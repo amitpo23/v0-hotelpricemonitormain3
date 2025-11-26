@@ -1,11 +1,21 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight, DollarSign } from "lucide-react"
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ChevronLeft,
+  ChevronRight,
+  DollarSign,
+  Hotel,
+  AlertTriangle,
+  Building2,
+} from "lucide-react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from "date-fns"
 import { RunScraperButton } from "./run-scraper-button"
 
@@ -18,6 +28,30 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
   const [selectedHotel, setSelectedHotel] = useState<string>(hotels[0]?.id || "")
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<any>(null)
+  const [competitorPrices, setCompetitorPrices] = useState<any[]>([])
+  const [competitors, setCompetitors] = useState<any[]>([])
+  const [loadingCompetitors, setLoadingCompetitors] = useState(false)
+
+  // Fetch competitors and their prices when hotel or day changes
+  useEffect(() => {
+    if (selectedHotel && selectedDay) {
+      fetchCompetitorDetails()
+    }
+  }, [selectedHotel, selectedDay])
+
+  const fetchCompetitorDetails = async () => {
+    if (!selectedHotel || !selectedDay) return
+    setLoadingCompetitors(true)
+    try {
+      const res = await fetch(`/api/competitors/prices?hotelId=${selectedHotel}&date=${selectedDay.date}`)
+      const data = await res.json()
+      setCompetitors(data.competitors || [])
+      setCompetitorPrices(data.prices || [])
+    } catch (error) {
+      console.error("Error fetching competitor details:", error)
+    }
+    setLoadingCompetitors(false)
+  }
 
   const selectedHotelData = hotels.find((h) => h.id === selectedHotel)
   const hotelPrices = dailyPrices.filter((p) => p.hotel_id === selectedHotel)
@@ -185,7 +219,7 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-3 gap-4 mb-6">
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm text-muted-foreground">Our Price</h4>
                 <p className="text-3xl font-bold text-cyan-400">${selectedDay.our_price}</p>
@@ -205,6 +239,78 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
                 </div>
               </div>
             </div>
+
+            {/* Competitor Breakdown */}
+            <div className="border-t border-border/50 pt-4">
+              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-cyan-400" />
+                Competitor Price Breakdown
+              </h4>
+
+              {loadingCompetitors ? (
+                <div className="text-center py-4 text-muted-foreground">Loading competitor details...</div>
+              ) : competitors.length > 0 ? (
+                <div className="grid gap-2">
+                  {competitorPrices.map((cp, idx) => {
+                    const comp = competitors.find((c) => c.id === cp.competitor_id) || {
+                      competitor_hotel_name: cp.source || "Unknown",
+                    }
+                    const priceDiff = cp.price - selectedDay.our_price
+                    const priceDiffPercent = ((priceDiff / selectedDay.our_price) * 100).toFixed(1)
+
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Hotel className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <div className="font-medium">{comp.competitor_hotel_name}</div>
+                            {comp.star_rating && (
+                              <div className="text-xs text-muted-foreground">
+                                {"★".repeat(comp.star_rating)} ({comp.star_rating} stars)
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold">${cp.price}</div>
+                          <div
+                            className={`text-xs ${priceDiff > 0 ? "text-green-400" : priceDiff < 0 ? "text-red-400" : "text-muted-foreground"}`}
+                          >
+                            {priceDiff > 0 ? "+" : ""}
+                            {priceDiffPercent}% vs us
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-yellow-400">No Real Competitors Configured</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        The average is calculated from OTA price estimates (Booking.com, Expedia, etc.), not from real
+                        competing hotels.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 bg-transparent"
+                        onClick={() => (window.location.href = "/competitors/add")}
+                      >
+                        + Add Real Competitors
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {selectedDay.price_recommendation && (
               <div className="mt-4 p-3 rounded-lg bg-background/50 border border-border/50">
                 <p className="text-sm">{selectedDay.price_recommendation}</p>
