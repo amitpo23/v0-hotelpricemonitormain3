@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Target, TrendingUp, AlertTriangle, CheckCircle, DollarSign } from "lucide-react"
 import { BudgetForm } from "./budget-form"
 import { BudgetProgress } from "./budget-progress"
+import { YearlyBudgetGrid } from "./yearly-budget-grid"
 
 export default async function BudgetPage() {
   const supabase = await createClient()
@@ -10,16 +11,18 @@ export default async function BudgetPage() {
   // Get hotels
   const { data: hotels } = await supabase.from("hotels").select("*").order("name")
 
-  // Get current month's budgets
+  const { data: allBudgets } = await supabase
+    .from("revenue_budgets")
+    .select("*, hotels(name)")
+    .order("year", { ascending: false })
+    .order("month", { ascending: true })
+
+  // Get current month's budgets for progress tracking
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth() + 1
 
-  const { data: budgets } = await supabase
-    .from("revenue_budgets")
-    .select("*, hotels(name)")
-    .eq("year", currentYear)
-    .eq("month", currentMonth)
+  const currentMonthBudgets = allBudgets?.filter((b) => b.year === currentYear && b.month === currentMonth) || []
 
   // Get revenue tracking for current month
   const monthStart = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`
@@ -33,7 +36,7 @@ export default async function BudgetPage() {
 
   // Calculate progress for each hotel
   const budgetProgress =
-    budgets?.map((budget) => {
+    currentMonthBudgets?.map((budget) => {
       const hotelRevenue = revenue?.filter((r) => r.hotel_id === budget.hotel_id) || []
       const totalRevenue = hotelRevenue.reduce((sum, r) => sum + Number(r.revenue || 0), 0)
       const totalBookings = hotelRevenue.reduce((sum, r) => sum + (r.bookings || 0), 0)
@@ -62,7 +65,7 @@ export default async function BudgetPage() {
     }) || []
 
   // Calculate totals
-  const totalTarget = budgets?.reduce((sum, b) => sum + Number(b.target_revenue || 0), 0) || 0
+  const totalTarget = currentMonthBudgets?.reduce((sum, b) => sum + Number(b.target_revenue || 0), 0) || 0
   const totalActual = budgetProgress.reduce((sum, b) => sum + b.totalRevenue, 0)
   const overallProgress = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0
   const hotelsOnTrack = budgetProgress.filter((b) => b.onTrack).length
@@ -132,10 +135,12 @@ export default async function BudgetPage() {
         </Card>
       </div>
 
-      {/* Budget Form */}
-      <BudgetForm hotels={hotels || []} existingBudgets={budgets || []} />
+      {/* Budget Form - now with month selector */}
+      <BudgetForm hotels={hotels || []} existingBudgets={allBudgets || []} />
 
-      {/* Budget Progress */}
+      <YearlyBudgetGrid hotels={hotels || []} budgets={allBudgets || []} />
+
+      {/* Budget Progress for current month */}
       <BudgetProgress budgetProgress={budgetProgress} />
     </div>
   )

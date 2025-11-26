@@ -1,8 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-// 5 competitor sources to scan
-const COMPETITORS = [
+const DEFAULT_OTA_SOURCES = [
   { name: "Booking.com", variance: 0.95 },
   { name: "Expedia", variance: 1.02 },
   { name: "Hotels.com", variance: 0.98 },
@@ -15,18 +14,12 @@ function getDemandLevel(date: Date): { level: string; multiplier: number } {
   const dayOfWeek = date.getDay()
   const month = date.getMonth()
 
-  // Weekend premium
   const isWeekend = dayOfWeek === 5 || dayOfWeek === 6
-
-  // Seasonal factors
-  const isHighSeason = month === 6 || month === 7 || month === 11 // July, August, December
+  const isHighSeason = month === 6 || month === 7 || month === 11
   const isMidSeason = month === 3 || month === 4 || month === 5 || month === 8 || month === 9
 
-  // Holiday check (simplified)
   const dayOfMonth = date.getDate()
-  const isHoliday =
-    (month === 11 && dayOfMonth >= 24 && dayOfMonth <= 31) || // Christmas/NY
-    (month === 0 && dayOfMonth <= 3) // New Year
+  const isHoliday = (month === 11 && dayOfMonth >= 24 && dayOfMonth <= 31) || (month === 0 && dayOfMonth <= 3)
 
   if (isHoliday) return { level: "peak", multiplier: 1.5 }
   if (isHighSeason && isWeekend) return { level: "peak", multiplier: 1.35 }
@@ -37,17 +30,43 @@ function getDemandLevel(date: Date): { level: string; multiplier: number } {
   return { level: "low", multiplier: 0.9 }
 }
 
-// Generate realistic competitor prices
-function generateCompetitorPrices(basePrice: number, date: Date) {
+function generateCompetitorPrices(
+  basePrice: number,
+  date: Date,
+  competitors: Array<{ id: string; competitor_hotel_name: string; star_rating?: number }>,
+) {
   const { multiplier } = getDemandLevel(date)
 
-  return COMPETITORS.map((comp) => {
-    // Add some randomness
-    const randomFactor = 0.9 + Math.random() * 0.2 // 0.9 to 1.1
-    const price = Math.round(basePrice * comp.variance * multiplier * randomFactor)
+  return competitors.map((comp, index) => {
+    // Different variance based on star rating or random
+    const starVariance = comp.star_rating
+      ? 0.9 + (comp.star_rating - 3) * 0.1 // 3-star: 0.9, 4-star: 1.0, 5-star: 1.1
+      : 0.9 + index * 0.05 // Spread prices
+
+    const randomFactor = 0.9 + Math.random() * 0.2
+    const price = Math.round(basePrice * starVariance * multiplier * randomFactor)
+
     return {
-      name: comp.name,
+      id: comp.id,
+      name: comp.competitor_hotel_name,
       price,
+      star_rating: comp.star_rating,
+    }
+  })
+}
+
+// Generate prices for OTA sources (when no competitors defined)
+function generateOTAPrices(basePrice: number, date: Date) {
+  const { multiplier } = getDemandLevel(date)
+
+  return DEFAULT_OTA_SOURCES.map((source) => {
+    const randomFactor = 0.9 + Math.random() * 0.2
+    const price = Math.round(basePrice * source.variance * multiplier * randomFactor)
+    return {
+      id: null,
+      name: source.name,
+      price,
+      star_rating: null,
     }
   })
 }
@@ -67,57 +86,49 @@ function calculateRecommendedPrice(
   let recommendation = ""
   let action = "maintain"
 
-  // High demand - price higher
   if (demandLevel === "peak") {
     recommendedPrice = Math.round(avgPrice * 1.1)
     if (ourPrice < recommendedPrice) {
-      recommendation = `Peak demand! Increase price to capture premium. Competitors avg: $${avgPrice}`
+      recommendation = `Peak demand! Increase price. Competitors avg: $${avgPrice}`
       action = "increase"
     } else {
       recommendation = `Good positioning for peak demand`
       action = "maintain"
     }
-  }
-  // High demand
-  else if (demandLevel === "high") {
+  } else if (demandLevel === "high") {
     recommendedPrice = Math.round(avgPrice * 1.05)
     if (ourPrice < avgPrice) {
-      recommendation = `High demand period. Consider raising price to match market avg of $${avgPrice}`
+      recommendation = `High demand. Consider raising to market avg of $${avgPrice}`
       action = "increase"
     } else {
       recommendation = `Well positioned for high demand`
       action = "maintain"
     }
-  }
-  // Medium demand - stay competitive
-  else if (demandLevel === "medium") {
+  } else if (demandLevel === "medium") {
     recommendedPrice = avgPrice
     if (ourPrice > maxPrice) {
-      recommendation = `Price above all competitors. Consider reducing to $${avgPrice} to stay competitive`
+      recommendation = `Price above all competitors. Consider reducing to $${avgPrice}`
       action = "decrease"
     } else if (ourPrice < minPrice * 0.9) {
-      recommendation = `Price significantly below market. Opportunity to increase to $${avgPrice}`
+      recommendation = `Price below market. Opportunity to increase to $${avgPrice}`
       action = "increase"
     } else {
       recommendation = `Price is competitive with market`
       action = "maintain"
     }
-  }
-  // Low demand - be aggressive
-  else {
+  } else {
     recommendedPrice = Math.round(avgPrice * 0.95)
     if (ourPrice > avgPrice) {
-      recommendation = `Low demand period. Reduce price to $${recommendedPrice} to capture bookings`
+      recommendation = `Low demand. Reduce price to $${recommendedPrice} to capture bookings`
       action = "decrease"
     } else {
-      recommendation = `Good competitive positioning for low demand period`
+      recommendation = `Good positioning for low demand period`
       action = "maintain"
     }
   }
 
-  // Ensure recommended price is reasonable
-  recommendedPrice = Math.max(recommendedPrice, Math.round(ourPrice * 0.7)) // Don't go below 70%
-  recommendedPrice = Math.min(recommendedPrice, Math.round(ourPrice * 1.5)) // Don't go above 150%
+  recommendedPrice = Math.max(recommendedPrice, Math.round(ourPrice * 0.7))
+  recommendedPrice = Math.min(recommendedPrice, Math.round(ourPrice * 1.5))
 
   return { price: recommendedPrice, recommendation, action }
 }
@@ -134,6 +145,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Hotel not found" }, { status: 404 })
     }
 
+    const { data: realCompetitors } = await supabase
+      .from("hotel_competitors")
+      .select("*")
+      .eq("hotel_id", hotelId)
+      .eq("is_active", true)
+
+    const hasRealCompetitors = realCompetitors && realCompetitors.length > 0
+    const competitorNames = hasRealCompetitors
+      ? realCompetitors.map((c) => c.competitor_hotel_name)
+      : DEFAULT_OTA_SOURCES.map((s) => s.name)
+
     const basePrice = hotel.base_price || 150
     const results = []
     const today = new Date()
@@ -144,20 +166,16 @@ export async function POST(request: Request) {
       scanDate.setDate(scanDate.getDate() + i)
       const dateStr = scanDate.toISOString().split("T")[0]
 
-      // Get demand level for this date
       const { level: demandLevel, multiplier } = getDemandLevel(scanDate)
-
-      // Our price with some seasonal adjustment
       const ourPrice = Math.round(basePrice * multiplier * (0.95 + Math.random() * 0.1))
 
-      // Generate competitor prices
-      const competitors = generateCompetitorPrices(basePrice, scanDate)
-      const competitorPrices = competitors.map((c) => c.price)
+      const competitors = hasRealCompetitors
+        ? generateCompetitorPrices(basePrice, scanDate, realCompetitors)
+        : generateOTAPrices(basePrice, scanDate)
 
-      // Calculate recommendation
+      const competitorPrices = competitors.map((c) => c.price)
       const recommendation = calculateRecommendedPrice(ourPrice, competitors, demandLevel)
 
-      // Prepare daily price record
       const dailyPrice = {
         hotel_id: hotelId,
         date: dateStr,
@@ -174,7 +192,27 @@ export async function POST(request: Request) {
 
       results.push(dailyPrice)
 
-      // Also save competitor data
+      if (hasRealCompetitors) {
+        for (const comp of competitors) {
+          if (comp.id) {
+            await supabase.from("competitor_daily_prices").upsert(
+              {
+                hotel_id: hotelId,
+                competitor_id: comp.id,
+                date: dateStr,
+                price: comp.price,
+                source: "booking",
+                room_type: "Standard",
+                availability: true,
+                scraped_at: new Date().toISOString(),
+              },
+              { onConflict: "competitor_id,date,source" },
+            )
+          }
+        }
+      }
+
+      // Also save to competitor_data for dashboard
       for (const comp of competitors) {
         await supabase.from("competitor_data").upsert(
           {
@@ -186,10 +224,7 @@ export async function POST(request: Request) {
             scraped_at: new Date().toISOString(),
             metadata: { date: dateStr, demand_level: demandLevel },
           },
-          {
-            onConflict: "hotel_id,competitor_name",
-            ignoreDuplicates: false,
-          },
+          { onConflict: "hotel_id,competitor_name", ignoreDuplicates: false },
         )
       }
     }
@@ -205,26 +240,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: upsertError.message }, { status: 500 })
     }
 
-    // Log the scan
-    await supabase.from("scan_results").insert({
-      scan_config_id: null,
-      source: "full_90_day_scan",
-      price: basePrice,
-      availability: true,
-      room_type: "All Rooms",
-      scan_date: new Date().toISOString(),
-      raw_data: {
-        days_scanned: 90,
-        competitors: COMPETITORS.map((c) => c.name),
-        hotel_id: hotelId,
-      },
-    })
-
     return NextResponse.json({
       success: true,
-      message: `Scanned 90 days for ${hotel.name} with 5 competitors`,
+      message: `Scanned 90 days for ${hotel.name}`,
       daysScanned: 90,
-      competitors: COMPETITORS.map((c) => c.name),
+      competitors: competitorNames,
+      competitorType: hasRealCompetitors ? "real_hotels" : "ota_sources",
+      competitorCount: competitorNames.length,
       summary: {
         increaseRecommendations: results.filter((r) => r.autopilot_action === "increase").length,
         decreaseRecommendations: results.filter((r) => r.autopilot_action === "decrease").length,

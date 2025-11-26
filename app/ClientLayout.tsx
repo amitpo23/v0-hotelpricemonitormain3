@@ -3,8 +3,19 @@
 import type React from "react"
 import "./globals.css"
 import Link from "next/link"
-import { Search, Bell, LayoutDashboard, Bot, LineChart, Building2, Plane, CalendarDays, Target } from "lucide-react"
-import { useSearchParams } from "next/navigation"
+import {
+  Search,
+  Bell,
+  LayoutDashboard,
+  Bot,
+  LineChart,
+  Building2,
+  Plane,
+  CalendarDays,
+  Target,
+  Users,
+} from "lucide-react"
+import { usePathname } from "next/navigation"
 import { Suspense } from "react"
 
 export function ClientLayout({
@@ -36,13 +47,13 @@ export function ClientLayout({
             <NavLink href="/calendar" icon={<CalendarDays className="h-4 w-4" />} label="Calendar" />
             <NavLink href="/budget" icon={<Target className="h-4 w-4" />} label="Budget" />
             <NavLink href="/hotels" icon={<Building2 className="h-4 w-4" />} label="Properties" />
+            <NavLink href="/competitors" icon={<Users className="h-4 w-4" />} label="Competitors" />
             <NavLink href="/scans" icon={<Search className="h-4 w-4" />} label="Scans" />
             <NavLink href="/autopilot" icon={<Bot className="h-4 w-4" />} label="Rules" highlight />
             <NavLink href="/predictions" icon={<LineChart className="h-4 w-4" />} label="Predictions" />
             <NavLink href="/alerts" icon={<Bell className="h-4 w-4" />} label="Alerts" />
           </div>
 
-          {/* <CHANGE> Removed UserNav - auth disabled for development */}
           <div className="w-24" />
         </div>
       </nav>
@@ -62,16 +73,19 @@ function NavLink({
   label: string
   highlight?: boolean
 }) {
-  const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const isActive = pathname === href || pathname?.startsWith(href + "/")
 
   return (
     <Link
       href={href}
       className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm
         ${
-          highlight
-            ? "bg-gradient-to-r from-cyan-500/10 to-blue-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20"
-            : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+          isActive
+            ? "bg-slate-800 text-white"
+            : highlight
+              ? "bg-gradient-to-r from-cyan-500/10 to-blue-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20"
+              : "text-slate-400 hover:text-white hover:bg-slate-800/50"
         }`}
     >
       {icon}
