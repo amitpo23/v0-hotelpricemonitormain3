@@ -45,7 +45,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/ssr": "latest",
-    "@supabase/supabase-js": "^2.84.0",
+    "@supabase/supabase-js": "^2.47.10",
     "@tailwindcss/postcss": "^4.1.9",
     "@tidbcloud/serverless": "latest",
     "@types/better-sqlite3": "latest",

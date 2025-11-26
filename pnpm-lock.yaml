@@ -117,7 +117,7 @@ importers:
         specifier: latest
         version: 0.7.0(@supabase/supabase-js@2.84.0(bufferutil@4.0.9))
       '@supabase/supabase-js':
-        specifier: ^2.84.0
+        specifier: ^2.47.10
         version: 2.84.0(bufferutil@4.0.9)
       '@tailwindcss/postcss':
         specifier: ^4.1.9
@@ -8532,7 +8532,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.0.0
+      '@types/node': 22.19.1
 
   '@types/yargs-parser@21.0.3': {}
 
