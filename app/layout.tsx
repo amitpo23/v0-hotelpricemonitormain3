@@ -3,8 +3,10 @@ import type { Metadata } from "next"
 import { Inter, Space_Grotesk } from "next/font/google"
 import "./globals.css"
 import Link from "next/link"
-import { Search, Bell, LayoutDashboard, Bot, LineChart, Activity, BarChart3, Map, Building2, Plane } from "lucide-react"
+import { Search, Bell, LayoutDashboard, Bot, LineChart, Building2, Plane, CalendarDays, Target } from "lucide-react"
 import { Suspense } from "react"
+import { createClient } from "@/lib/supabase/server"
+import { UserNav } from "@/components/user-nav"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" })
@@ -24,11 +26,16 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   return (
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <body className="font-sans antialiased bg-slate-950 text-white">
@@ -52,15 +59,16 @@ export default function RootLayout({
 
               <div className="flex items-center gap-0.5">
                 <NavLink href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" />
-                <NavLink href="/analytics" icon={<BarChart3 className="h-4 w-4" />} label="Analytics" />
+                <NavLink href="/calendar" icon={<CalendarDays className="h-4 w-4" />} label="Calendar" />
+                <NavLink href="/budget" icon={<Target className="h-4 w-4" />} label="Budget" />
                 <NavLink href="/hotels" icon={<Building2 className="h-4 w-4" />} label="Properties" />
                 <NavLink href="/scans" icon={<Search className="h-4 w-4" />} label="Scans" />
                 <NavLink href="/autopilot" icon={<Bot className="h-4 w-4" />} label="Rules" highlight />
                 <NavLink href="/predictions" icon={<LineChart className="h-4 w-4" />} label="Predictions" />
-                <NavLink href="/market-intel" icon={<Map className="h-4 w-4" />} label="Market" />
-                <NavLink href="/trends" icon={<Activity className="h-4 w-4" />} label="Trends" />
                 <NavLink href="/alerts" icon={<Bell className="h-4 w-4" />} label="Alerts" />
               </div>
+
+              <UserNav user={user} />
             </div>
           </nav>
         </Suspense>
