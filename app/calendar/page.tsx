@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarDays, TrendingUp, TrendingDown, Minus, AlertCircle } from "lucide-react"
+import { CalendarDays, TrendingUp, TrendingDown, Minus, AlertCircle, Clock } from "lucide-react"
 import { CalendarGrid } from "./calendar-grid"
-import { GenerateCalendarButton } from "./generate-calendar-button"
 
 export default async function CalendarPage() {
   const supabase = await createClient()
@@ -11,10 +10,9 @@ export default async function CalendarPage() {
   // Get hotels
   const { data: hotels } = await supabase.from("hotels").select("*").order("name")
 
-  // Get daily prices for next 60 days
   const today = new Date()
   const futureDate = new Date(today)
-  futureDate.setDate(futureDate.getDate() + 60)
+  futureDate.setDate(futureDate.getDate() + 90)
 
   const { data: dailyPrices } = await supabase
     .from("daily_prices")
@@ -24,10 +22,9 @@ export default async function CalendarPage() {
     .order("date")
 
   // Calculate summary stats
-  const pricesWithRecommendation =
-    dailyPrices?.filter((p) => p.recommended_price && p.our_price && p.recommended_price !== p.our_price) || []
-  const increaseSuggestions = pricesWithRecommendation.filter((p) => p.recommended_price > p.our_price).length
-  const decreaseSuggestions = pricesWithRecommendation.filter((p) => p.recommended_price < p.our_price).length
+  const increaseCount = dailyPrices?.filter((p) => p.autopilot_action === "increase").length || 0
+  const decreaseCount = dailyPrices?.filter((p) => p.autopilot_action === "decrease").length || 0
+  const maintainCount = dailyPrices?.filter((p) => p.autopilot_action === "maintain").length || 0
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -40,9 +37,14 @@ export default async function CalendarPage() {
             </div>
             Price Calendar
           </h1>
-          <p className="text-muted-foreground mt-1">Daily price comparison with competitors and AI recommendations</p>
+          <p className="text-muted-foreground mt-1">
+            90-day price comparison with 5 competitors and AI recommendations
+          </p>
         </div>
-        <GenerateCalendarButton hotels={hotels || []} />
+        <Badge variant="outline" className="flex items-center gap-2 px-3 py-1">
+          <Clock className="h-4 w-4" />
+          Auto-scan every 5 hours
+        </Badge>
       </div>
 
       {/* Summary Cards */}
@@ -53,30 +55,30 @@ export default async function CalendarPage() {
             <CardTitle className="text-2xl">{dailyPrices?.length || 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-border/50 bg-card/50">
+        <Card className="border-border/50 bg-card/50 border-green-500/30">
           <CardHeader className="pb-2">
-            <CardDescription>Price Increase Suggestions</CardDescription>
+            <CardDescription>Increase Recommendations</CardDescription>
             <CardTitle className="text-2xl text-green-500 flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              {increaseSuggestions}
+              {increaseCount}
             </CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-border/50 bg-card/50">
+        <Card className="border-border/50 bg-card/50 border-red-500/30">
           <CardHeader className="pb-2">
-            <CardDescription>Price Decrease Suggestions</CardDescription>
+            <CardDescription>Decrease Recommendations</CardDescription>
             <CardTitle className="text-2xl text-red-500 flex items-center gap-2">
               <TrendingDown className="h-5 w-5" />
-              {decreaseSuggestions}
+              {decreaseCount}
             </CardTitle>
           </CardHeader>
         </Card>
-        <Card className="border-border/50 bg-card/50">
+        <Card className="border-border/50 bg-card/50 border-cyan-500/30">
           <CardHeader className="pb-2">
             <CardDescription>Optimal Prices</CardDescription>
             <CardTitle className="text-2xl text-cyan-400 flex items-center gap-2">
               <Minus className="h-5 w-5" />
-              {(dailyPrices?.length || 0) - pricesWithRecommendation.length}
+              {maintainCount}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -90,21 +92,39 @@ export default async function CalendarPage() {
         <CardContent className="flex flex-wrap gap-4">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-green-500/20 border border-green-500" />
-            <span className="text-sm">Increase price recommended</span>
+            <span className="text-sm">Increase price</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-red-500/20 border border-red-500" />
-            <span className="text-sm">Decrease price recommended</span>
+            <span className="text-sm">Decrease price</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-cyan-500/20 border border-cyan-500" />
-            <span className="text-sm">Price is optimal</span>
+            <span className="text-sm">Price optimal</span>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500">
-              Peak
+              peak
             </Badge>
-            <span className="text-sm">High demand day</span>
+            <span className="text-sm">Peak demand</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500">
+              high
+            </Badge>
+            <span className="text-sm">High demand</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500">
+              medium
+            </Badge>
+            <span className="text-sm">Medium demand</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-gray-500/20 text-gray-400 border-gray-500">
+              low
+            </Badge>
+            <span className="text-sm">Low demand</span>
           </div>
         </CardContent>
       </Card>

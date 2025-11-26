@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight, DollarSign } from "lucide-react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from "date-fns"
+import { RunScraperButton } from "./run-scraper-button"
 
 interface CalendarGridProps {
   hotels: any[]
@@ -16,7 +17,9 @@ interface CalendarGridProps {
 export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
   const [selectedHotel, setSelectedHotel] = useState<string>(hotels[0]?.id || "")
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [selectedDay, setSelectedDay] = useState<any>(null)
 
+  const selectedHotelData = hotels.find((h) => h.id === selectedHotel)
   const hotelPrices = dailyPrices.filter((p) => p.hotel_id === selectedHotel)
 
   const monthStart = startOfMonth(currentMonth)
@@ -30,44 +33,60 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
 
   const getDayColor = (priceData: any) => {
     if (!priceData || !priceData.recommended_price || !priceData.our_price) {
-      return "bg-muted/30"
+      return "bg-muted/30 border-border/30"
     }
-    if (priceData.recommended_price > priceData.our_price) {
+    if (priceData.autopilot_action === "increase") {
       return "bg-green-500/20 border-green-500/50"
     }
-    if (priceData.recommended_price < priceData.our_price) {
+    if (priceData.autopilot_action === "decrease") {
       return "bg-red-500/20 border-red-500/50"
     }
     return "bg-cyan-500/20 border-cyan-500/50"
   }
 
   const getRecommendationIcon = (priceData: any) => {
-    if (!priceData || !priceData.recommended_price || !priceData.our_price) return null
-    if (priceData.recommended_price > priceData.our_price) {
+    if (!priceData || !priceData.autopilot_action) return null
+    if (priceData.autopilot_action === "increase") {
       return <TrendingUp className="h-3 w-3 text-green-500" />
     }
-    if (priceData.recommended_price < priceData.our_price) {
+    if (priceData.autopilot_action === "decrease") {
       return <TrendingDown className="h-3 w-3 text-red-500" />
     }
     return <Minus className="h-3 w-3 text-cyan-400" />
   }
 
+  const getDemandBadge = (level: string) => {
+    const colors: Record<string, string> = {
+      peak: "bg-orange-500/20 text-orange-400 border-orange-500",
+      high: "bg-yellow-500/20 text-yellow-400 border-yellow-500",
+      medium: "bg-blue-500/20 text-blue-400 border-blue-500",
+      low: "bg-gray-500/20 text-gray-400 border-gray-500",
+    }
+    return colors[level] || colors.medium
+  }
+
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="flex items-center justify-between">
-        <Select value={selectedHotel} onValueChange={setSelectedHotel}>
-          <SelectTrigger className="w-64 bg-background/50">
-            <SelectValue placeholder="Select hotel" />
-          </SelectTrigger>
-          <SelectContent>
-            {hotels.map((hotel) => (
-              <SelectItem key={hotel.id} value={hotel.id}>
-                {hotel.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Select value={selectedHotel} onValueChange={setSelectedHotel}>
+            <SelectTrigger className="w-64 bg-background/50">
+              <SelectValue placeholder="Select hotel" />
+            </SelectTrigger>
+            <SelectContent>
+              {hotels.map((hotel) => (
+                <SelectItem key={hotel.id} value={hotel.id}>
+                  {hotel.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {selectedHotel && selectedHotelData && (
+            <RunScraperButton hotelId={selectedHotel} hotelName={selectedHotelData.name} />
+          )}
+        </div>
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
@@ -107,6 +126,7 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
               return (
                 <div
                   key={day.toISOString()}
+                  onClick={() => setSelectedDay(priceData)}
                   className={`aspect-square p-1 rounded-lg border ${dayColor} ${
                     isToday(day) ? "ring-2 ring-cyan-500" : ""
                   } hover:bg-accent/50 transition-colors cursor-pointer`}
@@ -116,12 +136,12 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
                       <span className={`text-xs font-medium ${isToday(day) ? "text-cyan-400" : ""}`}>
                         {format(day, "d")}
                       </span>
-                      {priceData?.demand_level === "peak" && (
+                      {priceData?.demand_level && (
                         <Badge
                           variant="outline"
-                          className="text-[10px] px-1 py-0 bg-orange-500/20 text-orange-400 border-orange-500"
+                          className={`text-[8px] px-1 py-0 ${getDemandBadge(priceData.demand_level)}`}
                         >
-                          Peak
+                          {priceData.demand_level}
                         </Badge>
                       )}
                     </div>
@@ -129,17 +149,17 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
                     {priceData && (
                       <div className="flex-1 flex flex-col justify-end text-[10px] space-y-0.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Ours:</span>
-                          <span className="font-medium">${priceData.our_price}</span>
+                          <span className="text-muted-foreground">Us:</span>
+                          <span className="font-medium text-cyan-400">${priceData.our_price}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Comp:</span>
+                          <span className="text-muted-foreground">Avg:</span>
                           <span>${priceData.avg_competitor_price}</span>
                         </div>
-                        {priceData.recommended_price && priceData.recommended_price !== priceData.our_price && (
+                        {priceData.recommended_price && priceData.autopilot_action !== "maintain" && (
                           <div className="flex items-center justify-between pt-0.5 border-t border-border/50">
                             {getRecommendationIcon(priceData)}
-                            <span className="font-bold text-cyan-400">${priceData.recommended_price}</span>
+                            <span className="font-bold text-yellow-400">${priceData.recommended_price}</span>
                           </div>
                         )}
                       </div>
@@ -153,6 +173,48 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
       </Card>
 
       {/* Selected Day Details */}
+      {selectedDay && (
+        <Card className="border-border/50 bg-card/50 border-cyan-500/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-cyan-400" />
+              {format(new Date(selectedDay.date), "EEEE, MMMM d, yyyy")}
+              <Badge variant="outline" className={getDemandBadge(selectedDay.demand_level)}>
+                {selectedDay.demand_level} demand
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Our Price</h4>
+                <p className="text-3xl font-bold text-cyan-400">${selectedDay.our_price}</p>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Competitor Range</h4>
+                <p className="text-xl">
+                  ${selectedDay.min_competitor_price} - ${selectedDay.max_competitor_price}
+                </p>
+                <p className="text-sm text-muted-foreground">Avg: ${selectedDay.avg_competitor_price}</p>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm text-muted-foreground">Recommendation</h4>
+                <div className="flex items-center gap-2">
+                  {getRecommendationIcon(selectedDay)}
+                  <span className="text-2xl font-bold text-yellow-400">${selectedDay.recommended_price}</span>
+                </div>
+              </div>
+            </div>
+            {selectedDay.price_recommendation && (
+              <div className="mt-4 p-3 rounded-lg bg-background/50 border border-border/50">
+                <p className="text-sm">{selectedDay.price_recommendation}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Price Recommendations Summary */}
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
           <CardTitle className="text-lg">Price Recommendations Summary</CardTitle>
@@ -160,34 +222,38 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
         <CardContent>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {hotelPrices
-              .filter((p) => p.recommended_price && p.our_price && p.recommended_price !== p.our_price)
-              .slice(0, 10)
+              .filter((p) => p.autopilot_action && p.autopilot_action !== "maintain")
+              .slice(0, 15)
               .map((price) => (
                 <div
                   key={price.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50"
+                  onClick={() => setSelectedDay(price)}
+                  className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50 hover:border-cyan-500/50 cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {getRecommendationIcon(price)}
                     <div>
                       <div className="font-medium">{format(new Date(price.date), "MMM d, yyyy")}</div>
-                      <div className="text-xs text-muted-foreground">{price.price_recommendation}</div>
+                      <div className="text-xs text-muted-foreground truncate max-w-md">
+                        {price.price_recommendation}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm text-muted-foreground">
-                      ${price.our_price} → <span className="text-cyan-400 font-bold">${price.recommended_price}</span>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">${price.our_price}</span>
+                      <span className="mx-2">→</span>
+                      <span className="text-yellow-400 font-bold">${price.recommended_price}</span>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Competitors: ${price.min_competitor_price} - ${price.max_competitor_price}
-                    </div>
+                    <Badge variant="outline" className={getDemandBadge(price.demand_level)}>
+                      {price.demand_level}
+                    </Badge>
                   </div>
                 </div>
               ))}
-            {hotelPrices.filter((p) => p.recommended_price && p.our_price && p.recommended_price !== p.our_price)
-              .length === 0 && (
+            {hotelPrices.filter((p) => p.autopilot_action && p.autopilot_action !== "maintain").length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                No price recommendations available. Generate calendar data first.
+                No price recommendations available. Click "Run Full Scan" to analyze 90 days.
               </div>
             )}
           </div>
