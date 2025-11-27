@@ -2,7 +2,17 @@ import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Play, Pause, Clock, Calendar, Zap, RefreshCw, TrendingUp, AlertTriangle } from "lucide-react"
+import {
+  PlusIcon,
+  PlayIcon,
+  PauseIcon,
+  ClockIcon,
+  CalendarIcon,
+  ZapIcon,
+  RefreshCwIcon,
+  TrendingUpIcon,
+  AlertTriangleIcon,
+} from "@/components/icons"
 import Link from "next/link"
 import { RunScanButton } from "./run-scan-button"
 import { BatchScanButton } from "./batch-scan-button"
@@ -27,7 +37,6 @@ export default async function ScansPage() {
     .order("scraped_at", { ascending: false })
     .limit(20)
 
-  // Calculate stats
   const activeConfigs = scanConfigs?.filter((c) => c.is_active).length || 0
   const completedScans = recentScans?.filter((s) => s.status === "completed").length || 0
   const avgPrice = recentResults?.length
@@ -47,14 +56,13 @@ export default async function ScansPage() {
           <BatchScanButton />
           <Link href="/scans/new">
             <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
+              <PlusIcon className="h-4 w-4 mr-2" />
               New Scan Config
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-cyan-500/20">
           <CardContent className="pt-6">
@@ -63,7 +71,7 @@ export default async function ScansPage() {
                 <p className="text-sm text-muted-foreground">Active Monitors</p>
                 <p className="text-3xl font-bold text-cyan-400">{activeConfigs}</p>
               </div>
-              <Zap className="h-8 w-8 text-cyan-500" />
+              <ZapIcon className="h-8 w-8 text-cyan-500" />
             </div>
           </CardContent>
         </Card>
@@ -75,7 +83,7 @@ export default async function ScansPage() {
                 <p className="text-sm text-muted-foreground">Scans Today</p>
                 <p className="text-3xl font-bold text-green-400">{completedScans}</p>
               </div>
-              <RefreshCw className="h-8 w-8 text-green-500" />
+              <RefreshCwIcon className="h-8 w-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
@@ -87,7 +95,7 @@ export default async function ScansPage() {
                 <p className="text-sm text-muted-foreground">Market Avg Price</p>
                 <p className="text-3xl font-bold text-purple-400">${avgPrice.toFixed(0)}</p>
               </div>
-              <TrendingUp className="h-8 w-8 text-purple-500" />
+              <TrendingUpIcon className="h-8 w-8 text-purple-500" />
             </div>
           </CardContent>
         </Card>
@@ -99,7 +107,7 @@ export default async function ScansPage() {
                 <p className="text-sm text-muted-foreground">Sources Tracked</p>
                 <p className="text-3xl font-bold text-orange-400">6</p>
               </div>
-              <AlertTriangle className="h-8 w-8 text-orange-500" />
+              <AlertTriangleIcon className="h-8 w-8 text-orange-500" />
             </div>
           </CardContent>
         </Card>
@@ -110,7 +118,7 @@ export default async function ScansPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-cyan-500" />
+                <ZapIcon className="h-5 w-5 text-cyan-500" />
                 Active Configurations
               </CardTitle>
               <CardDescription>Scheduled price monitoring tasks</CardDescription>
@@ -118,7 +126,7 @@ export default async function ScansPage() {
             <CardContent>
               {!scanConfigs || scanConfigs.length === 0 ? (
                 <div className="text-center py-12">
-                  <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <ClockIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium mb-2">No scan configurations</h3>
                   <p className="text-muted-foreground mb-4">
                     Create a scan configuration to start monitoring competitor prices
@@ -137,15 +145,15 @@ export default async function ScansPage() {
                       <div className="flex items-center gap-4">
                         <div className={`p-2 rounded-full ${config.is_active ? "bg-green-500/20" : "bg-muted"}`}>
                           {config.is_active ? (
-                            <Play className="h-4 w-4 text-green-500" />
+                            <PlayIcon className="h-4 w-4 text-green-500" />
                           ) : (
-                            <Pause className="h-4 w-4 text-muted-foreground" />
+                            <PauseIcon className="h-4 w-4 text-muted-foreground" />
                           )}
                         </div>
                         <div>
                           <div className="font-medium">{config.hotels?.name || "Unknown Hotel"}</div>
                           <div className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Calendar className="h-3 w-3" />
+                            <CalendarIcon className="h-3 w-3" />
                             {new Date(config.check_in_date).toLocaleDateString()} -{" "}
                             {new Date(config.check_out_date).toLocaleDateString()}
                             {config.hotels?.location && (
@@ -170,7 +178,6 @@ export default async function ScansPage() {
             </CardContent>
           </Card>
 
-          {/* Recent Results */}
           <Card>
             <CardHeader>
               <CardTitle>Latest Price Data</CardTitle>
@@ -266,7 +273,6 @@ export default async function ScansPage() {
             </CardContent>
           </Card>
 
-          {/* Data Sources */}
           <Card>
             <CardHeader>
               <CardTitle>Data Sources</CardTitle>

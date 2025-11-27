@@ -1,13 +1,19 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarDays, TrendingUp, TrendingDown, Minus, AlertCircle, Clock } from "lucide-react"
+import {
+  CalendarDaysIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  MinusIcon,
+  AlertCircleIcon,
+  ClockIcon,
+} from "@/components/icons"
 import { CalendarGrid } from "./calendar-grid"
 
 export default async function CalendarPage() {
   const supabase = await createClient()
 
-  // Get hotels
   const { data: hotels } = await supabase.from("hotels").select("*").order("name")
 
   const today = new Date()
@@ -21,33 +27,28 @@ export default async function CalendarPage() {
     .lte("date", futureDate.toISOString().split("T")[0])
     .order("date")
 
-  // Calculate summary stats
   const increaseCount = dailyPrices?.filter((p) => p.autopilot_action === "increase").length || 0
   const decreaseCount = dailyPrices?.filter((p) => p.autopilot_action === "decrease").length || 0
   const maintainCount = dailyPrices?.filter((p) => p.autopilot_action === "maintain").length || 0
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
-              <CalendarDays className="h-8 w-8 text-cyan-400" />
+              <CalendarDaysIcon className="h-8 w-8 text-cyan-400" />
             </div>
             Price Calendar
           </h1>
-          <p className="text-muted-foreground mt-1">
-            90-day price comparison with 5 competitors and AI recommendations
-          </p>
+          <p className="text-muted-foreground mt-1">90-day price comparison with competitors and AI recommendations</p>
         </div>
         <Badge variant="outline" className="flex items-center gap-2 px-3 py-1">
-          <Clock className="h-4 w-4" />
+          <ClockIcon className="h-4 w-4" />
           Auto-scan every 5 hours
         </Badge>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-border/50 bg-card/50">
           <CardHeader className="pb-2">
@@ -59,7 +60,7 @@ export default async function CalendarPage() {
           <CardHeader className="pb-2">
             <CardDescription>Increase Recommendations</CardDescription>
             <CardTitle className="text-2xl text-green-500 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
+              <TrendingUpIcon className="h-5 w-5" />
               {increaseCount}
             </CardTitle>
           </CardHeader>
@@ -68,7 +69,7 @@ export default async function CalendarPage() {
           <CardHeader className="pb-2">
             <CardDescription>Decrease Recommendations</CardDescription>
             <CardTitle className="text-2xl text-red-500 flex items-center gap-2">
-              <TrendingDown className="h-5 w-5" />
+              <TrendingDownIcon className="h-5 w-5" />
               {decreaseCount}
             </CardTitle>
           </CardHeader>
@@ -77,14 +78,13 @@ export default async function CalendarPage() {
           <CardHeader className="pb-2">
             <CardDescription>Optimal Prices</CardDescription>
             <CardTitle className="text-2xl text-cyan-400 flex items-center gap-2">
-              <Minus className="h-5 w-5" />
+              <MinusIcon className="h-5 w-5" />
               {maintainCount}
             </CardTitle>
           </CardHeader>
         </Card>
       </div>
 
-      {/* Legend */}
       <Card className="border-border/50 bg-card/50">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Legend</CardTitle>
@@ -129,13 +129,12 @@ export default async function CalendarPage() {
         </CardContent>
       </Card>
 
-      {/* Calendar Grid */}
       {hotels && hotels.length > 0 ? (
         <CalendarGrid hotels={hotels} dailyPrices={dailyPrices || []} />
       ) : (
         <Card className="border-border/50 bg-card/50">
           <CardContent className="py-12 text-center">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <AlertCircleIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No hotels found</h3>
             <p className="text-muted-foreground">Add hotels first to see price calendar</p>
           </CardContent>

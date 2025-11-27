@@ -2,7 +2,18 @@ import type React from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plane, Search, Building2, Bot, Target, ArrowRight, Brain, Radar, Gauge, DollarSign } from "lucide-react"
+import {
+  PlaneIcon,
+  SearchIcon,
+  BuildingIcon,
+  BotIcon,
+  TargetIcon,
+  ArrowRightIcon,
+  BrainIcon,
+  RadarIcon,
+  GaugeIcon,
+  DollarSignIcon,
+} from "@/components/icons"
 
 export default function Home() {
   return (
@@ -20,7 +31,7 @@ export default function Home() {
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-500 blur-2xl opacity-50" />
                 <div className="relative bg-gradient-to-r from-cyan-500 to-blue-500 p-4 rounded-2xl">
-                  <Plane className="h-10 w-10 text-white" />
+                  <PlaneIcon className="h-10 w-10 text-white" />
                 </div>
               </div>
             </div>
@@ -48,7 +59,7 @@ export default function Home() {
                   className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-8 py-6 text-lg rounded-xl"
                 >
                   Launch Dashboard
-                  <ArrowRight className="ml-2 h-5 w-5" />
+                  <ArrowRightIcon className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
               <Link href="/hotels">
@@ -66,25 +77,25 @@ export default function Home() {
           {/* Feature Cards */}
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
             <FeatureCard
-              icon={<Radar className="h-8 w-8" />}
+              icon={<RadarIcon className="h-8 w-8" />}
               title="Competitor Scanning"
               description="Real-time monitoring of competitor prices from booking.com, Expedia, and direct channels"
               color="cyan"
             />
             <FeatureCard
-              icon={<Brain className="h-8 w-8" />}
+              icon={<BrainIcon className="h-8 w-8" />}
               title="AI Predictions"
               description="Machine learning models predict demand and optimal pricing 30 days ahead"
               color="blue"
             />
             <FeatureCard
-              icon={<Bot className="h-8 w-8" />}
+              icon={<BotIcon className="h-8 w-8" />}
               title="Smart Automation"
               description="Set rules and let Autopilot adjust prices automatically based on market conditions"
               color="purple"
             />
             <FeatureCard
-              icon={<Target className="h-8 w-8" />}
+              icon={<TargetIcon className="h-8 w-8" />}
               title="Revenue Targets"
               description="Define revenue goals and occupancy targets - we optimize to achieve them"
               color="pink"
@@ -110,25 +121,25 @@ export default function Home() {
                 number={1}
                 title="Connect Properties"
                 description="Add your hotels and connect to your property management system"
-                icon={<Building2 className="h-6 w-6" />}
+                icon={<BuildingIcon className="h-6 w-6" />}
               />
               <Step
                 number={2}
                 title="Scan Competitors"
                 description="Set up automated scans to monitor competitor pricing continuously"
-                icon={<Search className="h-6 w-6" />}
+                icon={<SearchIcon className="h-6 w-6" />}
               />
               <Step
                 number={3}
                 title="Define Rules"
                 description="Create pricing rules with min/max bounds and revenue targets"
-                icon={<Gauge className="h-6 w-6" />}
+                icon={<GaugeIcon className="h-6 w-6" />}
               />
               <Step
                 number={4}
                 title="Maximize Revenue"
                 description="Autopilot optimizes pricing 24/7 while you focus on guests"
-                icon={<DollarSign className="h-6 w-6" />}
+                icon={<DollarSignIcon className="h-6 w-6" />}
               />
             </CardContent>
           </Card>

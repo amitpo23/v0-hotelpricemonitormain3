@@ -4,18 +4,18 @@ import type React from "react"
 import "./globals.css"
 import Link from "next/link"
 import {
-  Search,
-  Bell,
-  LayoutDashboard,
-  Bot,
-  LineChart,
-  Building2,
-  Plane,
-  CalendarDays,
-  Target,
-  Users,
-  BookOpen,
-} from "lucide-react"
+  IconSearch,
+  IconBell,
+  IconDashboard,
+  IconBot,
+  IconChart,
+  IconBuilding,
+  IconPlane,
+  IconCalendar,
+  IconTarget,
+  IconUsers,
+  IconBook,
+} from "@/components/icons"
 import { usePathname } from "next/navigation"
 import { Suspense } from "react"
 
@@ -32,7 +32,7 @@ export function ClientLayout({
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-500 blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
               <div className="relative bg-gradient-to-r from-cyan-500 to-blue-500 p-2 rounded-lg">
-                <Plane className="h-5 w-5 text-white" />
+                <IconPlane className="h-5 w-5 text-white" />
               </div>
             </div>
             <div>
@@ -44,16 +44,16 @@ export function ClientLayout({
           </Link>
 
           <div className="flex items-center gap-0.5">
-            <NavLink href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" />
-            <NavLink href="/calendar" icon={<CalendarDays className="h-4 w-4" />} label="Calendar" />
-            <NavLink href="/budget" icon={<Target className="h-4 w-4" />} label="Budget" />
-            <NavLink href="/bookings" icon={<BookOpen className="h-4 w-4" />} label="Bookings" />
-            <NavLink href="/hotels" icon={<Building2 className="h-4 w-4" />} label="Properties" />
-            <NavLink href="/competitors" icon={<Users className="h-4 w-4" />} label="Competitors" />
-            <NavLink href="/scans" icon={<Search className="h-4 w-4" />} label="Scans" />
-            <NavLink href="/autopilot" icon={<Bot className="h-4 w-4" />} label="Rules" highlight />
-            <NavLink href="/predictions" icon={<LineChart className="h-4 w-4" />} label="Predictions" />
-            <NavLink href="/alerts" icon={<Bell className="h-4 w-4" />} label="Alerts" />
+            <NavLink href="/dashboard" icon={<IconDashboard className="h-4 w-4" />} label="Dashboard" />
+            <NavLink href="/calendar" icon={<IconCalendar className="h-4 w-4" />} label="Calendar" />
+            <NavLink href="/budget" icon={<IconTarget className="h-4 w-4" />} label="Budget" />
+            <NavLink href="/bookings" icon={<IconBook className="h-4 w-4" />} label="Bookings" />
+            <NavLink href="/hotels" icon={<IconBuilding className="h-4 w-4" />} label="Properties" />
+            <NavLink href="/competitors" icon={<IconUsers className="h-4 w-4" />} label="Competitors" />
+            <NavLink href="/scans" icon={<IconSearch className="h-4 w-4" />} label="Scans" />
+            <NavLink href="/autopilot" icon={<IconBot className="h-4 w-4" />} label="Rules" highlight />
+            <NavLink href="/predictions" icon={<IconChart className="h-4 w-4" />} label="Predictions" />
+            <NavLink href="/alerts" icon={<IconBell className="h-4 w-4" />} label="Alerts" />
           </div>
 
           <div className="w-24" />

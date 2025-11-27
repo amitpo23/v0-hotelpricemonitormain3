@@ -20,36 +20,36 @@ export async function GET(request: Request) {
       .eq("hotel_id", hotelId)
       .eq("is_active", true)
 
-    // Get competitor prices for the specific date
+    if (!competitors || competitors.length === 0) {
+      return NextResponse.json({
+        competitors: [],
+        prices: [],
+        source: "no_competitors",
+        message: "No competitors configured. Please add competitors first.",
+      })
+    }
+
+    // Get competitor prices for the specific date - ONE per competitor
     let prices: any[] = []
 
-    if (competitors && competitors.length > 0 && date) {
+    if (date) {
+      const competitorIds = competitors.map((c) => c.id)
+
       const { data: competitorPrices } = await supabase
         .from("competitor_daily_prices")
         .select("*")
         .eq("hotel_id", hotelId)
         .eq("date", date)
+        .in("competitor_id", competitorIds)
 
-      prices = competitorPrices || []
-    }
-
-    // If no real competitors, return OTA sources info
-    if (!competitors || competitors.length === 0) {
-      const otaSources = [
-        { name: "Booking.com", description: "Price estimate from Booking.com variance model" },
-        { name: "Expedia", description: "Price estimate from Expedia variance model" },
-        { name: "Hotels.com", description: "Price estimate from Hotels.com variance model" },
-        { name: "Agoda", description: "Price estimate from Agoda variance model" },
-        { name: "Trip.com", description: "Price estimate from Trip.com variance model" },
-      ]
-
-      return NextResponse.json({
-        competitors: [],
-        prices: [],
-        source: "ota_estimates",
-        otaSources,
-        message: "No real competitors configured. Using OTA price estimates.",
-      })
+      const priceMap = new Map()
+      for (const price of competitorPrices || []) {
+        const existing = priceMap.get(price.competitor_id)
+        if (!existing || new Date(price.scraped_at) > new Date(existing.scraped_at)) {
+          priceMap.set(price.competitor_id, price)
+        }
+      }
+      prices = Array.from(priceMap.values())
     }
 
     return NextResponse.json({

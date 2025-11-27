@@ -6,16 +6,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  ChevronLeft,
-  ChevronRight,
-  DollarSign,
-  Hotel,
-  AlertTriangle,
-  Building2,
-} from "lucide-react"
+  TrendingUpIcon,
+  TrendingDownIcon,
+  MinusIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DollarSignIcon,
+  HotelIcon,
+  AlertTriangleIcon,
+  BuildingIcon,
+} from "@/components/icons"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from "date-fns"
 import { RunScraperButton } from "./run-scraper-button"
 
@@ -32,7 +32,6 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
   const [competitors, setCompetitors] = useState<any[]>([])
   const [loadingCompetitors, setLoadingCompetitors] = useState(false)
 
-  // Fetch competitors and their prices when hotel or day changes
   useEffect(() => {
     if (selectedHotel && selectedDay) {
       fetchCompetitorDetails()
@@ -81,12 +80,12 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
   const getRecommendationIcon = (priceData: any) => {
     if (!priceData || !priceData.autopilot_action) return null
     if (priceData.autopilot_action === "increase") {
-      return <TrendingUp className="h-3 w-3 text-green-500" />
+      return <TrendingUpIcon className="h-3 w-3 text-green-500" />
     }
     if (priceData.autopilot_action === "decrease") {
-      return <TrendingDown className="h-3 w-3 text-red-500" />
+      return <TrendingDownIcon className="h-3 w-3 text-red-500" />
     }
-    return <Minus className="h-3 w-3 text-cyan-400" />
+    return <MinusIcon className="h-3 w-3 text-cyan-400" />
   }
 
   const getDemandBadge = (level: string) => {
@@ -101,7 +100,6 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
 
   return (
     <div className="space-y-4">
-      {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Select value={selectedHotel} onValueChange={setSelectedHotel}>
@@ -124,19 +122,17 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeftIcon className="h-4 w-4" />
           </Button>
           <span className="font-semibold min-w-32 text-center">{format(currentMonth, "MMMM yyyy")}</span>
           <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRightIcon className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Calendar */}
       <Card className="border-border/50 bg-card/50">
         <CardContent className="p-4">
-          {/* Day headers */}
           <div className="grid grid-cols-7 gap-1 mb-2">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
               <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
@@ -145,14 +141,11 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
             ))}
           </div>
 
-          {/* Calendar grid */}
           <div className="grid grid-cols-7 gap-1">
-            {/* Empty cells for days before month start */}
             {Array.from({ length: monthStart.getDay() }).map((_, i) => (
               <div key={`empty-${i}`} className="aspect-square" />
             ))}
 
-            {/* Days */}
             {days.map((day) => {
               const priceData = getPriceForDate(day)
               const dayColor = getDayColor(priceData)
@@ -206,12 +199,11 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
         </CardContent>
       </Card>
 
-      {/* Selected Day Details */}
       {selectedDay && (
         <Card className="border-border/50 bg-card/50 border-cyan-500/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-cyan-400" />
+              <DollarSignIcon className="h-5 w-5 text-cyan-400" />
               {format(new Date(selectedDay.date), "EEEE, MMMM d, yyyy")}
               <Badge variant="outline" className={getDemandBadge(selectedDay.demand_level)}>
                 {selectedDay.demand_level} demand
@@ -240,10 +232,9 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
               </div>
             </div>
 
-            {/* Competitor Breakdown */}
             <div className="border-t border-border/50 pt-4">
               <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-cyan-400" />
+                <BuildingIcon className="h-4 w-4 text-cyan-400" />
                 Competitor Price Breakdown
               </h4>
 
@@ -251,20 +242,20 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
                 <div className="text-center py-4 text-muted-foreground">Loading competitor details...</div>
               ) : competitors.length > 0 ? (
                 <div className="grid gap-2">
-                  {competitorPrices.map((cp, idx) => {
-                    const comp = competitors.find((c) => c.id === cp.competitor_id) || {
-                      competitor_hotel_name: cp.source || "Unknown",
-                    }
-                    const priceDiff = cp.price - selectedDay.our_price
-                    const priceDiffPercent = ((priceDiff / selectedDay.our_price) * 100).toFixed(1)
+                  {competitors.map((comp) => {
+                    const priceData = competitorPrices.find((cp) => cp.competitor_id === comp.id)
+                    const price = priceData?.price || 0
+                    const priceDiff = price - selectedDay.our_price
+                    const priceDiffPercent =
+                      selectedDay.our_price > 0 ? ((priceDiff / selectedDay.our_price) * 100).toFixed(1) : "0"
 
                     return (
                       <div
-                        key={idx}
+                        key={comp.id}
                         className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50"
                       >
                         <div className="flex items-center gap-3">
-                          <Hotel className="h-4 w-4 text-muted-foreground" />
+                          <HotelIcon className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <div className="font-medium">{comp.competitor_hotel_name}</div>
                             {comp.star_rating && (
@@ -275,13 +266,25 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold">${cp.price}</div>
-                          <div
-                            className={`text-xs ${priceDiff > 0 ? "text-green-400" : priceDiff < 0 ? "text-red-400" : "text-muted-foreground"}`}
-                          >
-                            {priceDiff > 0 ? "+" : ""}
-                            {priceDiffPercent}% vs us
-                          </div>
+                          {price > 0 ? (
+                            <>
+                              <div className="font-bold">${price}</div>
+                              <div
+                                className={`text-xs ${
+                                  priceDiff > 0
+                                    ? "text-green-400"
+                                    : priceDiff < 0
+                                      ? "text-red-400"
+                                      : "text-muted-foreground"
+                                }`}
+                              >
+                                {priceDiff > 0 ? "+" : ""}
+                                {priceDiffPercent}% vs us
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-muted-foreground text-sm">No price data</div>
+                          )}
                         </div>
                       </div>
                     )
@@ -290,12 +293,11 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
               ) : (
                 <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
                   <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    <AlertTriangleIcon className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-medium text-yellow-400">No Real Competitors Configured</p>
+                      <p className="font-medium text-yellow-400">No Competitors Configured</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        The average is calculated from OTA price estimates (Booking.com, Expedia, etc.), not from real
-                        competing hotels.
+                        Add competitors to see price comparisons and get accurate recommendations.
                       </p>
                       <Button
                         variant="outline"
@@ -303,7 +305,7 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
                         className="mt-2 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 bg-transparent"
                         onClick={() => (window.location.href = "/competitors/add")}
                       >
-                        + Add Real Competitors
+                        + Add Competitors
                       </Button>
                     </div>
                   </div>
@@ -320,7 +322,6 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
         </Card>
       )}
 
-      {/* Price Recommendations Summary */}
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
           <CardTitle className="text-lg">Price Recommendations Summary</CardTitle>

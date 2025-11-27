@@ -22,7 +22,7 @@ interface DashboardChartsProps {
   scanResults: any[]
   predictions: any[]
   revenue: any[]
-  dailyPrices?: any[] // Added dailyPrices prop
+  dailyPrices?: any[]
 }
 
 export function DashboardCharts({ scanResults, predictions, revenue, dailyPrices = [] }: DashboardChartsProps) {

@@ -5,23 +5,23 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import {
-  TrendingUp,
-  DollarSign,
-  Zap,
-  AlertTriangle,
-  ArrowUpRight,
-  ArrowDownRight,
-  BarChart3,
-  Building2,
-  Brain,
-  Gauge,
-  Clock,
-  CheckCircle2,
-  Bot,
-  Target,
-  Calendar,
-  Users,
-} from "lucide-react"
+  TrendingUpIcon,
+  DollarSignIcon,
+  ZapIcon,
+  AlertTriangleIcon,
+  ArrowUpRightIcon,
+  ArrowDownRightIcon,
+  BarChartIcon,
+  BuildingIcon,
+  BrainIcon,
+  GaugeIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  BotIcon,
+  TargetIcon,
+  CalendarIcon,
+  UsersIcon,
+} from "@/components/icons"
 import { DashboardCharts } from "./dashboard-charts"
 
 export default async function DashboardPage() {
@@ -134,7 +134,7 @@ export default async function DashboardPage() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-gradient-to-r from-cyan-500/20 to-blue-500/20">
-              <Gauge className="h-6 w-6 text-cyan-400" />
+              <GaugeIcon className="h-6 w-6 text-cyan-400" />
             </div>
             <h1 className="text-4xl font-bold text-white">Command Center</h1>
           </div>
@@ -146,13 +146,13 @@ export default async function DashboardPage() {
               variant="outline"
               className="gap-2 border-slate-700 text-slate-300 hover:bg-slate-800 bg-transparent"
             >
-              <Calendar className="h-4 w-4" />
+              <CalendarIcon className="h-4 w-4" />
               Price Calendar
             </Button>
           </Link>
           <Link href="/predictions">
             <Button className="gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600">
-              <Brain className="h-4 w-4" />
+              <BrainIcon className="h-4 w-4" />
               Generate Predictions
             </Button>
           </Link>
@@ -176,7 +176,7 @@ export default async function DashboardPage() {
               <span className="text-slate-400">{totalCompetitors} competitors tracked</span>
             </div>
             <div className="flex items-center gap-2 text-slate-400">
-              <Clock className="h-4 w-4" />
+              <ClockIcon className="h-4 w-4" />
               <span className="text-sm">Last scan: {lastScan ? lastScan.toLocaleString() : "Never"}</span>
             </div>
           </div>
@@ -187,7 +187,7 @@ export default async function DashboardPage() {
         <Card className="mb-8 bg-slate-900/50 border-slate-800">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-white">
-              <Target className="h-5 w-5 text-cyan-400" />
+              <TargetIcon className="h-5 w-5 text-cyan-400" />
               Budget Progress -{" "}
               {new Date(currentYear, currentMonth - 1).toLocaleString("default", { month: "long", year: "numeric" })}
             </CardTitle>
@@ -244,38 +244,38 @@ export default async function DashboardPage() {
       {/* Key Metrics - Updated with more data */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         <MetricCard
-          icon={<Building2 className="h-4 w-4" />}
+          icon={<BuildingIcon className="h-4 w-4" />}
           label="Properties"
           value={totalHotels.toString()}
           color="cyan"
         />
         <MetricCard
-          icon={<DollarSign className="h-4 w-4" />}
+          icon={<DollarSignIcon className="h-4 w-4" />}
           label="Our Avg Price"
           value={avgOurPrice > 0 ? `$${avgOurPrice.toFixed(0)}` : "N/A"}
           trend={priceTrend}
           color="green"
         />
         <MetricCard
-          icon={<Users className="h-4 w-4" />}
+          icon={<UsersIcon className="h-4 w-4" />}
           label="Competitor Avg"
           value={avgCompetitorPrice > 0 ? `$${avgCompetitorPrice.toFixed(0)}` : "N/A"}
           color="yellow"
         />
         <MetricCard
-          icon={<Zap className="h-4 w-4" />}
+          icon={<ZapIcon className="h-4 w-4" />}
           label="Active Rules"
           value={activeRules.toString()}
           color="purple"
         />
         <MetricCard
-          icon={<BarChart3 className="h-4 w-4" />}
+          icon={<BarChartIcon className="h-4 w-4" />}
           label="Avg Occupancy"
           value={`${avgOccupancy.toFixed(0)}%`}
           color="blue"
         />
         <MetricCard
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangleIcon className="h-4 w-4" />}
           label="Alerts"
           value={unreadAlerts.toString()}
           color={unreadAlerts > 0 ? "red" : "slate"}
@@ -287,7 +287,7 @@ export default async function DashboardPage() {
         <Card className="bg-slate-900/50 border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
-              <DollarSign className="h-5 w-5 text-green-400" />
+              <DollarSignIcon className="h-5 w-5 text-green-400" />
               Price Position vs Competitors
             </CardTitle>
           </CardHeader>
@@ -331,7 +331,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <DollarSign className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+                <DollarSignIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-500 mb-3">No price data yet</p>
                 <Link href="/calendar">
                   <Button size="sm" className="bg-gradient-to-r from-cyan-500 to-blue-500">
@@ -347,7 +347,7 @@ export default async function DashboardPage() {
         <Card className="bg-slate-900/50 border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
-              <Target className="h-5 w-5 text-cyan-400" />
+              <TargetIcon className="h-5 w-5 text-cyan-400" />
               Revenue vs Budget
             </CardTitle>
           </CardHeader>
@@ -394,7 +394,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <Target className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+                <TargetIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-500 mb-3">No budget set for this month</p>
                 <Link href="/budget">
                   <Button size="sm" className="bg-gradient-to-r from-cyan-500 to-blue-500">
@@ -421,14 +421,14 @@ export default async function DashboardPage() {
         <Card className="bg-slate-900/50 border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
-              <Zap className="h-5 w-5 text-yellow-400" />
+              <ZapIcon className="h-5 w-5 text-yellow-400" />
               Autopilot Activity
             </CardTitle>
           </CardHeader>
           <CardContent>
             {!autopilotLogs || autopilotLogs.length === 0 ? (
               <div className="text-center py-8">
-                <Bot className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+                <BotIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-500 mb-3">No actions yet</p>
                 <Link href="/autopilot/new">
                   <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 bg-transparent">
@@ -444,7 +444,7 @@ export default async function DashboardPage() {
                     className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50"
                   >
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-4 w-4 text-green-400" />
+                      <CheckCircleIcon className="h-4 w-4 text-green-400" />
                       <div>
                         <div className="font-medium text-sm text-white">{log.action_taken}</div>
                         <div className="text-xs text-slate-500">{new Date(log.executed_at).toLocaleString()}</div>
@@ -468,7 +468,7 @@ export default async function DashboardPage() {
         <Card className="bg-slate-900/50 border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
-              <TrendingUp className="h-5 w-5 text-green-400" />
+              <TrendingUpIcon className="h-5 w-5 text-green-400" />
               High Demand Days
             </CardTitle>
           </CardHeader>
@@ -505,7 +505,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <Calendar className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+                <CalendarIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-500 mb-3">No high demand days detected</p>
                 <Link href="/calendar">
                   <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 bg-transparent">
@@ -521,7 +521,7 @@ export default async function DashboardPage() {
         <Card className="bg-slate-900/50 border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
-              <Users className="h-5 w-5 text-purple-400" />
+              <UsersIcon className="h-5 w-5 text-purple-400" />
               Competitors Tracked
             </CardTitle>
           </CardHeader>
@@ -566,7 +566,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <Users className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+                <UsersIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-500 mb-3">No competitors configured</p>
                 <Link href="/competitors/add">
                   <Button size="sm" className="bg-gradient-to-r from-cyan-500 to-blue-500">
@@ -617,7 +617,7 @@ function MetricCard({
         <div className="text-3xl font-bold text-white">{value}</div>
         {typeof trend === "number" && trend !== 0 && (
           <div className={`flex items-center text-sm ${trend >= 0 ? "text-red-400" : "text-green-400"}`}>
-            {trend >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+            {trend >= 0 ? <ArrowUpRightIcon className="h-3 w-3" /> : <ArrowDownRightIcon className="h-3 w-3" />}
             {Math.abs(trend).toFixed(1)}% vs market
           </div>
         )}
