@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-// Demand factors by day of week and season
+const SCAN_DAYS = 180
+
 function getDemandLevel(date: Date): { level: string; multiplier: number } {
   const dayOfWeek = date.getDay()
   const month = date.getMonth()
@@ -26,22 +27,17 @@ function generateCompetitorPrice(
   basePrice: number,
   date: Date,
   competitor: { id: string; competitor_hotel_name: string; star_rating?: number },
-  index: number,
+  roomTypeMultiplier = 1.0,
 ): number {
   const { multiplier } = getDemandLevel(date)
 
-  // Different variance based on star rating
-  const starVariance = competitor.star_rating
-    ? 0.85 + (competitor.star_rating - 3) * 0.1 // 3-star: 0.85, 4-star: 0.95, 5-star: 1.05
-    : 0.9 + index * 0.05
+  const starVariance = competitor.star_rating ? 0.85 + (competitor.star_rating - 3) * 0.1 : 0.95
 
-  // Random daily variance (5-15%)
   const randomFactor = 0.92 + Math.random() * 0.16
 
-  return Math.round(basePrice * starVariance * multiplier * randomFactor)
+  return Math.round(basePrice * starVariance * multiplier * randomFactor * roomTypeMultiplier)
 }
 
-// Calculate recommended price based on competitors and demand
 function calculateRecommendedPrice(
   ourPrice: number,
   competitorPrices: number[],
@@ -51,8 +47,6 @@ function calculateRecommendedPrice(
     return { price: ourPrice, recommendation: "No competitors to compare", action: "maintain" }
   }
 
-  const minPrice = Math.min(...competitorPrices)
-  const maxPrice = Math.max(...competitorPrices)
   const avgPrice = Math.round(competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length)
 
   let recommendedPrice = ourPrice
@@ -77,10 +71,10 @@ function calculateRecommendedPrice(
     }
   } else if (demandLevel === "medium") {
     recommendedPrice = avgPrice
-    if (ourPrice > maxPrice) {
-      recommendation = `Price above all competitors. Consider reducing to $${avgPrice}`
+    if (ourPrice > avgPrice * 1.15) {
+      recommendation = `Price above competitors. Consider reducing to $${avgPrice}`
       action = "decrease"
-    } else if (ourPrice < minPrice * 0.9) {
+    } else if (ourPrice < avgPrice * 0.85) {
       recommendation = `Price below market. Opportunity to increase to $${avgPrice}`
       action = "increase"
     } else {
@@ -96,7 +90,6 @@ function calculateRecommendedPrice(
     }
   }
 
-  // Clamp recommended price
   recommendedPrice = Math.max(recommendedPrice, Math.round(ourPrice * 0.7))
   recommendedPrice = Math.min(recommendedPrice, Math.round(ourPrice * 1.5))
 
@@ -106,27 +99,32 @@ function calculateRecommendedPrice(
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
-    const { hotelId } = await request.json()
+    const { hotelId, roomTypeId } = await request.json()
 
-    // Get hotel details
     const { data: hotel, error: hotelError } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
 
     if (hotelError || !hotel) {
       return NextResponse.json({ error: "Hotel not found" }, { status: 404 })
     }
 
+    const { data: hotelRoomTypes } = await supabase
+      .from("hotel_room_types")
+      .select("*")
+      .eq("hotel_id", hotelId)
+      .eq("is_active", true)
+
     const { data: competitors } = await supabase
       .from("hotel_competitors")
-      .select("*")
+      .select(`
+        *,
+        competitor_room_types (*)
+      `)
       .eq("hotel_id", hotelId)
       .eq("is_active", true)
 
     if (!competitors || competitors.length === 0) {
       return NextResponse.json(
-        {
-          error: "No competitors configured. Please add competitors first.",
-          redirect: "/competitors/add",
-        },
+        { error: "No competitors configured. Please add competitors first.", redirect: "/competitors/add" },
         { status: 400 },
       )
     }
@@ -135,57 +133,77 @@ export async function POST(request: Request) {
     const results = []
     const today = new Date()
 
-    // Scan 90 days ahead
-    for (let i = 0; i < 90; i++) {
+    const roomTypesToScan = roomTypeId
+      ? hotelRoomTypes?.filter((rt) => rt.id === roomTypeId) || []
+      : hotelRoomTypes && hotelRoomTypes.length > 0
+        ? hotelRoomTypes
+        : [{ id: null, name: "Standard", base_price: basePrice }]
+
+    for (let i = 0; i < SCAN_DAYS; i++) {
       const scanDate = new Date(today)
       scanDate.setDate(scanDate.getDate() + i)
       const dateStr = scanDate.toISOString().split("T")[0]
 
       const { level: demandLevel, multiplier } = getDemandLevel(scanDate)
-      const ourPrice = Math.round(basePrice * multiplier * (0.95 + Math.random() * 0.1))
 
-      const competitorPrices: number[] = []
+      for (const roomType of roomTypesToScan) {
+        const roomBasePrice = roomType.base_price || basePrice
+        const ourPrice = Math.round(roomBasePrice * multiplier * (0.95 + Math.random() * 0.1))
 
-      for (let idx = 0; idx < competitors.length; idx++) {
-        const comp = competitors[idx]
-        const price = generateCompetitorPrice(basePrice, scanDate, comp, idx)
-        competitorPrices.push(price)
+        const competitorPrices: number[] = []
 
-        await supabase.from("competitor_daily_prices").upsert(
-          {
-            hotel_id: hotelId,
-            competitor_id: comp.id,
-            date: dateStr,
-            price: price,
-            source: "scan", // Single source
-            room_type: "Standard",
-            availability: true,
-            scraped_at: new Date().toISOString(),
-          },
-          { onConflict: "competitor_id,date,source" },
-        )
+        for (const comp of competitors) {
+          const compRoomTypes = comp.competitor_room_types || []
+
+          // Find matching room type or use general price
+          const matchingRoomType = compRoomTypes.find(
+            (crt: any) =>
+              crt.name.toLowerCase().includes(roomType.name.toLowerCase()) ||
+              roomType.name.toLowerCase().includes(crt.name.toLowerCase()),
+          )
+
+          const roomMultiplier = matchingRoomType ? 1.0 : 0.95
+          const price = generateCompetitorPrice(roomBasePrice, scanDate, comp, roomMultiplier)
+          competitorPrices.push(price)
+
+          await supabase.from("competitor_daily_prices").upsert(
+            {
+              hotel_id: hotelId,
+              competitor_id: comp.id,
+              room_type_id: matchingRoomType?.id || null,
+              date: dateStr,
+              price: price,
+              source: "scan",
+              room_type: roomType.name,
+              availability: true,
+              scraped_at: new Date().toISOString(),
+            },
+            { onConflict: "competitor_id,date,source" },
+          )
+        }
+
+        const recommendation = calculateRecommendedPrice(ourPrice, competitorPrices, demandLevel)
+
+        const dailyPrice = {
+          hotel_id: hotelId,
+          room_type_id: roomType.id,
+          date: dateStr,
+          our_price: ourPrice,
+          recommended_price: recommendation.price,
+          min_competitor_price: competitorPrices.length > 0 ? Math.min(...competitorPrices) : null,
+          max_competitor_price: competitorPrices.length > 0 ? Math.max(...competitorPrices) : null,
+          avg_competitor_price:
+            competitorPrices.length > 0
+              ? Math.round(competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length)
+              : null,
+          demand_level: demandLevel,
+          price_recommendation: recommendation.recommendation,
+          autopilot_action: recommendation.action,
+          updated_at: new Date().toISOString(),
+        }
+
+        results.push(dailyPrice)
       }
-
-      const recommendation = calculateRecommendedPrice(ourPrice, competitorPrices, demandLevel)
-
-      const dailyPrice = {
-        hotel_id: hotelId,
-        date: dateStr,
-        our_price: ourPrice,
-        recommended_price: recommendation.price,
-        min_competitor_price: competitorPrices.length > 0 ? Math.min(...competitorPrices) : null,
-        max_competitor_price: competitorPrices.length > 0 ? Math.max(...competitorPrices) : null,
-        avg_competitor_price:
-          competitorPrices.length > 0
-            ? Math.round(competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length)
-            : null,
-        demand_level: demandLevel,
-        price_recommendation: recommendation.recommendation,
-        autopilot_action: recommendation.action,
-        updated_at: new Date().toISOString(),
-      }
-
-      results.push(dailyPrice)
     }
 
     // Upsert all daily prices
@@ -201,11 +219,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Scanned 90 days for ${hotel.name}`,
-      daysScanned: 90,
+      message: `Scanned ${SCAN_DAYS} days for ${hotel.name}`,
+      daysScanned: SCAN_DAYS,
+      roomTypesScanned: roomTypesToScan.length,
       competitors: competitors.map((c) => ({
         name: c.competitor_hotel_name,
         stars: c.star_rating,
+        color: c.display_color,
+        roomTypes: c.competitor_room_types?.length || 0,
       })),
       competitorCount: competitors.length,
       summary: {

@@ -4,20 +4,21 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  ArrowLeft,
-  MapPin,
-  DollarSign,
-  TrendingUp,
-  BarChart3,
-  Bot,
-  Target,
-  Activity,
-  Users,
-  Zap,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react"
+  ArrowLeftIcon,
+  MapPinIcon,
+  DollarSignIcon,
+  TrendingUpIcon,
+  BarChart3Icon,
+  BotIcon,
+  TargetIcon,
+  ActivityIcon,
+  UsersIcon,
+  ZapIcon,
+  CalendarIcon,
+  ArrowUpRightIcon,
+  ArrowDownRightIcon,
+  BedDoubleIcon,
+} from "@/components/icons"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteHotelButton } from "./delete-button"
@@ -46,6 +47,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
     { data: revenue },
     { data: historicalPerformance },
     { data: optimizationHistory },
+    { data: roomTypes },
   ] = await Promise.all([
     supabase.from("scan_results").select("*").eq("hotel_id", id).order("scraped_at", { ascending: false }).limit(100),
     supabase
@@ -83,6 +85,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
       .eq("hotel_id", id)
       .order("date", { ascending: false })
       .limit(20),
+    supabase.from("hotel_room_types").select("*").eq("hotel_id", id).eq("is_active", true),
   ])
 
   // Calculate KPIs
@@ -124,7 +127,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
     <div className="container mx-auto px-4 py-8">
       <Link href="/hotels">
         <Button variant="ghost" className="mb-4">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeftIcon className="h-4 w-4 mr-2" />
           Back to Hotels
         </Button>
       </Link>
@@ -135,12 +138,18 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
           <h1 className="text-4xl font-bold mb-2">{hotel.name}</h1>
           {hotel.location && (
             <p className="flex items-center gap-1 text-muted-foreground">
-              <MapPin className="h-4 w-4" />
+              <MapPinIcon className="h-4 w-4" />
               {hotel.location}
             </p>
           )}
         </div>
         <div className="flex gap-2">
+          <Link href={`/hotels/${id}/room-types`}>
+            <Button variant="outline" className="gap-2 bg-transparent">
+              <BedDoubleIcon className="h-4 w-4" />
+              Room Types ({roomTypes?.length || 0})
+            </Button>
+          </Link>
           <Link href={`/hotels/${id}/edit`}>
             <Button variant="outline">Edit Hotel</Button>
           </Link>
@@ -153,7 +162,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <DollarSign className="h-3 w-3" />
+              <DollarSignIcon className="h-3 w-3" />
               <span className="text-xs">Base Price</span>
             </div>
             <div className="text-xl font-bold">${hotel.base_price || 0}</div>
@@ -163,7 +172,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <BarChart3 className="h-3 w-3" />
+              <BarChart3Icon className="h-3 w-3" />
               <span className="text-xs">Market Avg</span>
             </div>
             <div className="text-xl font-bold">${avgCompetitorPrice.toFixed(0)}</div>
@@ -173,7 +182,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <Target className="h-3 w-3" />
+              <TargetIcon className="h-3 w-3" />
               <span className="text-xs">Position</span>
             </div>
             <div className={`text-xl font-bold ${pricePosition >= 0 ? "text-amber-600" : "text-green-600"}`}>
@@ -186,13 +195,13 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <TrendingUp className="h-3 w-3" />
+              <TrendingUpIcon className="h-3 w-3" />
               <span className="text-xs">Trend</span>
             </div>
             <div
               className={`text-xl font-bold flex items-center ${priceTrend >= 0 ? "text-green-600" : "text-red-600"}`}
             >
-              {priceTrend >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+              {priceTrend >= 0 ? <ArrowUpRightIcon className="h-4 w-4" /> : <ArrowDownRightIcon className="h-4 w-4" />}
               {Math.abs(priceTrend).toFixed(1)}%
             </div>
           </CardContent>
@@ -201,7 +210,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <Activity className="h-3 w-3" />
+              <ActivityIcon className="h-3 w-3" />
               <span className="text-xs">Occupancy</span>
             </div>
             <div className="text-xl font-bold">{avgOccupancy.toFixed(0)}%</div>
@@ -211,7 +220,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <BarChart3 className="h-3 w-3" />
+              <BarChart3Icon className="h-3 w-3" />
               <span className="text-xs">RevPAR</span>
             </div>
             <div className="text-xl font-bold">${revpar.toFixed(0)}</div>
@@ -221,7 +230,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <Users className="h-3 w-3" />
+              <UsersIcon className="h-3 w-3" />
               <span className="text-xs">Competitors</span>
             </div>
             <div className="text-xl font-bold">
@@ -233,7 +242,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <Bot className="h-3 w-3" />
+              <BotIcon className="h-3 w-3" />
               <span className="text-xs">Auto Rules</span>
             </div>
             <div className="text-xl font-bold">{activeRules}</div>
@@ -275,7 +284,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                 <Card className="border-green-200 bg-green-50 dark:bg-green-950/30">
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                      <TrendingUp className="h-5 w-5" />
+                      <TrendingUpIcon className="h-5 w-5" />
                       Recommended Price
                     </CardTitle>
                   </CardHeader>
@@ -399,10 +408,10 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         <TabsContent value="predictions" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5" />
                 Price Predictions
-              </CardTitle>
+              </div>
               <CardDescription>AI-generated price forecasts for the next 30 days</CardDescription>
             </CardHeader>
             <CardContent>
@@ -443,7 +452,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <CalendarIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="font-medium mb-2">No Predictions Yet</h3>
                   <p className="text-muted-foreground mb-4">Generate AI-powered price predictions</p>
                   <Link href="/predictions">
@@ -461,10 +470,10 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Bot className="h-5 w-5" />
+                  <div className="flex items-center gap-2">
+                    <BotIcon className="h-5 w-5" />
                     Autopilot Rules
-                  </CardTitle>
+                  </div>
                   <Link href={`/autopilot/new?hotel=${id}`}>
                     <Button size="sm">Add Rule</Button>
                   </Link>
@@ -501,7 +510,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <Bot className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <BotIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <p className="text-muted-foreground">No autopilot rules configured</p>
                   </div>
                 )}
@@ -510,10 +519,10 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-yellow-500" />
+                <div className="flex items-center gap-2">
+                  <ZapIcon className="h-5 w-5 text-yellow-500" />
                   Recent Actions
-                </CardTitle>
+                </div>
               </CardHeader>
               <CardContent>
                 {autopilotLogs && autopilotLogs.length > 0 ? (

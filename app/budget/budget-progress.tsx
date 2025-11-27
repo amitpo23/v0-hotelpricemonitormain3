@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { TrendingUp, Target, Zap, AlertTriangle, CheckCircle } from "lucide-react"
+import { TrendingUpIcon, TargetIcon, ZapIcon, AlertTriangleIcon, CheckCircleIcon } from "@/components/icons"
 
 interface BudgetProgressProps {
   budgetProgress: any[]
@@ -15,7 +15,7 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
     return (
       <Card className="border-border/50 bg-card/50">
         <CardContent className="py-12 text-center">
-          <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <TargetIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">No budgets set</h3>
           <p className="text-muted-foreground">Set your first monthly budget above to start tracking progress</p>
         </CardContent>
@@ -39,12 +39,12 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
                   {budget.hotels?.name || "Hotel"}
                   {budget.onTrack ? (
                     <Badge className="bg-green-500/20 text-green-400 border-green-500">
-                      <CheckCircle className="h-3 w-3 mr-1" />
+                      <CheckCircleIcon className="h-3 w-3 mr-1" />
                       On Track
                     </Badge>
                   ) : (
                     <Badge className="bg-orange-500/20 text-orange-400 border-orange-500">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      <AlertTriangleIcon className="h-3 w-3 mr-1" />
                       Behind Target
                     </Badge>
                   )}
@@ -101,7 +101,7 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
               {!budget.onTrack && budget.gap > 0 && (
                 <div className="p-3 rounded-lg bg-gradient-to-r from-cyan-500/10 to-blue-600/10 border border-cyan-500/30">
                   <div className="flex items-center gap-2 mb-2">
-                    <Zap className="h-4 w-4 text-cyan-400" />
+                    <ZapIcon className="h-4 w-4 text-cyan-400" />
                     <span className="font-medium text-cyan-400">Autopilot Recommendation</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -114,11 +114,11 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
                   </p>
                   <div className="mt-2 flex gap-2">
                     <Button size="sm" variant="outline" className="text-xs bg-transparent">
-                      <TrendingUp className="h-3 w-3 mr-1" />
+                      <TrendingUpIcon className="h-3 w-3 mr-1" />
                       Optimize Prices
                     </Button>
                     <Button size="sm" variant="outline" className="text-xs bg-transparent">
-                      <Zap className="h-3 w-3 mr-1" />
+                      <ZapIcon className="h-3 w-3 mr-1" />
                       Enable Aggressive Mode
                     </Button>
                   </div>
@@ -128,7 +128,7 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
               {budget.onTrack && budget.gap <= 0 && (
                 <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircleIcon className="h-4 w-4 text-green-500" />
                     <span className="font-medium text-green-400">Target Achieved!</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">

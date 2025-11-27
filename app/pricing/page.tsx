@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, Minus, DollarSign, BarChart3 } from "lucide-react"
+import { TrendingUpIcon, TrendingDownIcon, MinusIcon, DollarSignIcon, BarChart3Icon } from "@/components/icons"
 
 export default async function PricingPage() {
   const supabase = await createClient()
@@ -67,7 +67,7 @@ export default async function PricingPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
+              <TrendingUpIcon className="h-5 w-5 text-green-600" />
               Price Recommendations
             </CardTitle>
             <CardDescription>AI-generated optimal pricing suggestions</CardDescription>
@@ -75,7 +75,7 @@ export default async function PricingPage() {
           <CardContent>
             {!recommendations || recommendations.length === 0 ? (
               <div className="text-center py-8">
-                <BarChart3 className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+                <BarChart3Icon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-500">No recommendations yet. Run scans to generate pricing insights.</p>
               </div>
             ) : (
@@ -96,11 +96,11 @@ export default async function PricingPage() {
                           <div className="text-2xl font-bold text-green-600">${rec.recommended_price}</div>
                           <div className="flex items-center gap-1 text-sm">
                             {diff > 0 ? (
-                              <TrendingUp className="h-3 w-3 text-green-600" />
+                              <TrendingUpIcon className="h-3 w-3 text-green-600" />
                             ) : diff < 0 ? (
-                              <TrendingDown className="h-3 w-3 text-red-600" />
+                              <TrendingDownIcon className="h-3 w-3 text-red-600" />
                             ) : (
-                              <Minus className="h-3 w-3 text-slate-400" />
+                              <MinusIcon className="h-3 w-3 text-slate-400" />
                             )}
                             <span
                               className={diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-slate-400"}
@@ -130,7 +130,7 @@ export default async function PricingPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-blue-600" />
+              <DollarSignIcon className="h-5 w-5 text-blue-600" />
               Market Overview
             </CardTitle>
             <CardDescription>Current competitor pricing by hotel</CardDescription>

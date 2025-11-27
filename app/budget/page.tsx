@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Target, TrendingUp, AlertTriangle, CheckCircle, DollarSign } from "lucide-react"
+import { TargetIcon, TrendingUpIcon, AlertTriangleIcon, CheckCircleIcon, DollarSignIcon } from "@/components/icons"
 import { BudgetForm } from "./budget-form"
 import { BudgetProgress } from "./budget-progress"
 import { YearlyBudgetGrid } from "./yearly-budget-grid"
@@ -78,7 +78,7 @@ export default async function BudgetPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
-              <Target className="h-8 w-8 text-cyan-400" />
+              <TargetIcon className="h-8 w-8 text-cyan-400" />
             </div>
             Revenue Budget
           </h1>
@@ -92,7 +92,7 @@ export default async function BudgetPage() {
           <CardHeader className="pb-2">
             <CardDescription>Monthly Target</CardDescription>
             <CardTitle className="text-2xl flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-cyan-400" />${totalTarget.toLocaleString()}
+              <DollarSignIcon className="h-5 w-5 text-cyan-400" />${totalTarget.toLocaleString()}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -100,7 +100,7 @@ export default async function BudgetPage() {
           <CardHeader className="pb-2">
             <CardDescription>Actual Revenue</CardDescription>
             <CardTitle className="text-2xl flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-500" />${totalActual.toLocaleString()}
+              <TrendingUpIcon className="h-5 w-5 text-green-500" />${totalActual.toLocaleString()}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -123,11 +123,11 @@ export default async function BudgetPage() {
             <CardDescription>Hotels Status</CardDescription>
             <CardTitle className="text-lg flex items-center gap-3">
               <span className="flex items-center gap-1 text-green-500">
-                <CheckCircle className="h-4 w-4" />
+                <CheckCircleIcon className="h-4 w-4" />
                 {hotelsOnTrack}
               </span>
               <span className="flex items-center gap-1 text-orange-500">
-                <AlertTriangle className="h-4 w-4" />
+                <AlertTriangleIcon className="h-4 w-4" />
                 {hotelsOffTrack}
               </span>
             </CardTitle>

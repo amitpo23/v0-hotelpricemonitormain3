@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Trash2 } from "lucide-react"
+import { Trash2Icon } from "@/components/icons"
 
 export function DeleteHotelButton({ hotelId, hotelName }: { hotelId: string; hotelName: string }) {
   const router = useRouter()
@@ -41,7 +41,7 @@ export function DeleteHotelButton({ hotelId, hotelName }: { hotelId: string; hot
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button variant="destructive" size="icon">
-          <Trash2 className="h-4 w-4" />
+          <Trash2Icon className="h-4 w-4" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Check } from "lucide-react"
+import { RefreshCwIcon, CheckIcon } from "@/components/icons"
 
 export function RefreshDataButton() {
   const [loading, setLoading] = useState(false)
@@ -11,7 +11,6 @@ export function RefreshDataButton() {
   const handleRefresh = async () => {
     setLoading(true)
     try {
-      // Call API to refresh market data
       const response = await fetch("/api/market/refresh", { method: "POST" })
       if (response.ok) {
         setSuccess(true)
@@ -30,9 +29,9 @@ export function RefreshDataButton() {
   return (
     <Button variant="outline" className="gap-2 bg-transparent" onClick={handleRefresh} disabled={loading}>
       {success ? (
-        <Check className="h-4 w-4 text-green-500" />
+        <CheckIcon className="h-4 w-4 text-green-500" />
       ) : (
-        <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        <RefreshCwIcon className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
       )}
       {loading ? "Refreshing..." : success ? "Updated!" : "Refresh Data"}
     </Button>

@@ -104,7 +104,7 @@ export function IconPlus({ className }: { className?: string }) {
 export function IconCheck({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M20 6L9 17l-5-5" />
+      <path d="M20 6L9 17l-5-5L1 18M17 6h6v6" />
     </svg>
   )
 }
@@ -267,7 +267,7 @@ export function IconSettings({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 001.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
     </svg>
   )
 }
@@ -417,6 +417,141 @@ export function IconCalendarDays({ className }: { className?: string }) {
   )
 }
 
+export function IconXCircle({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M15 9l-6 6M9 9l6 6" />
+    </svg>
+  )
+}
+
+export function IconCheckCircle2({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  )
+}
+
+export function IconBuilding2({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M6 22V4a2 2 0 012-2h8a2 2 0 012 2v18zM6 12H4a2 2 0 00-2 2v6a2 2 0 002 2h2M18 9h2a2 2 0 012 2v9a2 2 0 01-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4" />
+    </svg>
+  )
+}
+
+export function IconLoader2({ className }: { className?: string }) {
+  return (
+    <svg className={`${className} animate-spin`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M21 12a9 9 0 11-6.219-8.56" />
+    </svg>
+  )
+}
+
+export function IconTrash2({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+    </svg>
+  )
+}
+
+export function IconBarChart3({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M3 3v18h18M7 16v-3M11 16V9M15 16v-6M19 16v-8" />
+    </svg>
+  )
+}
+
+export function IconBed({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M2 4v16M2 8h18a2 2 0 012 2v10M2 17h20M6 8v9" />
+    </svg>
+  )
+}
+
+export function IconLink({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+    </svg>
+  )
+}
+
+export function IconPalette({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <circle cx="13.5" cy="6.5" r="0.5" fill="currentColor" />
+      <circle cx="17.5" cy="10.5" r="0.5" fill="currentColor" />
+      <circle cx="8.5" cy="7.5" r="0.5" fill="currentColor" />
+      <circle cx="6.5" cy="12.5" r="0.5" fill="currentColor" />
+      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2z" />
+    </svg>
+  )
+}
+
+export function IconBedDouble({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M2 20v-8a2 2 0 012-2h16a2 2 0 012 2v8M4 10V6a2 2 0 012-2h12a2 2 0 012 2v4M12 4v6M2 18h20" />
+    </svg>
+  )
+}
+
+export function IconSun({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <circle cx="12" cy="12" r="5" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  )
+}
+
+export function IconCloud({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M18 10h-1.26A8 8 0 109 2.83M22 12A10 10 0 0012 2v10z" />
+    </svg>
+  )
+}
+
+export function IconPieChart({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z" />
+    </svg>
+  )
+}
+
+export function IconMessageSquare({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M8 12h3m0 0l3 3M11 3a9 9 0 00-7.8 3.6H4a2 2 0 000 4h1.28A8.06 8.06 0 0111 3z" />
+    </svg>
+  )
+}
+
+export function IconSend({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M21 11.5a8.38 8.38 0 01-1.94-2.22M16.5 3L21 7.5M6 21v-8a2 2 0 012-2h9m2 4H5a2 2 0 01-2-2V9a2 2 0 012-2h13a2 2 0 012 2v4a2 2 0 01-2 2h-9" />
+    </svg>
+  )
+}
+
+export function IconUser({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M4 16c-.89 0-1.78-.19-2.6-.55C1.43 14.65 1 13.86 1 13s.43-1.65 1.36-2.15A8.21 8.21 0 0112 3c2.62 0 4.98.39 6.97 1.15.82.36 1.71.55 2.6.55a4.6 4.6 0 011.71.4 4.6 4.6 0 01-.4 1.71 4.6 4.6 0 00-1.15 2.6c0 .99-.2 1.98-.55 2.6A8.21 8.21 0 0022 16a8.21 8.21 0 00-4.75-1.85c-.82-.36-1.71-.55-2.6-.55-.89 0-1.78.19-2.6.55a4.6 4.6 0 01-.4-1.71 4.6 4.6 0 011.71-.4c1.15-.47 2.35-1.15 3.4-1.95M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  )
+}
+
 // Aliases for compatibility with lucide-react naming convention
 export {
   IconPlane as PlaneIcon,
@@ -460,4 +595,92 @@ export {
   IconTrash as TrashIcon,
   IconSettings as SettingsIcon,
   IconActivity as ActivityIcon,
+  IconXCircle as XCircleIcon,
+  IconCheckCircle2 as CheckCircle2Icon,
+  IconBuilding2 as Building2Icon,
+  IconLoader2 as Loader2Icon,
+  IconScan as ScanIcon,
+  IconTrash2 as Trash2Icon,
+  IconBarChart3 as BarChart3Icon,
+  IconBed as BedIcon,
+  IconLink as LinkIcon,
+  IconPalette as PaletteIcon,
+  IconBell as BellIcon,
+  IconSave as SaveIcon,
+  IconArrowLeft as ArrowLeftIcon,
+  IconGlobe as GlobeIcon,
+  IconSparkles as SparklesIcon,
+  IconBedDouble as BedDoubleIcon,
+  IconSun as SunIcon,
+  IconCloud as CloudIcon,
+  IconPieChart as PieChartIcon,
+  IconMessageSquare as MessageSquareIcon,
+  IconSend as SendIcon,
+  IconUser as UserIcon,
+}
+
+// Icons namespace export for compatibility
+export const Icons = {
+  plane: IconPlane,
+  search: IconSearch,
+  building: IconBuilding,
+  bot: IconBot,
+  target: IconTarget,
+  arrowRight: IconArrowRight,
+  brain: IconBrain,
+  radar: IconRadar,
+  gauge: IconGauge,
+  dollarSign: IconDollar,
+  trendingUp: IconTrendingUp,
+  trendingDown: IconTrendingDown,
+  zap: IconZap,
+  alertTriangle: IconAlert,
+  arrowUpRight: IconArrowUpRight,
+  arrowDownRight: IconArrowDownRight,
+  barChart: IconBarChart,
+  clock: IconClock,
+  checkCircle: IconCheckCircle,
+  calendar: IconCalendar,
+  users: IconUsers,
+  chevronLeft: IconChevronLeft,
+  chevronRight: IconChevronRight,
+  minus: IconMinus,
+  hotel: IconHotel,
+  alertCircle: IconAlertCircle,
+  calendarDays: IconCalendarDays,
+  plus: IconPlus,
+  play: IconPlay,
+  pause: IconPause,
+  refreshCw: IconRefresh,
+  loader: IconLoader,
+  check: IconCheck,
+  x: IconX,
+  star: IconStar,
+  mapPin: IconMapPin,
+  externalLink: IconExternalLink,
+  info: IconInfo,
+  trash: IconTrash,
+  settings: IconSettings,
+  activity: IconActivity,
+  xCircle: IconXCircle,
+  building2: IconBuilding2,
+  loader2: IconLoader2,
+  scan: IconScan,
+  trash2: IconTrash2,
+  barChart3: IconBarChart3,
+  bed: IconBed,
+  bedDouble: IconBedDouble,
+  link: IconLink,
+  palette: IconPalette,
+  bell: IconBell,
+  save: IconSave,
+  arrowLeft: IconArrowLeft,
+  globe: IconGlobe,
+  sparkles: IconSparkles,
+  sun: IconSun,
+  cloud: IconCloud,
+  pieChart: IconPieChart,
+  messageSquare: IconMessageSquare,
+  send: IconSend,
+  user: IconUser,
 }

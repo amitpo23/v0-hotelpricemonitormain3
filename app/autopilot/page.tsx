@@ -3,7 +3,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Zap, Plus, Settings, TrendingUp, TrendingDown, Target, DollarSign, Activity } from "lucide-react"
+import {
+  ZapIcon,
+  PlusIcon,
+  SettingsIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  TargetIcon,
+  DollarSignIcon,
+  ActivityIcon,
+} from "@/components/icons"
 
 export default async function AutopilotPage() {
   const supabase = await createClient()
@@ -19,13 +28,13 @@ export default async function AutopilotPage() {
   const getTriggerIcon = (type: string) => {
     switch (type) {
       case "competitor_undercut":
-        return <TrendingDown className="h-4 w-4 text-red-500" />
+        return <TrendingDownIcon className="h-4 w-4 text-red-500" />
       case "occupancy_threshold":
-        return <Target className="h-4 w-4 text-blue-500" />
+        return <TargetIcon className="h-4 w-4 text-blue-500" />
       case "demand_spike":
-        return <TrendingUp className="h-4 w-4 text-green-500" />
+        return <TrendingUpIcon className="h-4 w-4 text-green-500" />
       default:
-        return <Activity className="h-4 w-4 text-purple-500" />
+        return <ActivityIcon className="h-4 w-4 text-purple-500" />
     }
   }
 
@@ -47,7 +56,7 @@ export default async function AutopilotPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-            <Zap className="h-10 w-10 text-yellow-500" />
+            <ZapIcon className="h-10 w-10 text-yellow-500" />
             Autopilot
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
@@ -56,7 +65,7 @@ export default async function AutopilotPage() {
         </div>
         <Link href="/autopilot/new">
           <Button className="gap-2">
-            <Plus className="h-4 w-4" />
+            <PlusIcon className="h-4 w-4" />
             Create Rule
           </Button>
         </Link>
@@ -106,7 +115,7 @@ export default async function AutopilotPage() {
             <CardContent>
               {!rules || rules.length === 0 ? (
                 <div className="text-center py-12">
-                  <Zap className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+                  <ZapIcon className="h-16 w-16 text-slate-300 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold mb-2">No rules yet</h3>
                   <p className="text-slate-500 mb-4">
                     Create your first autopilot rule to start automating your pricing
@@ -161,13 +170,13 @@ export default async function AutopilotPage() {
                         <div className="mt-3 pt-3 border-t flex gap-4">
                           {rule.target_revenue && (
                             <div className="flex items-center gap-1 text-sm">
-                              <DollarSign className="h-4 w-4 text-green-500" />
+                              <DollarSignIcon className="h-4 w-4 text-green-500" />
                               Target: ${rule.target_revenue.toLocaleString()}
                             </div>
                           )}
                           {rule.target_occupancy && (
                             <div className="flex items-center gap-1 text-sm">
-                              <Target className="h-4 w-4 text-blue-500" />
+                              <TargetIcon className="h-4 w-4 text-blue-500" />
                               Occupancy: {rule.target_occupancy}%
                             </div>
                           )}
@@ -177,7 +186,7 @@ export default async function AutopilotPage() {
                       <div className="flex justify-end mt-3">
                         <Link href={`/autopilot/${rule.id}`}>
                           <Button variant="ghost" size="sm" className="gap-1">
-                            <Settings className="h-4 w-4" />
+                            <SettingsIcon className="h-4 w-4" />
                             Configure
                           </Button>
                         </Link>
@@ -195,7 +204,7 @@ export default async function AutopilotPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
+                <ActivityIcon className="h-5 w-5" />
                 Activity Log
               </CardTitle>
             </CardHeader>

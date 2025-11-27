@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, CalendarDays } from "lucide-react"
+import { ArrowLeftIcon, SaveIcon, CalendarDaysIcon } from "@/components/icons"
 import Link from "next/link"
 
 export default function AddBookingPage() {
@@ -68,14 +68,14 @@ export default function AddBookingPage() {
   return (
     <div className="container mx-auto p-6 max-w-2xl">
       <Link href="/bookings" className="flex items-center gap-2 text-slate-400 hover:text-white mb-6">
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeftIcon className="h-4 w-4" />
         Back to Bookings
       </Link>
 
       <Card className="bg-slate-900/50 border-slate-800">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5 text-cyan-400" />
+            <CalendarDaysIcon className="h-5 w-5 text-cyan-400" />
             Add New Booking
           </CardTitle>
         </CardHeader>
@@ -195,7 +195,6 @@ export default function AddBookingPage() {
               />
             </div>
 
-            {/* Summary */}
             {nights > 0 && (
               <Card className="bg-cyan-500/10 border-cyan-500/30">
                 <CardContent className="p-4">
@@ -220,7 +219,7 @@ export default function AddBookingPage() {
               disabled={loading || !formData.hotel_id || nights <= 0}
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-500"
             >
-              <Save className="h-4 w-4 mr-2" />
+              <SaveIcon className="h-4 w-4 mr-2" />
               {loading ? "Saving..." : "Add Booking"}
             </Button>
           </form>

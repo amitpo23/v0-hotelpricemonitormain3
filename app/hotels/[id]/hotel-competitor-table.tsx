@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Users, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { UsersIcon, TrendingUpIcon, TrendingDownIcon, MinusIcon } from "@/components/icons"
 
 interface HotelCompetitorTableProps {
   competitorData: any[]
@@ -51,13 +51,13 @@ export function HotelCompetitorTable({ competitorData, hotelBasePrice }: HotelCo
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+            <UsersIcon className="h-5 w-5" />
             Competitor Analysis
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-12">
-            <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <UsersIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-medium mb-2">No Competitor Data</h3>
             <p className="text-muted-foreground">Run a scan to gather competitor pricing data</p>
           </div>
@@ -70,7 +70,7 @@ export function HotelCompetitorTable({ competitorData, hotelBasePrice }: HotelCo
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
+          <UsersIcon className="h-5 w-5" />
           Competitor Analysis
         </CardTitle>
         <CardDescription>
@@ -105,15 +105,15 @@ export function HotelCompetitorTable({ competitorData, hotelBasePrice }: HotelCo
                   >
                     {comp.priceDiff > 0 ? (
                       <>
-                        <TrendingDown className="h-3 w-3 mr-1" />${Math.abs(comp.priceDiff).toFixed(0)} cheaper
+                        <TrendingDownIcon className="h-3 w-3 mr-1" />${Math.abs(comp.priceDiff).toFixed(0)} cheaper
                       </>
                     ) : comp.priceDiff < 0 ? (
                       <>
-                        <TrendingUp className="h-3 w-3 mr-1" />${Math.abs(comp.priceDiff).toFixed(0)} more expensive
+                        <TrendingUpIcon className="h-3 w-3 mr-1" />${Math.abs(comp.priceDiff).toFixed(0)} more expensive
                       </>
                     ) : (
                       <>
-                        <Minus className="h-3 w-3 mr-1" />
+                        <MinusIcon className="h-3 w-3 mr-1" />
                         Same price
                       </>
                     )}

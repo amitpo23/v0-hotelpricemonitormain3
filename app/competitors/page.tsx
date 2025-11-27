@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Building2, ExternalLink, Star, Trash2 } from "lucide-react"
+import { Icons } from "@/components/icons"
 import Link from "next/link"
 import { revalidatePath } from "next/cache"
 
@@ -16,10 +16,13 @@ export default async function CompetitorsPage() {
     .select("*, hotels(name)")
     .order("competitor_hotel_name")
 
+  const { data: competitorRoomTypes } = await supabase.from("competitor_room_types").select("*").eq("is_active", true)
+
   async function deleteCompetitor(formData: FormData) {
     "use server"
     const id = formData.get("id") as string
     const supabase = await createClient()
+    await supabase.from("competitor_room_types").delete().eq("competitor_id", id)
     await supabase.from("hotel_competitors").delete().eq("id", id)
     revalidatePath("/competitors")
   }
@@ -33,7 +36,7 @@ export default async function CompetitorsPage() {
         </div>
         <Link href="/competitors/add">
           <Button className="bg-gradient-to-r from-cyan-500 to-blue-600">
-            <Plus className="w-4 h-4 mr-2" />
+            <Icons.plus className="w-4 h-4 mr-2" />
             Add Competitor
           </Button>
         </Link>
@@ -83,7 +86,7 @@ export default async function CompetitorsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-cyan-500/10">
-                    <Building2 className="w-5 h-5 text-cyan-500" />
+                    <Icons.building className="w-5 h-5 text-cyan-500" />
                   </div>
                   <div>
                     <CardTitle>{hotel.name}</CardTitle>
@@ -99,58 +102,95 @@ export default async function CompetitorsPage() {
                   <p>No competitors defined yet</p>
                   <Link href={`/competitors/add?hotel=${hotel.id}`}>
                     <Button variant="outline" size="sm" className="mt-2 bg-transparent">
-                      <Plus className="w-4 h-4 mr-2" />
+                      <Icons.plus className="w-4 h-4 mr-2" />
                       Add First Competitor
                     </Button>
                   </Link>
                 </div>
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {hotelCompetitors.map((comp) => (
-                    <div key={comp.id} className="p-4 rounded-lg border bg-card/50 hover:bg-card/80 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-medium">{comp.competitor_hotel_name}</h3>
-                          {comp.star_rating && (
-                            <div className="flex items-center gap-1 mt-1">
-                              {Array.from({ length: comp.star_rating }).map((_, i) => (
-                                <Star key={i} className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                              ))}
+                  {hotelCompetitors.map((comp) => {
+                    const roomTypes = competitorRoomTypes?.filter((rt) => rt.competitor_id === comp.id) || []
+
+                    return (
+                      <div
+                        key={comp.id}
+                        className="p-4 rounded-lg border bg-card/50 hover:bg-card/80 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: comp.display_color || "#f97316" }}
+                            />
+                            <div>
+                              <h3 className="font-medium">{comp.competitor_hotel_name}</h3>
+                              {comp.star_rating && (
+                                <div className="flex items-center gap-1 mt-1">
+                                  {Array.from({ length: comp.star_rating }).map((_, i) => (
+                                    <Icons.star key={i} className="w-3 h-3 fill-yellow-500 text-yellow-500" />
+                                  ))}
+                                </div>
+                              )}
                             </div>
+                          </div>
+                          <form action={deleteCompetitor}>
+                            <input type="hidden" name="id" value={comp.id} />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                            >
+                              <Icons.trash className="w-4 h-4" />
+                            </Button>
+                          </form>
+                        </div>
+
+                        {roomTypes.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1">
+                            {roomTypes.map((rt) => (
+                              <Badge
+                                key={rt.id}
+                                variant="outline"
+                                className="text-xs"
+                                style={{ borderColor: rt.display_color || "#f97316" }}
+                              >
+                                {rt.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {comp.booking_url && (
+                            <a href={comp.booking_url} target="_blank" rel="noopener noreferrer">
+                              <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                                Booking <Icons.externalLink className="w-3 h-3 ml-1" />
+                              </Badge>
+                            </a>
+                          )}
+                          {comp.expedia_url && (
+                            <a href={comp.expedia_url} target="_blank" rel="noopener noreferrer">
+                              <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                                Expedia <Icons.externalLink className="w-3 h-3 ml-1" />
+                              </Badge>
+                            </a>
                           )}
                         </div>
-                        <form action={deleteCompetitor}>
-                          <input type="hidden" name="id" value={comp.id} />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </form>
-                      </div>
 
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {comp.booking_url && (
-                          <a href={comp.booking_url} target="_blank" rel="noopener noreferrer">
-                            <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
-                              Booking <ExternalLink className="w-3 h-3 ml-1" />
-                            </Badge>
-                          </a>
-                        )}
-                        {comp.expedia_url && (
-                          <a href={comp.expedia_url} target="_blank" rel="noopener noreferrer">
-                            <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
-                              Expedia <ExternalLink className="w-3 h-3 ml-1" />
-                            </Badge>
-                          </a>
-                        )}
-                      </div>
+                        {comp.notes && <p className="text-sm text-muted-foreground mt-2">{comp.notes}</p>}
 
-                      {comp.notes && <p className="text-sm text-muted-foreground mt-2">{comp.notes}</p>}
-                    </div>
-                  ))}
+                        <div className="mt-3 pt-3 border-t flex gap-2">
+                          <Link href={`/competitors/${comp.id}/room-types`} className="flex-1">
+                            <Button variant="outline" size="sm" className="w-full bg-transparent text-xs">
+                              <Icons.bed className="w-3 h-3 mr-1" />
+                              Room Types ({roomTypes.length})
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

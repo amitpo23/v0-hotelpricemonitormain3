@@ -2,7 +2,15 @@ import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Calendar, Clock, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react"
+import {
+  ArrowLeftIcon,
+  CalendarIcon,
+  ClockIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  MinusIcon,
+  RefreshCwIcon,
+} from "@/components/icons"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { RunScanButton } from "../run-scan-button"
@@ -73,7 +81,7 @@ export default async function ScanDetailsPage({ params }: { params: Promise<{ id
       <div className="flex items-center gap-4 mb-8">
         <Link href="/scans">
           <Button variant="outline" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeftIcon className="h-4 w-4" />
           </Button>
         </Link>
         <div className="flex-1">
@@ -81,7 +89,7 @@ export default async function ScanDetailsPage({ params }: { params: Promise<{ id
             {scanConfig.hotels?.name || "Scan Configuration"}
           </h1>
           <p className="text-muted-foreground flex items-center gap-2 mt-1">
-            <Calendar className="h-4 w-4" />
+            <CalendarIcon className="h-4 w-4" />
             {new Date(scanConfig.check_in_date).toLocaleDateString()} -{" "}
             {new Date(scanConfig.check_out_date).toLocaleDateString()}
             {scanConfig.hotels?.location && <span className="ml-2">• {scanConfig.hotels.location}</span>}
@@ -120,11 +128,11 @@ export default async function ScanDetailsPage({ params }: { params: Promise<{ id
             <p className="text-sm text-muted-foreground mb-1">Price Position</p>
             <div className="flex items-center gap-2">
               {priceDiff > 0 ? (
-                <TrendingUp className="h-6 w-6 text-red-400" />
+                <TrendingUpIcon className="h-6 w-6 text-red-400" />
               ) : priceDiff < 0 ? (
-                <TrendingDown className="h-6 w-6 text-green-400" />
+                <TrendingDownIcon className="h-6 w-6 text-green-400" />
               ) : (
-                <Minus className="h-6 w-6 text-gray-400" />
+                <MinusIcon className="h-6 w-6 text-gray-400" />
               )}
               <p
                 className={`text-3xl font-bold ${priceDiff > 0 ? "text-red-400" : priceDiff < 0 ? "text-green-400" : "text-gray-400"}`}
@@ -155,7 +163,7 @@ export default async function ScanDetailsPage({ params }: { params: Promise<{ id
             <CardContent>
               {!dailyPrices || dailyPrices.length === 0 ? (
                 <div className="text-center py-12">
-                  <RefreshCw className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <RefreshCwIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium mb-2">No price data yet</h3>
                   <p className="text-muted-foreground mb-4">Run a scan from the Calendar page to collect price data</p>
                   <Link href="/calendar">
@@ -273,7 +281,7 @@ export default async function ScanDetailsPage({ params }: { params: Promise<{ id
                       </div>
                       {scan.completed_at && (
                         <div className="flex items-center gap-2 text-xs text-cyan-500">
-                          <Clock className="h-3 w-3" />
+                          <ClockIcon className="h-3 w-3" />
                           {Math.round(
                             (new Date(scan.completed_at).getTime() - new Date(scan.started_at).getTime()) / 1000,
                           )}

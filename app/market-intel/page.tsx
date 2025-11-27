@@ -4,18 +4,18 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import {
-  MapPin,
-  TrendingUp,
-  Globe,
-  Calendar,
-  Cloud,
-  Sun,
-  Users,
-  Building2,
-  DollarSign,
-  Activity,
-  Sparkles,
-} from "lucide-react"
+  MapPinIcon,
+  TrendingUpIcon,
+  GlobeIcon,
+  CalendarIcon,
+  CloudIcon,
+  SunIcon,
+  UsersIcon,
+  Building2Icon,
+  DollarSignIcon,
+  ActivityIcon,
+  SparklesIcon,
+} from "@/components/icons"
 import { FetchMarketDataButton } from "./fetch-market-data-button"
 
 export default async function MarketIntelPage() {
@@ -76,7 +76,7 @@ export default async function MarketIntelPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-            <Globe className="h-10 w-10 text-primary" />
+            <GlobeIcon className="h-10 w-10 text-primary" />
             Market Intelligence
           </h1>
           <p className="text-muted-foreground">Real-time market data, regional insights, and demand forecasting</p>
@@ -89,7 +89,7 @@ export default async function MarketIntelPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <MapPin className="h-4 w-4" />
+              <MapPinIcon className="h-4 w-4" />
               <span className="text-sm">Regions Tracked</span>
             </div>
             <div className="text-3xl font-bold">{Object.keys(citiesMap).length}</div>
@@ -98,7 +98,7 @@ export default async function MarketIntelPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <DollarSign className="h-4 w-4" />
+              <DollarSignIcon className="h-4 w-4" />
               <span className="text-sm">Market Avg Price</span>
             </div>
             <div className="text-3xl font-bold">${avgRegionalPrice.toFixed(0)}</div>
@@ -107,7 +107,7 @@ export default async function MarketIntelPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Building2 className="h-4 w-4" />
+              <Building2Icon className="h-4 w-4" />
               <span className="text-sm">Avg Occupancy</span>
             </div>
             <div className="text-3xl font-bold">{avgOccupancy.toFixed(0)}%</div>
@@ -116,7 +116,7 @@ export default async function MarketIntelPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Users className="h-4 w-4" />
+              <UsersIcon className="h-4 w-4" />
               <span className="text-sm">Competitors</span>
             </div>
             <div className="text-3xl font-bold">{uniqueCompetitors.length}</div>
@@ -125,7 +125,7 @@ export default async function MarketIntelPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Activity className="h-4 w-4" />
+              <ActivityIcon className="h-4 w-4" />
               <span className="text-sm">Demand Factors</span>
             </div>
             <div className="text-3xl font-bold">{demandFactors?.length || 0}</div>
@@ -139,7 +139,7 @@ export default async function MarketIntelPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
+                <MapPinIcon className="h-5 w-5" />
                 Regional Market Overview
               </CardTitle>
               <CardDescription>Latest market conditions by location</CardDescription>
@@ -161,7 +161,7 @@ export default async function MarketIntelPage() {
                           <div className="flex items-start justify-between mb-3">
                             <div>
                               <h3 className="font-bold text-lg flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-blue-500" />
+                                <MapPinIcon className="h-4 w-4 text-blue-500" />
                                 {city}
                               </h3>
                               <p className="text-sm text-muted-foreground">{latest.region}</p>
@@ -188,9 +188,9 @@ export default async function MarketIntelPage() {
                               <div className="text-muted-foreground">Weather</div>
                               <div className="font-bold text-lg flex items-center gap-1">
                                 {latest.weather_impact?.toLowerCase().includes("rain") ? (
-                                  <Cloud className="h-4 w-4 text-blue-400" />
+                                  <CloudIcon className="h-4 w-4 text-blue-400" />
                                 ) : (
-                                  <Sun className="h-4 w-4 text-amber-400" />
+                                  <SunIcon className="h-4 w-4 text-amber-400" />
                                 )}
                                 {latest.weather_impact || "N/A"}
                               </div>
@@ -200,7 +200,7 @@ export default async function MarketIntelPage() {
                           {latest.events && Array.isArray(latest.events) && latest.events.length > 0 && (
                             <div className="mt-3 pt-3 border-t">
                               <div className="flex items-center gap-2 mb-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-sm text-muted-foreground">Upcoming Events</span>
                               </div>
                               <div className="flex flex-wrap gap-2">
@@ -218,7 +218,7 @@ export default async function MarketIntelPage() {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Globe className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <GlobeIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="font-medium mb-2">No Regional Data Yet</h3>
                   <p className="text-muted-foreground mb-4">
                     Click "Fetch Market Data" to gather regional market intelligence
@@ -232,7 +232,7 @@ export default async function MarketIntelPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
+                <UsersIcon className="h-5 w-5" />
                 Competitor Landscape
               </CardTitle>
               <CardDescription>Price positioning across booking platforms</CardDescription>
@@ -284,7 +284,7 @@ export default async function MarketIntelPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
+                <SparklesIcon className="h-5 w-5" />
                 Demand Factors
               </CardTitle>
               <CardDescription>Events and conditions affecting pricing</CardDescription>
@@ -336,19 +336,19 @@ export default async function MarketIntelPage() {
             <CardContent className="space-y-2">
               <Link href="/analytics">
                 <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
-                  <Activity className="h-4 w-4" />
+                  <ActivityIcon className="h-4 w-4" />
                   View Full Analytics
                 </Button>
               </Link>
               <Link href="/predictions">
                 <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
-                  <TrendingUp className="h-4 w-4" />
+                  <TrendingUpIcon className="h-4 w-4" />
                   Generate Predictions
                 </Button>
               </Link>
               <Link href="/autopilot">
                 <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
-                  <Sparkles className="h-4 w-4" />
+                  <SparklesIcon className="h-4 w-4" />
                   Configure Autopilot
                 </Button>
               </Link>

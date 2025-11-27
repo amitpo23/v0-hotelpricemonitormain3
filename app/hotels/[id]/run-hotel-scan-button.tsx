@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Scan, Loader2, CheckCircle } from "lucide-react"
+import { ScanIcon, Loader2Icon, CheckCircleIcon } from "@/components/icons"
 import { useRouter } from "next/navigation"
 
 interface RunHotelScanButtonProps {
@@ -49,12 +49,12 @@ export function RunHotelScanButton({ hotelId }: RunHotelScanButtonProps) {
       >
         {loading ? (
           <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
             Scanning Competitors...
           </>
         ) : (
           <>
-            <Scan className="h-4 w-4 mr-2" />
+            <ScanIcon className="h-4 w-4 mr-2" />
             Run Price Scan Now
           </>
         )}
@@ -63,7 +63,7 @@ export function RunHotelScanButton({ hotelId }: RunHotelScanButtonProps) {
       {result && (
         <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
           <div className="flex items-center gap-2 text-green-400 mb-3">
-            <CheckCircle className="h-5 w-5" />
+            <CheckCircleIcon className="h-5 w-5" />
             <span className="font-medium">Scan Complete</span>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">

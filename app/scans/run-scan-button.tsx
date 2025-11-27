@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Play, Loader2 } from "lucide-react"
+import { PlayIcon, Loader2Icon } from "@/components/icons"
 import { useRouter } from "next/navigation"
 
 interface RunScanButtonProps {
@@ -48,7 +48,7 @@ export function RunScanButton({ configId, hotelName }: RunScanButtonProps) {
       disabled={loading}
       className="text-cyan-500 hover:text-cyan-400 hover:bg-cyan-500/10"
     >
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+      {loading ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <PlayIcon className="h-4 w-4" />}
     </Button>
   )
 }

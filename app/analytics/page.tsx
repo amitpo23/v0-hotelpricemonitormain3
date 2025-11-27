@@ -5,22 +5,22 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
 import {
-  TrendingUp,
-  DollarSign,
-  MapPin,
-  Users,
-  Calendar,
-  Target,
-  BarChart3,
-  PieChart,
-  Activity,
-  Globe,
-  Building2,
-  ArrowUpRight,
-  ArrowDownRight,
-  Sparkles,
-  Clock,
-} from "lucide-react"
+  TrendingUpIcon,
+  DollarSignIcon,
+  MapPinIcon,
+  UsersIcon,
+  CalendarIcon,
+  TargetIcon,
+  BarChart3Icon,
+  PieChartIcon,
+  ActivityIcon,
+  GlobeIcon,
+  Building2Icon,
+  ArrowUpRightIcon,
+  ArrowDownRightIcon,
+  SparklesIcon,
+  ClockIcon,
+} from "@/components/icons"
 import { AnalyticsCharts } from "./analytics-charts"
 import { MarketIntelligencePanel } from "./market-intelligence-panel"
 import { RefreshDataButton } from "./refresh-data-button"
@@ -125,7 +125,7 @@ export default async function AnalyticsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-            <BarChart3 className="h-10 w-10 text-primary" />
+            <BarChart3Icon className="h-10 w-10 text-primary" />
             Advanced Analytics
           </h1>
           <p className="text-muted-foreground">
@@ -136,7 +136,7 @@ export default async function AnalyticsPage() {
           <RefreshDataButton />
           <Link href="/dashboard">
             <Button variant="outline" className="gap-2 bg-transparent">
-              <Activity className="h-4 w-4" />
+              <ActivityIcon className="h-4 w-4" />
               Dashboard
             </Button>
           </Link>
@@ -148,7 +148,7 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Building2 className="h-3.5 w-3.5" />
+              <Building2Icon className="h-3.5 w-3.5" />
               <span className="text-xs">Hotels</span>
             </div>
             <div className="text-2xl font-bold">{totalHotels}</div>
@@ -158,7 +158,7 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <DollarSign className="h-3.5 w-3.5" />
+              <DollarSignIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Avg Price</span>
             </div>
             <div className="text-2xl font-bold">${avgMarketPrice.toFixed(0)}</div>
@@ -168,7 +168,7 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Users className="h-3.5 w-3.5" />
+              <UsersIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Competitors</span>
             </div>
             <div className="text-2xl font-bold">{competitorCount}</div>
@@ -178,7 +178,7 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Target className="h-3.5 w-3.5" />
+              <TargetIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Occupancy</span>
             </div>
             <div className="text-2xl font-bold">{avgOccupancy.toFixed(0)}%</div>
@@ -188,7 +188,7 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <BarChart3 className="h-3.5 w-3.5" />
+              <BarChart3Icon className="h-3.5 w-3.5" />
               <span className="text-xs">RevPAR</span>
             </div>
             <div className="text-2xl font-bold">${avgRevPAR.toFixed(0)}</div>
@@ -198,7 +198,7 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Globe className="h-3.5 w-3.5" />
+              <GlobeIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Market Avg</span>
             </div>
             <div className="text-2xl font-bold">${avgCompetitorPrice.toFixed(0)}</div>
@@ -208,12 +208,16 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <TrendingUp className="h-3.5 w-3.5" />
+              <TrendingUpIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Revenue</span>
             </div>
             <div className="text-2xl font-bold">${(totalRevenue / 1000).toFixed(0)}K</div>
             <div className={`flex items-center text-xs ${revenueGrowth >= 0 ? "text-green-600" : "text-red-600"}`}>
-              {revenueGrowth >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+              {revenueGrowth >= 0 ? (
+                <ArrowUpRightIcon className="h-3 w-3" />
+              ) : (
+                <ArrowDownRightIcon className="h-3 w-3" />
+              )}
               {Math.abs(revenueGrowth).toFixed(1)}%
             </div>
           </CardContent>
@@ -222,7 +226,7 @@ export default async function AnalyticsPage() {
         <Card className="col-span-1">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Sparkles className="h-3.5 w-3.5" />
+              <SparklesIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Optimization</span>
             </div>
             <div className="text-2xl font-bold">{optimizationSuccessRate.toFixed(0)}%</div>
@@ -255,7 +259,7 @@ export default async function AnalyticsPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Target className="h-5 w-5 text-blue-500" />
+                  <TargetIcon className="h-5 w-5 text-blue-500" />
                   Price Position
                 </CardTitle>
               </CardHeader>
@@ -288,7 +292,7 @@ export default async function AnalyticsPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-green-500" />
+                  <MapPinIcon className="h-5 w-5 text-green-500" />
                   Regional Demand
                 </CardTitle>
               </CardHeader>
@@ -324,7 +328,7 @@ export default async function AnalyticsPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-purple-500" />
+                  <CalendarIcon className="h-5 w-5 text-purple-500" />
                   Demand Factors
                 </CardTitle>
               </CardHeader>
@@ -369,7 +373,7 @@ export default async function AnalyticsPage() {
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+                  <UsersIcon className="h-5 w-5" />
                   Competitor Price Comparison
                 </CardTitle>
                 <CardDescription>Latest prices from tracked competitors</CardDescription>
@@ -426,7 +430,7 @@ export default async function AnalyticsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <PieChart className="h-5 w-5" />
+                  <PieChartIcon className="h-5 w-5" />
                   Competitor Stats
                 </CardTitle>
               </CardHeader>
@@ -598,7 +602,7 @@ export default async function AnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
+                <SparklesIcon className="h-5 w-5" />
                 Price Optimization History
               </CardTitle>
               <CardDescription>Recent price optimizations and their performance</CardDescription>
@@ -610,7 +614,7 @@ export default async function AnalyticsPage() {
                     <div key={opt.id} className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <ClockIcon className="h-4 w-4 text-muted-foreground" />
                           <span className="font-medium">{new Date(opt.date).toLocaleDateString()}</span>
                         </div>
                         <div className="text-sm text-muted-foreground">
@@ -621,7 +625,7 @@ export default async function AnalyticsPage() {
                         <div className="text-sm text-muted-foreground">Price Change</div>
                         <div className="flex items-center gap-2">
                           <span className="text-muted-foreground">${Number(opt.original_price || 0).toFixed(0)}</span>
-                          <ArrowUpRight className="h-4 w-4" />
+                          <ArrowUpRightIcon className="h-4 w-4" />
                           <span className="font-bold">${Number(opt.optimized_price || 0).toFixed(0)}</span>
                         </div>
                       </div>

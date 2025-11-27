@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Check, Globe } from "lucide-react"
+import { RefreshCwIcon, CheckIcon, GlobeIcon } from "@/components/icons"
 
 export function FetchMarketDataButton() {
   const [loading, setLoading] = useState(false)
@@ -29,11 +29,11 @@ export function FetchMarketDataButton() {
   return (
     <Button onClick={handleFetch} disabled={loading} className="gap-2">
       {success ? (
-        <Check className="h-4 w-4" />
+        <CheckIcon className="h-4 w-4" />
       ) : loading ? (
-        <RefreshCw className="h-4 w-4 animate-spin" />
+        <RefreshCwIcon className="h-4 w-4 animate-spin" />
       ) : (
-        <Globe className="h-4 w-4" />
+        <GlobeIcon className="h-4 w-4" />
       )}
       {loading ? "Fetching Data..." : success ? "Data Updated!" : "Fetch Market Data"}
     </Button>

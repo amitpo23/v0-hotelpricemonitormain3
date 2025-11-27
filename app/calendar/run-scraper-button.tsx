@@ -2,16 +2,17 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, Radar, CheckCircle, Users, Building2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
+import { Loader2Icon, RadarIcon, CheckCircleIcon, BuildingIcon } from "@/components/icons"
 
 interface RunScraperButtonProps {
   hotelId: string
   hotelName: string
+  roomTypeId?: string
 }
 
-export function RunScraperButton({ hotelId, hotelName }: RunScraperButtonProps) {
+export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperButtonProps) {
   const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<any>(null)
   const router = useRouter()
@@ -24,7 +25,7 @@ export function RunScraperButton({ hotelId, hotelName }: RunScraperButtonProps) 
       const response = await fetch("/api/scraper/run-full", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hotelId }),
+        body: JSON.stringify({ hotelId, roomTypeId }),
       })
 
       const data = await response.json()
@@ -52,20 +53,20 @@ export function RunScraperButton({ hotelId, hotelName }: RunScraperButtonProps) 
         >
           {isRunning ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Scanning 90 days...
+              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              Scanning 180 days...
             </>
           ) : (
             <>
-              <Radar className="mr-2 h-4 w-4" />
-              Run Full Scan (90 Days)
+              <RadarIcon className="mr-2 h-4 w-4" />
+              Run Full Scan (180 Days)
             </>
           )}
         </Button>
 
         {result && !result.error && (
           <div className="flex items-center gap-2 text-sm text-green-400">
-            <CheckCircle className="h-4 w-4" />
+            <CheckCircleIcon className="h-4 w-4" />
             <span>
               Scanned! {result.summary?.increaseRecommendations} increases, {result.summary?.decreaseRecommendations}{" "}
               decreases
@@ -79,42 +80,28 @@ export function RunScraperButton({ hotelId, hotelName }: RunScraperButtonProps) 
       {result && !result.error && result.competitors && (
         <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700">
           <div className="flex items-center gap-2 mb-2">
-            {result.competitorType === "real_hotels" ? (
-              <>
-                <Building2 className="h-4 w-4 text-cyan-400" />
-                <span className="text-sm font-medium text-cyan-400">
-                  Tracking {result.competitorCount} Competitor Hotels
-                </span>
-              </>
-            ) : (
-              <>
-                <Users className="h-4 w-4 text-amber-400" />
-                <span className="text-sm font-medium text-amber-400">
-                  Tracking {result.competitorCount} OTA Sources (No competitors defined)
-                </span>
-              </>
-            )}
+            <BuildingIcon className="h-4 w-4 text-cyan-400" />
+            <span className="text-sm font-medium text-cyan-400">
+              Tracking {result.competitorCount} Competitor Hotels
+              {result.roomTypesScanned > 1 && ` • ${result.roomTypesScanned} room types`}
+            </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {result.competitors.map((name: string) => (
+            {result.competitors.map((comp: any) => (
               <Badge
-                key={name}
+                key={comp.name}
                 variant="secondary"
-                className={
-                  result.competitorType === "real_hotels"
-                    ? "bg-cyan-500/10 text-cyan-300 border-cyan-500/20"
-                    : "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                }
+                className="bg-cyan-500/10 text-cyan-300 border-cyan-500/20"
+                style={{
+                  borderLeftColor: comp.color || "#06b6d4",
+                  borderLeftWidth: "3px",
+                }}
               >
-                {name}
+                {comp.name} {comp.stars && `${"★".repeat(comp.stars)}`}
+                {comp.roomTypes > 0 && ` (${comp.roomTypes} rooms)`}
               </Badge>
             ))}
           </div>
-          {result.competitorType === "ota_sources" && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Add real competitor hotels in the Competitors page for more accurate pricing
-            </p>
-          )}
         </div>
       )}
     </div>

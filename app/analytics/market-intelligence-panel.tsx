@@ -3,16 +3,16 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
-  MapPin,
-  Calendar,
-  TrendingUp,
-  TrendingDown,
-  Sparkles,
-  Activity,
-  AlertTriangle,
-  Sun,
-  CloudRain,
-} from "lucide-react"
+  MapPinIcon,
+  CalendarIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  SparklesIcon,
+  ActivityIcon,
+  AlertTriangleIcon,
+  SunIcon,
+  CloudIcon,
+} from "@/components/icons"
 
 interface MarketIntelligencePanelProps {
   regionalData: any[]
@@ -50,15 +50,15 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
   const getTrendIcon = (type: string) => {
     switch (type) {
       case "price_increase":
-        return <TrendingUp className="h-4 w-4 text-green-500" />
+        return <TrendingUpIcon className="h-4 w-4 text-green-500" />
       case "price_decrease":
-        return <TrendingDown className="h-4 w-4 text-red-500" />
+        return <TrendingDownIcon className="h-4 w-4 text-red-500" />
       case "demand_spike":
-        return <Activity className="h-4 w-4 text-blue-500" />
+        return <ActivityIcon className="h-4 w-4 text-blue-500" />
       case "competitor_change":
-        return <AlertTriangle className="h-4 w-4 text-amber-500" />
+        return <AlertTriangleIcon className="h-4 w-4 text-amber-500" />
       default:
-        return <Activity className="h-4 w-4" />
+        return <ActivityIcon className="h-4 w-4" />
     }
   }
 
@@ -66,9 +66,9 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
   const getWeatherIcon = (impact: string | null) => {
     if (!impact) return null
     if (impact.toLowerCase().includes("rain") || impact.toLowerCase().includes("storm")) {
-      return <CloudRain className="h-4 w-4 text-blue-500" />
+      return <CloudIcon className="h-4 w-4 text-blue-500" />
     }
-    return <Sun className="h-4 w-4 text-amber-500" />
+    return <SunIcon className="h-4 w-4 text-amber-500" />
   }
 
   return (
@@ -77,7 +77,7 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+            <MapPinIcon className="h-5 w-5" />
             Regional Market Data
           </CardTitle>
           <CardDescription>Occupancy and pricing trends by location</CardDescription>
@@ -98,7 +98,7 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
                     <div key={city} className="p-4 rounded-lg border bg-card">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <MapPinIcon className="h-4 w-4 text-muted-foreground" />
                           <span className="font-bold text-lg">{city}</span>
                           <span className="text-sm text-muted-foreground">({latestData.region})</span>
                         </div>
@@ -136,7 +136,7 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
                           <div className="flex flex-wrap gap-2">
                             {latestData.events.slice(0, 3).map((event: any, idx: number) => (
                               <Badge key={idx} variant="outline" className="text-xs">
-                                <Calendar className="h-3 w-3 mr-1" />
+                                <CalendarIcon className="h-3 w-3 mr-1" />
                                 {event.name}
                               </Badge>
                             ))}
@@ -157,7 +157,7 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
+            <SparklesIcon className="h-5 w-5" />
             Demand Factors
           </CardTitle>
           <CardDescription>Events and conditions affecting demand</CardDescription>
@@ -201,7 +201,7 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
       <Card className="lg:col-span-3">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
+            <TrendingUpIcon className="h-5 w-5" />
             Detected Market Trends
           </CardTitle>
           <CardDescription>Automatically detected patterns and changes</CardDescription>

@@ -1,9 +1,20 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Target, Calendar, Sparkles } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  TargetIcon,
+  CalendarIcon,
+  SparklesIcon,
+  TrendingUpIcon,
+  GlobeIcon,
+  MessageSquareIcon,
+} from "@/components/icons"
 import { PredictionChart } from "./prediction-chart"
 import { GeneratePredictionsButton } from "./generate-button"
+import { YearlyPredictions } from "./yearly-predictions"
+import { MarketIntelligence } from "./market-intelligence"
+import { PredictionChat } from "./prediction-chat"
 
 export default async function PredictionsPage() {
   const supabase = await createClient()
@@ -14,7 +25,7 @@ export default async function PredictionsPage() {
       .select("*, hotels (name)")
       .order("prediction_date", { ascending: true })
       .gte("prediction_date", new Date().toISOString().split("T")[0]),
-    supabase.from("hotels").select("id, name, base_price"),
+    supabase.from("hotels").select("id, name, base_price, location"),
   ])
 
   const getDemandColor = (demand: string | null) => {
@@ -51,90 +62,145 @@ export default async function PredictionsPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-            <Target className="h-10 w-10 text-purple-500" />
-            Price Predictions
+            <TargetIcon className="h-10 w-10 text-purple-500" />
+            AI Price Predictions
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
-            AI-powered demand forecasting and optimal pricing suggestions
+            AI-powered demand forecasting with market intelligence from Google Trends and international data sources
           </p>
         </div>
         <GeneratePredictionsButton hotels={hotels || []} />
       </div>
 
-      {/* Prediction Chart */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>30-Day Price Forecast</CardTitle>
-          <CardDescription>Predicted optimal prices based on demand analysis</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PredictionChart predictions={predictions || []} />
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="daily" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsTrigger value="daily" className="flex items-center gap-2">
+            <CalendarIcon className="h-4 w-4" />
+            Daily
+          </TabsTrigger>
+          <TabsTrigger value="monthly" className="flex items-center gap-2">
+            <TrendingUpIcon className="h-4 w-4" />
+            Monthly
+          </TabsTrigger>
+          <TabsTrigger value="market" className="flex items-center gap-2">
+            <GlobeIcon className="h-4 w-4" />
+            Market Intel
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="flex items-center gap-2">
+            <MessageSquareIcon className="h-4 w-4" />
+            AI Chat
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Predictions by Hotel */}
-      {Object.keys(predictionsByHotel).length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Sparkles className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No predictions yet</h3>
-            <p className="text-slate-500 mb-6">Generate AI predictions to see optimal pricing for your hotels</p>
-            <GeneratePredictionsButton hotels={hotels || []} />
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {Object.entries(predictionsByHotel).map(([hotelId, data]: [string, any]) => (
-            <Card key={hotelId}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-blue-500" />
-                  {data.hotelName}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                  {data.predictions.slice(0, 14).map((pred: any) => (
-                    <div key={pred.id} className={`p-3 rounded-lg border ${getDemandColor(pred.predicted_demand)}`}>
-                      <div className="text-xs font-medium mb-1">
-                        {new Date(pred.prediction_date).toLocaleDateString("en-US", {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </div>
-                      <div className="text-xl font-bold">${pred.predicted_price}</div>
-                      <div className="text-xs capitalize mt-1">{pred.predicted_demand || "medium"} demand</div>
-                      {pred.confidence_score && (
-                        <div className="text-xs opacity-75 mt-1">{(pred.confidence_score * 100).toFixed(0)}% conf.</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+        {/* Daily Predictions Tab */}
+        <TabsContent value="daily" className="space-y-6">
+          {/* Prediction Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>30-Day Price Forecast</CardTitle>
+              <CardDescription>
+                Predicted optimal prices based on demand analysis and market intelligence
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PredictionChart predictions={predictions || []} />
+            </CardContent>
+          </Card>
 
-                {data.predictions[0]?.factors && (
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="text-sm font-medium mb-2">Factors Considered:</div>
-                    <div className="flex flex-wrap gap-2">
-                      {data.predictions[0].factors.seasonality && (
-                        <Badge variant="outline">Seasonality: {data.predictions[0].factors.seasonality}</Badge>
-                      )}
-                      {data.predictions[0].factors.competitor_avg && (
-                        <Badge variant="outline">Competitor Avg: ${data.predictions[0].factors.competitor_avg}</Badge>
-                      )}
-                      {data.predictions[0].factors.events?.map((event: string, i: number) => (
-                        <Badge key={i} variant="outline" className="bg-purple-50">
-                          {event}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          {/* Predictions by Hotel */}
+          {Object.keys(predictionsByHotel).length === 0 ? (
+            <Card>
+              <CardContent className="py-16 text-center">
+                <SparklesIcon className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No predictions yet</h3>
+                <p className="text-slate-500 mb-6">Generate AI predictions to see optimal pricing for your hotels</p>
+                <GeneratePredictionsButton hotels={hotels || []} />
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(predictionsByHotel).map(([hotelId, data]: [string, any]) => (
+                <Card key={hotelId}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarIcon className="h-5 w-5 text-blue-500" />
+                      {data.hotelName}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                      {data.predictions.slice(0, 14).map((pred: any) => (
+                        <div key={pred.id} className={`p-3 rounded-lg border ${getDemandColor(pred.predicted_demand)}`}>
+                          <div className="text-xs font-medium mb-1">
+                            {new Date(pred.prediction_date).toLocaleDateString("en-US", {
+                              weekday: "short",
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </div>
+                          <div className="text-xl font-bold">${pred.predicted_price}</div>
+                          <div className="text-xs capitalize mt-1">{pred.predicted_demand || "medium"} demand</div>
+                          {pred.confidence_score && (
+                            <div className="text-xs opacity-75 mt-1">
+                              {(pred.confidence_score * 100).toFixed(0)}% conf.
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {data.predictions[0]?.factors && (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="text-sm font-medium mb-2">Factors Considered:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {data.predictions[0].factors.seasonality && (
+                            <Badge variant="outline">Seasonality: {data.predictions[0].factors.seasonality}</Badge>
+                          )}
+                          {data.predictions[0].factors.competitor_avg && (
+                            <Badge variant="outline">
+                              Competitor Avg: ${data.predictions[0].factors.competitor_avg}
+                            </Badge>
+                          )}
+                          {data.predictions[0].factors.market_trend && (
+                            <Badge variant="outline" className="bg-blue-50">
+                              Market: {data.predictions[0].factors.market_trend}
+                            </Badge>
+                          )}
+                          {data.predictions[0].factors.google_trend && (
+                            <Badge variant="outline" className="bg-green-50">
+                              Google Trend: {data.predictions[0].factors.google_trend}
+                            </Badge>
+                          )}
+                          {data.predictions[0].factors.events?.map((event: string, i: number) => (
+                            <Badge key={i} variant="outline" className="bg-purple-50">
+                              {event}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Monthly Predictions Tab */}
+        <TabsContent value="monthly">
+          <YearlyPredictions hotels={hotels || []} />
+        </TabsContent>
+
+        {/* Market Intelligence Tab */}
+        <TabsContent value="market">
+          <MarketIntelligence hotels={hotels || []} />
+        </TabsContent>
+
+        {/* AI Chat Tab */}
+        <TabsContent value="chat">
+          <PredictionChat predictions={predictions || []} hotels={hotels || []} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

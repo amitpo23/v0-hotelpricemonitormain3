@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Calendar, ChevronLeft, ChevronRight, Target } from "lucide-react"
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, TargetIcon } from "@/components/icons"
 
 interface YearlyBudgetGridProps {
   hotels: any[]
@@ -48,7 +48,7 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-cyan-400" />
+              <CalendarIcon className="h-5 w-5 text-cyan-400" />
               Yearly Budget Overview
             </CardTitle>
             <CardDescription>View and manage budgets across all months</CardDescription>
@@ -70,11 +70,11 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
 
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" onClick={() => setSelectedYear(selectedYear - 1)}>
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeftIcon className="h-4 w-4" />
               </Button>
               <span className="w-16 text-center font-medium">{selectedYear}</span>
               <Button variant="outline" size="icon" onClick={() => setSelectedYear(selectedYear + 1)}>
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRightIcon className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -122,7 +122,7 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
                   <span className={`text-sm font-medium ${isCurrent ? "text-cyan-400" : "text-muted-foreground"}`}>
                     {month}
                   </span>
-                  {hasBudget && <Target className="h-3 w-3 text-cyan-400" />}
+                  {hasBudget && <TargetIcon className="h-3 w-3 text-cyan-400" />}
                 </div>
 
                 {hasBudget ? (

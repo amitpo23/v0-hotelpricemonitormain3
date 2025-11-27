@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCwIcon } from "@/components/icons"
 
 interface GenerateCalendarButtonProps {
   hotels: any[]
@@ -40,7 +40,7 @@ export function GenerateCalendarButton({ hotels }: GenerateCalendarButtonProps) 
       disabled={loading || hotels.length === 0}
       className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
     >
-      <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+      <RefreshCwIcon className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
       {loading ? "Generating..." : "Generate Calendar Data"}
     </Button>
   )

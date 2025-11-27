@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCwIcon } from "@/components/icons"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
@@ -25,7 +25,7 @@ export function AnalyzeTrendsButton() {
 
   return (
     <Button onClick={analyzeTrends} disabled={loading} className="gap-2">
-      <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+      <RefreshCwIcon className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
       {loading ? "Analyzing..." : "Analyze Trends"}
     </Button>
   )

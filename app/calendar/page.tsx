@@ -16,9 +16,17 @@ export default async function CalendarPage() {
 
   const { data: hotels } = await supabase.from("hotels").select("*").order("name")
 
+  const { data: roomTypes } = await supabase
+    .from("hotel_room_types")
+    .select("*, hotels(name)")
+    .eq("is_active", true)
+    .order("name")
+
+  const { data: competitors } = await supabase.from("hotel_competitors").select("*").eq("is_active", true)
+
   const today = new Date()
   const futureDate = new Date(today)
-  futureDate.setDate(futureDate.getDate() + 90)
+  futureDate.setDate(futureDate.getDate() + 180)
 
   const { data: dailyPrices } = await supabase
     .from("daily_prices")
@@ -41,7 +49,7 @@ export default async function CalendarPage() {
             </div>
             Price Calendar
           </h1>
-          <p className="text-muted-foreground mt-1">90-day price comparison with competitors and AI recommendations</p>
+          <p className="text-muted-foreground mt-1">180-day price comparison with competitors and AI recommendations</p>
         </div>
         <Badge variant="outline" className="flex items-center gap-2 px-3 py-1">
           <ClockIcon className="h-4 w-4" />
@@ -102,35 +110,29 @@ export default async function CalendarPage() {
             <div className="w-4 h-4 rounded bg-cyan-500/20 border border-cyan-500" />
             <span className="text-sm">Price optimal</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500">
-              peak
-            </Badge>
-            <span className="text-sm">Peak demand</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500">
-              high
-            </Badge>
-            <span className="text-sm">High demand</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500">
-              medium
-            </Badge>
-            <span className="text-sm">Medium demand</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-gray-500/20 text-gray-400 border-gray-500">
-              low
-            </Badge>
-            <span className="text-sm">Low demand</span>
+          <div className="border-l border-border/50 pl-4 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Competitors:</span>
+            {competitors && competitors.length > 0 ? (
+              competitors.slice(0, 6).map((comp) => (
+                <div key={comp.id} className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: comp.display_color || "#f97316" }} />
+                  <span className="text-xs">{comp.competitor_hotel_name}</span>
+                </div>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground">No competitors</span>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {hotels && hotels.length > 0 ? (
-        <CalendarGrid hotels={hotels} dailyPrices={dailyPrices || []} />
+        <CalendarGrid
+          hotels={hotels}
+          dailyPrices={dailyPrices || []}
+          roomTypes={roomTypes || []}
+          competitors={competitors || []}
+        />
       ) : (
         <Card className="border-border/50 bg-card/50">
           <CardContent className="py-12 text-center">

@@ -1,7 +1,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarDays, DollarSign, TrendingUp, Users, Building2, Plus } from "lucide-react"
+import {
+  CalendarDaysIcon,
+  DollarSignIcon,
+  TrendingUpIcon,
+  UsersIcon,
+  Building2Icon,
+  PlusIcon,
+} from "@/components/icons"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -10,10 +17,8 @@ export default async function BookingsPage() {
 
   const today = new Date().toISOString().split("T")[0]
 
-  // Get all hotels
   const { data: hotels } = await supabase.from("hotels").select("*")
 
-  // Get upcoming bookings
   const { data: bookings } = await supabase
     .from("bookings")
     .select("*")
@@ -21,7 +26,6 @@ export default async function BookingsPage() {
     .eq("status", "confirmed")
     .order("check_in_date", { ascending: true })
 
-  // Calculate stats
   const totalBookings = bookings?.length || 0
   const totalRevenue = bookings?.reduce((sum, b) => sum + Number(b.total_price || 0), 0) || 0
   const totalNights =
@@ -32,7 +36,6 @@ export default async function BookingsPage() {
     }, 0) || 0
   const avgNightlyRate = totalNights > 0 ? totalRevenue / totalNights : 0
 
-  // Group bookings by hotel
   const bookingsByHotel: Record<string, any[]> = {}
   bookings?.forEach((b) => {
     if (!bookingsByHotel[b.hotel_id]) {
@@ -50,19 +53,18 @@ export default async function BookingsPage() {
         </div>
         <Link href="/bookings/add">
           <Button className="bg-gradient-to-r from-cyan-500 to-blue-500">
-            <Plus className="h-4 w-4 mr-2" />
+            <PlusIcon className="h-4 w-4 mr-2" />
             Add Booking
           </Button>
         </Link>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-slate-900/50 border-slate-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-cyan-500/20 rounded-lg">
-                <CalendarDays className="h-5 w-5 text-cyan-400" />
+                <CalendarDaysIcon className="h-5 w-5 text-cyan-400" />
               </div>
               <div>
                 <p className="text-sm text-slate-400">Total Bookings</p>
@@ -76,7 +78,7 @@ export default async function BookingsPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-500/20 rounded-lg">
-                <DollarSign className="h-5 w-5 text-green-400" />
+                <DollarSignIcon className="h-5 w-5 text-green-400" />
               </div>
               <div>
                 <p className="text-sm text-slate-400">Booked Revenue</p>
@@ -90,7 +92,7 @@ export default async function BookingsPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-500/20 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-purple-400" />
+                <TrendingUpIcon className="h-5 w-5 text-purple-400" />
               </div>
               <div>
                 <p className="text-sm text-slate-400">Total Nights</p>
@@ -104,7 +106,7 @@ export default async function BookingsPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-500/20 rounded-lg">
-                <Users className="h-5 w-5 text-orange-400" />
+                <UsersIcon className="h-5 w-5 text-orange-400" />
               </div>
               <div>
                 <p className="text-sm text-slate-400">Avg Nightly Rate</p>
@@ -115,11 +117,10 @@ export default async function BookingsPage() {
         </Card>
       </div>
 
-      {/* Info Card */}
       <Card className="bg-blue-500/10 border-blue-500/30">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <TrendingUp className="h-5 w-5 text-blue-400 mt-0.5" />
+            <TrendingUpIcon className="h-5 w-5 text-blue-400 mt-0.5" />
             <div>
               <p className="font-medium text-blue-400">How Bookings Affect Predictions</p>
               <p className="text-sm text-slate-400 mt-1">צבר ההזמנות משפיע על תחזיות המחירים בצורה הבאה:</p>
@@ -134,7 +135,6 @@ export default async function BookingsPage() {
         </CardContent>
       </Card>
 
-      {/* Bookings by Hotel */}
       {hotels?.map((hotel) => {
         const hotelBookings = bookingsByHotel[hotel.id] || []
         const hotelRevenue = hotelBookings.reduce((sum, b) => sum + Number(b.total_price || 0), 0)
@@ -144,7 +144,7 @@ export default async function BookingsPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Building2 className="h-5 w-5 text-cyan-400" />
+                  <Building2Icon className="h-5 w-5 text-cyan-400" />
                   <CardTitle>{hotel.name}</CardTitle>
                   <Badge variant="outline" className="text-cyan-400 border-cyan-400/50">
                     {hotelBookings.length} bookings
@@ -211,7 +211,7 @@ export default async function BookingsPage() {
       {(!hotels || hotels.length === 0) && (
         <Card className="bg-slate-900/50 border-slate-800">
           <CardContent className="p-8 text-center">
-            <Building2 className="h-12 w-12 mx-auto text-slate-600 mb-4" />
+            <Building2Icon className="h-12 w-12 mx-auto text-slate-600 mb-4" />
             <p className="text-slate-400">No hotels found. Add a hotel first.</p>
             <Link href="/hotels">
               <Button className="mt-4">Go to Properties</Button>

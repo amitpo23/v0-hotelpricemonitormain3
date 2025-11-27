@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { PlusIcon, Loader2Icon, ChevronLeftIcon, ChevronRightIcon } from "@/components/icons"
 
 interface BudgetFormProps {
   hotels: any[]
@@ -99,7 +99,7 @@ export function BudgetForm({ hotels, existingBudgets }: BudgetFormProps) {
               }
             }}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeftIcon className="h-4 w-4" />
           </Button>
 
           <div className="flex items-center gap-2">
@@ -143,7 +143,7 @@ export function BudgetForm({ hotels, existingBudgets }: BudgetFormProps) {
               }
             }}
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRightIcon className="h-4 w-4" />
           </Button>
         </div>
 
@@ -216,10 +216,10 @@ export function BudgetForm({ hotels, existingBudgets }: BudgetFormProps) {
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2Icon className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  <Plus className="mr-2 h-4 w-4" />
+                  <PlusIcon className="mr-2 h-4 w-4" />
                   {existingBudget ? "Update Budget" : "Set Budget"}
                 </>
               )}

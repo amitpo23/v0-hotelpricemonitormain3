@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Loader2 } from "lucide-react"
+import { RefreshCwIcon, Loader2Icon } from "@/components/icons"
 import { useRouter } from "next/navigation"
 
 export function BatchScanButton() {
@@ -40,7 +40,7 @@ export function BatchScanButton() {
       disabled={loading}
       className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 bg-transparent"
     >
-      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+      {loading ? <Loader2Icon className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCwIcon className="h-4 w-4 mr-2" />}
       Scan All
     </Button>
   )

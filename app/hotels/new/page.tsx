@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeftIcon } from "@/components/icons"
 import Link from "next/link"
 
 export default function NewHotelPage() {
@@ -52,7 +52,7 @@ export default function NewHotelPage() {
     <div className="container mx-auto px-4 py-8">
       <Link href="/hotels">
         <Button variant="ghost" className="mb-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeftIcon className="h-4 w-4 mr-2" />
           Back to Hotels
         </Button>
       </Link>

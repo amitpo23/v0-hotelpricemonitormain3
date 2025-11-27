@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Bell, CheckCircle2, AlertTriangle, Info, XCircle } from "lucide-react"
+import { BellIcon, CheckCircle2Icon, AlertTriangleIcon, InfoIcon, XCircleIcon } from "@/components/icons"
 import { MarkAlertReadButton } from "./mark-read-button"
 
 export default async function AlertsPage() {
@@ -17,11 +17,11 @@ export default async function AlertsPage() {
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
       case "error":
-        return <XCircle className="h-5 w-5 text-red-600" />
+        return <XCircleIcon className="h-5 w-5 text-red-600" />
       case "warning":
-        return <AlertTriangle className="h-5 w-5 text-orange-600" />
+        return <AlertTriangleIcon className="h-5 w-5 text-orange-600" />
       default:
-        return <Info className="h-5 w-5 text-blue-600" />
+        return <InfoIcon className="h-5 w-5 text-blue-600" />
     }
   }
 
@@ -53,7 +53,7 @@ export default async function AlertsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
+            <BellIcon className="h-5 w-5" />
             All Alerts
           </CardTitle>
           <CardDescription>Recent pricing alerts and notifications</CardDescription>
@@ -61,7 +61,7 @@ export default async function AlertsPage() {
         <CardContent>
           {!alerts || alerts.length === 0 ? (
             <div className="text-center py-16">
-              <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto mb-4" />
+              <CheckCircle2Icon className="h-16 w-16 text-green-400 mx-auto mb-4" />
               <h3 className="text-xl font-medium mb-2">All clear!</h3>
               <p className="text-slate-500">
                 No alerts at the moment. We'll notify you when something needs your attention.

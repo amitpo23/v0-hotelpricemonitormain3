@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, Activity, Zap } from "lucide-react"
+import { TrendingUpIcon, TrendingDownIcon, ActivityIcon, ZapIcon } from "@/components/icons"
 import { AnalyzeTrendsButton } from "./analyze-button"
 
 export default async function TrendsPage() {
@@ -16,13 +16,13 @@ export default async function TrendsPage() {
   const getTrendIcon = (type: string) => {
     switch (type) {
       case "price_increase":
-        return <TrendingUp className="h-5 w-5 text-green-600" />
+        return <TrendingUpIcon className="h-5 w-5 text-green-600" />
       case "price_decrease":
-        return <TrendingDown className="h-5 w-5 text-red-600" />
+        return <TrendingDownIcon className="h-5 w-5 text-red-600" />
       case "demand_spike":
-        return <Zap className="h-5 w-5 text-yellow-600" />
+        return <ZapIcon className="h-5 w-5 text-yellow-600" />
       default:
-        return <Activity className="h-5 w-5 text-blue-600" />
+        return <ActivityIcon className="h-5 w-5 text-blue-600" />
     }
   }
 
@@ -53,7 +53,7 @@ export default async function TrendsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-green-600 mb-2">
-              <TrendingUp className="h-5 w-5" />
+              <TrendingUpIcon className="h-5 w-5" />
               <span className="font-medium">Price Increases</span>
             </div>
             <div className="text-3xl font-bold">
@@ -65,7 +65,7 @@ export default async function TrendsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-red-600 mb-2">
-              <TrendingDown className="h-5 w-5" />
+              <TrendingDownIcon className="h-5 w-5" />
               <span className="font-medium">Price Decreases</span>
             </div>
             <div className="text-3xl font-bold">
@@ -77,7 +77,7 @@ export default async function TrendsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-yellow-600 mb-2">
-              <Zap className="h-5 w-5" />
+              <ZapIcon className="h-5 w-5" />
               <span className="font-medium">Demand Spikes</span>
             </div>
             <div className="text-3xl font-bold">
@@ -95,7 +95,7 @@ export default async function TrendsPage() {
         <CardContent>
           {!trends || trends.length === 0 ? (
             <div className="text-center py-16">
-              <Activity className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+              <ActivityIcon className="h-16 w-16 text-slate-300 mx-auto mb-4" />
               <h3 className="text-xl font-medium mb-2">No trends detected yet</h3>
               <p className="text-slate-500 mb-4">Run a trend analysis to detect market patterns</p>
               <AnalyzeTrendsButton />

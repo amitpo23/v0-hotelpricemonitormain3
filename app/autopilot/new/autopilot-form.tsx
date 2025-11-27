@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Loader2 } from "lucide-react"
+import { Loader2Icon } from "@/components/icons"
 
 interface Hotel {
   id: string
@@ -214,7 +214,7 @@ export function AutopilotRuleForm({ hotels }: { hotels: Hotel[] }) {
 
       <div className="flex gap-4">
         <Button type="submit" className="flex-1" disabled={loading}>
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {loading && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
           Create Rule
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>

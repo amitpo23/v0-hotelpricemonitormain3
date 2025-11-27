@@ -12,7 +12,6 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DollarSignIcon,
-  HotelIcon,
   AlertTriangleIcon,
   BuildingIcon,
 } from "@/components/icons"
@@ -22,29 +21,36 @@ import { RunScraperButton } from "./run-scraper-button"
 interface CalendarGridProps {
   hotels: any[]
   dailyPrices: any[]
+  roomTypes: any[]
+  competitors: any[]
 }
 
-export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
+export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: CalendarGridProps) {
   const [selectedHotel, setSelectedHotel] = useState<string>(hotels[0]?.id || "")
+  const [selectedRoomType, setSelectedRoomType] = useState<string>("all")
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<any>(null)
   const [competitorPrices, setCompetitorPrices] = useState<any[]>([])
-  const [competitors, setCompetitors] = useState<any[]>([])
   const [loadingCompetitors, setLoadingCompetitors] = useState(false)
+
+  const hotelRoomTypes = roomTypes.filter((rt) => rt.hotel_id === selectedHotel)
+  const hotelCompetitors = competitors.filter((c) => c.hotel_id === selectedHotel)
 
   useEffect(() => {
     if (selectedHotel && selectedDay) {
       fetchCompetitorDetails()
     }
-  }, [selectedHotel, selectedDay])
+  }, [selectedHotel, selectedDay, selectedRoomType])
 
   const fetchCompetitorDetails = async () => {
     if (!selectedHotel || !selectedDay) return
     setLoadingCompetitors(true)
     try {
-      const res = await fetch(`/api/competitors/prices?hotelId=${selectedHotel}&date=${selectedDay.date}`)
+      const roomTypeParam = selectedRoomType !== "all" ? `&roomTypeId=${selectedRoomType}` : ""
+      const res = await fetch(
+        `/api/competitors/prices?hotelId=${selectedHotel}&date=${selectedDay.date}${roomTypeParam}`,
+      )
       const data = await res.json()
-      setCompetitors(data.competitors || [])
       setCompetitorPrices(data.prices || [])
     } catch (error) {
       console.error("Error fetching competitor details:", error)
@@ -53,7 +59,12 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
   }
 
   const selectedHotelData = hotels.find((h) => h.id === selectedHotel)
-  const hotelPrices = dailyPrices.filter((p) => p.hotel_id === selectedHotel)
+
+  const hotelPrices = dailyPrices.filter((p) => {
+    if (p.hotel_id !== selectedHotel) return false
+    if (selectedRoomType !== "all" && p.room_type_id && p.room_type_id !== selectedRoomType) return false
+    return true
+  })
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
@@ -98,12 +109,23 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
     return colors[level] || colors.medium
   }
 
+  const getCompetitorColor = (competitorId: string) => {
+    const comp = hotelCompetitors.find((c) => c.id === competitorId)
+    return comp?.display_color || "#f97316"
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Select value={selectedHotel} onValueChange={setSelectedHotel}>
-            <SelectTrigger className="w-64 bg-background/50">
+        <div className="flex items-center gap-4 flex-wrap">
+          <Select
+            value={selectedHotel}
+            onValueChange={(v) => {
+              setSelectedHotel(v)
+              setSelectedRoomType("all")
+            }}
+          >
+            <SelectTrigger className="w-48 bg-background/50">
               <SelectValue placeholder="Select hotel" />
             </SelectTrigger>
             <SelectContent>
@@ -115,8 +137,29 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
             </SelectContent>
           </Select>
 
+          <Select value={selectedRoomType} onValueChange={setSelectedRoomType}>
+            <SelectTrigger className="w-48 bg-background/50">
+              <SelectValue placeholder="All room types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Room Types</SelectItem>
+              {hotelRoomTypes.map((rt) => (
+                <SelectItem key={rt.id} value={rt.id}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: rt.display_color || "#06b6d4" }} />
+                    {rt.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {selectedHotel && selectedHotelData && (
-            <RunScraperButton hotelId={selectedHotel} hotelName={selectedHotelData.name} />
+            <RunScraperButton
+              hotelId={selectedHotel}
+              hotelName={selectedHotelData.name}
+              roomTypeId={selectedRoomType !== "all" ? selectedRoomType : undefined}
+            />
           )}
         </div>
 
@@ -130,6 +173,21 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
           </Button>
         </div>
       </div>
+
+      {hotelCompetitors.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
+          <span className="text-sm text-muted-foreground">Tracking:</span>
+          {hotelCompetitors.map((comp) => (
+            <div key={comp.id} className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: comp.display_color || "#f97316" }} />
+              <span className="text-sm">{comp.competitor_hotel_name}</span>
+              {comp.star_rating && (
+                <span className="text-xs text-muted-foreground">{"★".repeat(comp.star_rating)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <Card className="border-border/50 bg-card/50">
         <CardContent className="p-4">
@@ -208,6 +266,11 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
               <Badge variant="outline" className={getDemandBadge(selectedDay.demand_level)}>
                 {selectedDay.demand_level} demand
               </Badge>
+              {selectedRoomType !== "all" && hotelRoomTypes.find((rt) => rt.id === selectedRoomType) && (
+                <Badge variant="outline" className="ml-2">
+                  {hotelRoomTypes.find((rt) => rt.id === selectedRoomType)?.name}
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -240,9 +303,9 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
 
               {loadingCompetitors ? (
                 <div className="text-center py-4 text-muted-foreground">Loading competitor details...</div>
-              ) : competitors.length > 0 ? (
+              ) : hotelCompetitors.length > 0 ? (
                 <div className="grid gap-2">
-                  {competitors.map((comp) => {
+                  {hotelCompetitors.map((comp) => {
                     const priceData = competitorPrices.find((cp) => cp.competitor_id === comp.id)
                     const price = priceData?.price || 0
                     const priceDiff = price - selectedDay.our_price
@@ -253,9 +316,13 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
                       <div
                         key={comp.id}
                         className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50"
+                        style={{ borderLeftColor: comp.display_color || "#f97316", borderLeftWidth: "4px" }}
                       >
                         <div className="flex items-center gap-3">
-                          <HotelIcon className="h-4 w-4 text-muted-foreground" />
+                          <div
+                            className="w-4 h-4 rounded-full"
+                            style={{ backgroundColor: comp.display_color || "#f97316" }}
+                          />
                           <div>
                             <div className="font-medium">{comp.competitor_hotel_name}</div>
                             {comp.star_rating && (
@@ -360,7 +427,7 @@ export function CalendarGrid({ hotels, dailyPrices }: CalendarGridProps) {
               ))}
             {hotelPrices.filter((p) => p.autopilot_action && p.autopilot_action !== "maintain").length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                No price recommendations available. Click "Run Full Scan" to analyze 90 days.
+                No price recommendations available. Click "Run Full Scan" to analyze 180 days.
               </div>
             )}
           </div>

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Check } from "lucide-react"
+import { CheckIcon } from "@/components/icons"
 
 export function MarkAlertReadButton({ alertId }: { alertId: string }) {
   const router = useRouter()
@@ -14,7 +14,7 @@ export function MarkAlertReadButton({ alertId }: { alertId: string }) {
 
   return (
     <Button variant="ghost" size="sm" onClick={handleMarkRead}>
-      <Check className="h-4 w-4 mr-1" />
+      <CheckIcon className="h-4 w-4 mr-1" />
       Mark read
     </Button>
   )

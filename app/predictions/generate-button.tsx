@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Sparkles, Loader2 } from "lucide-react"
+import { SparklesIcon, Loader2Icon } from "@/components/icons"
 
 interface Hotel {
   id: string
@@ -34,7 +34,7 @@ export function GeneratePredictionsButton({ hotels }: { hotels: Hotel[] }) {
 
   return (
     <Button onClick={handleGenerate} disabled={loading || hotels.length === 0} className="gap-2">
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+      {loading ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <SparklesIcon className="h-4 w-4" />}
       Generate Predictions
     </Button>
   )

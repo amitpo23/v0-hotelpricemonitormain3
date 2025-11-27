@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, MapPin, DollarSign } from "lucide-react"
+import { PlusIcon, MapPinIcon, DollarSignIcon } from "@/components/icons"
 import Link from "next/link"
 import type { Hotel } from "@/lib/types"
 
@@ -18,7 +18,7 @@ export default async function HotelsPage() {
         </div>
         <Link href="/hotels/new">
           <Button>
-            <Plus className="h-4 w-4 mr-2" />
+            <PlusIcon className="h-4 w-4 mr-2" />
             Add Hotel
           </Button>
         </Link>
@@ -35,12 +35,12 @@ export default async function HotelsPage() {
       {!hotels || hotels.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <MapPin className="h-16 w-16 text-slate-300 mb-4" />
+            <MapPinIcon className="h-16 w-16 text-slate-300 mb-4" />
             <h3 className="text-xl font-semibold mb-2">No hotels yet</h3>
             <p className="text-slate-600 dark:text-slate-400 mb-4">Get started by adding your first hotel</p>
             <Link href="/hotels/new">
               <Button>
-                <Plus className="h-4 w-4 mr-2" />
+                <PlusIcon className="h-4 w-4 mr-2" />
                 Add Your First Hotel
               </Button>
             </Link>
@@ -56,7 +56,7 @@ export default async function HotelsPage() {
                 </CardTitle>
                 {hotel.location && (
                   <CardDescription className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
+                    <MapPinIcon className="h-4 w-4" />
                     {hotel.location}
                   </CardDescription>
                 )}
@@ -64,7 +64,7 @@ export default async function HotelsPage() {
               <CardContent>
                 {hotel.base_price && (
                   <div className="flex items-center gap-2 mb-4">
-                    <DollarSign className="h-4 w-4 text-green-600" />
+                    <DollarSignIcon className="h-4 w-4 text-green-600" />
                     <span className="text-2xl font-bold">${hotel.base_price}</span>
                     <span className="text-slate-500">/ night</span>
                   </div>

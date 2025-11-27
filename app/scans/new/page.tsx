@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeftIcon } from "@/components/icons"
 import Link from "next/link"
 import type { Hotel } from "@/lib/types"
 
@@ -69,7 +69,7 @@ export default function NewScanPage() {
     <div className="container mx-auto px-4 py-8">
       <Link href="/scans">
         <Button variant="ghost" className="mb-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeftIcon className="h-4 w-4 mr-2" />
           Back to Scans
         </Button>
       </Link>
