@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Target,
   Users,
+  BookOpen,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { Suspense } from "react"
@@ -46,6 +47,7 @@ export function ClientLayout({
             <NavLink href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" />
             <NavLink href="/calendar" icon={<CalendarDays className="h-4 w-4" />} label="Calendar" />
             <NavLink href="/budget" icon={<Target className="h-4 w-4" />} label="Budget" />
+            <NavLink href="/bookings" icon={<BookOpen className="h-4 w-4" />} label="Bookings" />
             <NavLink href="/hotels" icon={<Building2 className="h-4 w-4" />} label="Properties" />
             <NavLink href="/competitors" icon={<Users className="h-4 w-4" />} label="Competitors" />
             <NavLink href="/scans" icon={<Search className="h-4 w-4" />} label="Scans" />
