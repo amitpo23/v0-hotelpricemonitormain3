@@ -104,7 +104,7 @@ export function IconPlus({ className }: { className?: string }) {
 export function IconCheck({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M20 6L9 17l-5-5L1 18M17 6h6v6" />
+      <path d="M20 6L9 17l-5-5L1 18M17 6h6v6M10 14L21 3" />
     </svg>
   )
 }
@@ -120,7 +120,7 @@ export function IconX({ className }: { className?: string }) {
 export function IconRefresh({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+      <path d="M23 4v6h-6M1 20v-6h6M5.64 5.64l12.73 12.73M18.36 5.64L5.64 18.36" />
     </svg>
   )
 }
@@ -136,7 +136,7 @@ export function IconLoader({ className }: { className?: string }) {
 export function IconTrendingUp({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6" />
+      <path d="M23 6l-9.5 9.5-5 5L1 18M17 6h6v6" />
     </svg>
   )
 }
@@ -221,6 +221,14 @@ export function IconTrash({ className }: { className?: string }) {
   )
 }
 
+export function IconTrash2({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+    </svg>
+  )
+}
+
 export function IconClock({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -267,7 +275,7 @@ export function IconSettings({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 001.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 001.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010-2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
     </svg>
   )
 }
@@ -275,7 +283,7 @@ export function IconSettings({ className }: { className?: string }) {
 export function IconExternalLink({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
     </svg>
   )
 }
@@ -318,7 +326,7 @@ export function IconRadar({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <circle cx="12" cy="12" r="10" />
-      <path d="M12 2v10l7.07 7.07" />
+      <path d="M12 2v10l7.07 7.07M18.36 5.64L5.64 18.36" />
     </svg>
   )
 }
@@ -451,10 +459,10 @@ export function IconLoader2({ className }: { className?: string }) {
   )
 }
 
-export function IconTrash2({ className }: { className?: string }) {
+export function IconScan2({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+      <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" />
     </svg>
   )
 }
@@ -515,7 +523,7 @@ export function IconSun({ className }: { className?: string }) {
 export function IconCloud({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M18 10h-1.26A8 8 0 109 2.83M22 12A10 10 0 0012 2v10z" />
+      <path d="M18 10h-1.26A8 8 0 009 2.83M22 12A10 10 0 0012 2v10z" />
     </svg>
   )
 }
@@ -548,6 +556,14 @@ export function IconUser({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path d="M4 16c-.89 0-1.78-.19-2.6-.55C1.43 14.65 1 13.86 1 13s.43-1.65 1.36-2.15A8.21 8.21 0 0112 3c2.62 0 4.98.39 6.97 1.15.82.36 1.71.55 2.6.55a4.6 4.6 0 011.71.4 4.6 4.6 0 01-.4 1.71 4.6 4.6 0 00-1.15 2.6c0 .99-.2 1.98-.55 2.6A8.21 8.21 0 0022 16a8.21 8.21 0 00-4.75-1.85c-.82-.36-1.71-.55-2.6-.55-.89 0-1.78.19-2.6.55a4.6 4.6 0 01-.4-1.71 4.6 4.6 0 011.71-.4c1.15-.47 2.35-1.15 3.4-1.95M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  )
+}
+
+export function PlusCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M12 5v14M5 12h14" />
     </svg>
   )
 }
@@ -593,6 +609,7 @@ export {
   IconExternalLink as ExternalLinkIcon,
   IconInfo as InfoIcon,
   IconTrash as TrashIcon,
+  IconTrash2 as Trash2Icon,
   IconSettings as SettingsIcon,
   IconActivity as ActivityIcon,
   IconXCircle as XCircleIcon,
@@ -600,9 +617,10 @@ export {
   IconBuilding2 as Building2Icon,
   IconLoader2 as Loader2Icon,
   IconScan as ScanIcon,
-  IconTrash2 as Trash2Icon,
+  IconScan2 as Scan2Icon,
   IconBarChart3 as BarChart3Icon,
   IconBed as BedIcon,
+  IconBedDouble as BedDoubleIcon,
   IconLink as LinkIcon,
   IconPalette as PaletteIcon,
   IconBell as BellIcon,
@@ -610,7 +628,6 @@ export {
   IconArrowLeft as ArrowLeftIcon,
   IconGlobe as GlobeIcon,
   IconSparkles as SparklesIcon,
-  IconBedDouble as BedDoubleIcon,
   IconSun as SunIcon,
   IconCloud as CloudIcon,
   IconPieChart as PieChartIcon,
@@ -660,13 +677,14 @@ export const Icons = {
   externalLink: IconExternalLink,
   info: IconInfo,
   trash: IconTrash,
+  trash2: IconTrash2,
   settings: IconSettings,
   activity: IconActivity,
   xCircle: IconXCircle,
   building2: IconBuilding2,
   loader2: IconLoader2,
   scan: IconScan,
-  trash2: IconTrash2,
+  scan2: IconScan2,
   barChart3: IconBarChart3,
   bed: IconBed,
   bedDouble: IconBedDouble,
@@ -683,4 +701,38 @@ export const Icons = {
   messageSquare: IconMessageSquare,
   send: IconSend,
   user: IconUser,
+  plusCircle: PlusCircleIcon,
 }
+
+export function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  )
+}
+
+export function LogOutIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+    </svg>
+  )
+}
+
+export function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
+export { ShieldIcon as Shield }
+export { LogOutIcon as LogOut }
+export { ChevronDownIcon as ChevronDown }
+export { IconCheck as Check }
+export { IconX as X }
+export { IconPlus as Plus }
+export { IconTrash as Trash }
+export { IconTrash2 as Trash2 }

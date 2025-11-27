@@ -6,6 +6,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const hotelId = searchParams.get("hotelId")
     const date = searchParams.get("date")
+    const roomTypeId = searchParams.get("roomTypeId")
 
     if (!hotelId) {
       return NextResponse.json({ error: "Hotel ID required" }, { status: 400 })
@@ -29,19 +30,27 @@ export async function GET(request: Request) {
       })
     }
 
-    // Get competitor prices for the specific date - ONE per competitor
+    // Get competitor prices for the specific date
     let prices: any[] = []
 
     if (date) {
       const competitorIds = competitors.map((c) => c.id)
 
-      const { data: competitorPrices } = await supabase
+      let query = supabase
         .from("competitor_daily_prices")
         .select("*")
         .eq("hotel_id", hotelId)
         .eq("date", date)
         .in("competitor_id", competitorIds)
 
+      // Filter by room type if specified
+      if (roomTypeId) {
+        query = query.eq("room_type_id", roomTypeId)
+      }
+
+      const { data: competitorPrices } = await query
+
+      // Get one price per competitor (most recent)
       const priceMap = new Map()
       for (const price of competitorPrices || []) {
         const existing = priceMap.get(price.competitor_id)
