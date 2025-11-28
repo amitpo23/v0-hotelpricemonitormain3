@@ -33,6 +33,7 @@ export default function NewHotelPage() {
           name: formData.get("name"),
           location: formData.get("location"),
           base_price: Number.parseFloat(formData.get("base_price") as string) || null,
+          total_rooms: Number.parseInt(formData.get("total_rooms") as string) || 50,
           competitor_urls: competitorUrls ? competitorUrls.split("\n").filter(Boolean) : [],
         }),
       })
@@ -74,9 +75,25 @@ export default function NewHotelPage() {
               <Input id="location" name="location" placeholder="New York, NY" />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="base_price">Base Price ($)</Label>
-              <Input id="base_price" name="base_price" type="number" step="0.01" placeholder="150.00" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="base_price">Base Price ($)</Label>
+                <Input id="base_price" name="base_price" type="number" step="0.01" placeholder="150.00" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="total_rooms">Total Rooms *</Label>
+                <Input
+                  id="total_rooms"
+                  name="total_rooms"
+                  type="number"
+                  placeholder="50"
+                  defaultValue={50}
+                  min={1}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">Number of rooms for occupancy calculations</p>
+              </div>
             </div>
 
             <div className="space-y-2">

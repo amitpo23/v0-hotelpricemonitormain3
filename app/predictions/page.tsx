@@ -9,25 +9,30 @@ import {
   TrendingUpIcon,
   GlobeIcon,
   MessageSquareIcon,
+  DollarSignIcon,
 } from "@/components/icons"
 import { PredictionChart } from "./prediction-chart"
 import { GeneratePredictionsButton } from "./generate-button"
 import { YearlyPredictions } from "./yearly-predictions"
 import { MarketIntelligence } from "./market-intelligence"
 import { PredictionChat } from "./prediction-chat"
+import { RevenueForecast } from "./revenue-forecast"
 
 export default async function PredictionsPage() {
   const supabase = await createClient()
 
-  const [{ data: predictions }, { data: hotels }, { data: roomTypes }] = await Promise.all([
-    supabase
-      .from("price_predictions")
-      .select("*, hotels (name)")
-      .order("prediction_date", { ascending: true })
-      .gte("prediction_date", new Date().toISOString().split("T")[0]),
-    supabase.from("hotels").select("id, name, base_price, location"),
-    supabase.from("hotel_room_types").select("*").eq("is_active", true),
-  ])
+  const [{ data: predictions }, { data: hotels }, { data: roomTypes }, { data: budgets }, { data: forecasts }] =
+    await Promise.all([
+      supabase
+        .from("price_predictions")
+        .select("*, hotels (name)")
+        .order("prediction_date", { ascending: true })
+        .gte("prediction_date", new Date().toISOString().split("T")[0]),
+      supabase.from("hotels").select("id, name, base_price, location, total_rooms"),
+      supabase.from("hotel_room_types").select("*").eq("is_active", true),
+      supabase.from("revenue_budgets").select("*"),
+      supabase.from("monthly_forecasts").select("*").eq("year", new Date().getFullYear()),
+    ])
 
   const getDemandColor = (demand: string | null) => {
     switch (demand) {
@@ -73,10 +78,14 @@ export default async function PredictionsPage() {
       </div>
 
       <Tabs defaultValue="daily" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
           <TabsTrigger value="daily" className="flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
             Daily
+          </TabsTrigger>
+          <TabsTrigger value="revenue" className="flex items-center gap-2">
+            <DollarSignIcon className="h-4 w-4" />
+            Revenue
           </TabsTrigger>
           <TabsTrigger value="monthly" className="flex items-center gap-2">
             <TrendingUpIcon className="h-4 w-4" />
@@ -182,6 +191,15 @@ export default async function PredictionsPage() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="revenue">
+          <RevenueForecast
+            hotels={hotels || []}
+            budgets={budgets || []}
+            forecasts={forecasts || []}
+            roomTypes={roomTypes || []}
+          />
         </TabsContent>
 
         {/* Monthly Predictions Tab */}

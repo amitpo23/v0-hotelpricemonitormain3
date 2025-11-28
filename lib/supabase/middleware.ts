@@ -1,29 +1,30 @@
-import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://dqhmraeyisoigxzsitiz.supabase.co"
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || ""
+
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  const supabaseResponse = NextResponse.next({ request })
 
-  const supabase = createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-        supabaseResponse = NextResponse.next({
-          request,
-        })
-        cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
-      },
-    },
-  })
+  // Get auth token from cookies
+  const authToken = request.cookies.get("supabase-auth-token")?.value
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user = null
+  if (authToken) {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+      if (response.ok) {
+        user = await response.json()
+      }
+    } catch {
+      // Token invalid or expired
+    }
+  }
 
   const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback", "/auth/pending", "/api/admin/setup"]
   const isPublicRoute = publicRoutes.some((route) =>
@@ -38,12 +39,26 @@ export async function updateSession(request: NextRequest) {
 
   // If user is logged in but not approved, redirect to pending page
   if (user && !isPublicRoute && request.nextUrl.pathname !== "/auth/pending") {
-    const { data: profile } = await supabase.from("profiles").select("is_approved, is_admin").eq("id", user.id).single()
+    try {
+      const profileResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=is_approved,is_admin`,
+        {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+        },
+      )
+      const profiles = await profileResponse.json()
+      const profile = profiles?.[0]
 
-    if (profile && !profile.is_approved && !profile.is_admin) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/auth/pending"
-      return NextResponse.redirect(url)
+      if (profile && !profile.is_approved && !profile.is_admin) {
+        const url = request.nextUrl.clone()
+        url.pathname = "/auth/pending"
+        return NextResponse.redirect(url)
+      }
+    } catch {
+      // Continue without profile check
     }
   }
 
