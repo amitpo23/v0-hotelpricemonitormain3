@@ -568,6 +568,14 @@ export function PlusCircleIcon({ className }: { className?: string }) {
   )
 }
 
+export function IconSpinner({ className }: { className?: string }) {
+  return (
+    <svg className={`${className} animate-spin`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M21 12a9 9 0 11-6.219-8.56" />
+    </svg>
+  )
+}
+
 // Aliases for compatibility with lucide-react naming convention
 export {
   IconPlane as PlaneIcon,
@@ -703,14 +711,6 @@ export const Icons = {
   user: IconUser,
   plusCircle: PlusCircleIcon,
   spinner: IconSpinner,
-}
-
-export function IconSpinner({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M21 12a9 9 0 11-6.219-8.56" />
-    </svg>
-  )
 }
 
 export function ShieldIcon({ className }: { className?: string }) {

@@ -14,6 +14,7 @@ import {
   DollarSignIcon,
   AlertTriangleIcon,
   BuildingIcon,
+  BedDoubleIcon,
 } from "@/components/icons"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from "date-fns"
 import { RunScraperButton } from "./run-scraper-button"
@@ -66,6 +67,12 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
     return true
   })
 
+  const selectedRoomTypeData = hotelRoomTypes.find((rt) => rt.id === selectedRoomType)
+  const avgPriceForRoomType =
+    hotelPrices.length > 0
+      ? Math.round(hotelPrices.reduce((sum, p) => sum + (p.our_price || 0), 0) / hotelPrices.length)
+      : selectedRoomTypeData?.base_price || 0
+
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
@@ -109,11 +116,6 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
     return colors[level] || colors.medium
   }
 
-  const getCompetitorColor = (competitorId: string) => {
-    const comp = hotelCompetitors.find((c) => c.id === competitorId)
-    return comp?.display_color || "#f97316"
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -138,16 +140,28 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
           </Select>
 
           <Select value={selectedRoomType} onValueChange={setSelectedRoomType}>
-            <SelectTrigger className="w-48 bg-background/50">
+            <SelectTrigger className="w-56 bg-background/50">
+              <BedDoubleIcon className="h-4 w-4 mr-2 text-cyan-400" />
               <SelectValue placeholder="All room types" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Room Types</SelectItem>
+              <SelectItem value="all">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" />
+                  All Room Types
+                </div>
+              </SelectItem>
               {hotelRoomTypes.map((rt) => (
                 <SelectItem key={rt.id} value={rt.id}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: rt.display_color || "#06b6d4" }} />
-                    {rt.name}
+                  <div className="flex items-center justify-between gap-4 w-full">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: rt.display_color || "#06b6d4" }}
+                      />
+                      {rt.name}
+                    </div>
+                    {rt.base_price && <span className="text-xs text-muted-foreground">${rt.base_price}</span>}
                   </div>
                 </SelectItem>
               ))}
@@ -174,6 +188,32 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
         </div>
       </div>
 
+      {selectedRoomType !== "all" && selectedRoomTypeData && (
+        <div
+          className="p-3 rounded-lg border"
+          style={{ borderColor: selectedRoomTypeData.display_color || "#06b6d4", borderLeftWidth: "4px" }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <BedDoubleIcon className="h-5 w-5" style={{ color: selectedRoomTypeData.display_color || "#06b6d4" }} />
+              <div>
+                <span className="font-medium">{selectedRoomTypeData.name}</span>
+                <p className="text-xs text-muted-foreground">
+                  Base price: ${selectedRoomTypeData.base_price} | Avg price: ${avgPriceForRoomType}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-bold" style={{ color: selectedRoomTypeData.display_color || "#06b6d4" }}>
+                ${avgPriceForRoomType}
+              </span>
+              <p className="text-xs text-muted-foreground">avg/night</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Competitor legend */}
       {hotelCompetitors.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
           <span className="text-sm text-muted-foreground">Tracking:</span>
@@ -189,6 +229,7 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
         </div>
       )}
 
+      {/* Calendar Grid */}
       <Card className="border-border/50 bg-card/50">
         <CardContent className="p-4">
           <div className="grid grid-cols-7 gap-1 mb-2">
@@ -257,6 +298,7 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
         </CardContent>
       </Card>
 
+      {/* Day Details */}
       {selectedDay && (
         <Card className="border-border/50 bg-card/50 border-cyan-500/50">
           <CardHeader className="pb-2">
@@ -266,9 +308,9 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
               <Badge variant="outline" className={getDemandBadge(selectedDay.demand_level)}>
                 {selectedDay.demand_level} demand
               </Badge>
-              {selectedRoomType !== "all" && hotelRoomTypes.find((rt) => rt.id === selectedRoomType) && (
-                <Badge variant="outline" className="ml-2">
-                  {hotelRoomTypes.find((rt) => rt.id === selectedRoomType)?.name}
+              {selectedRoomType !== "all" && selectedRoomTypeData && (
+                <Badge variant="outline" className="ml-2" style={{ borderColor: selectedRoomTypeData.display_color }}>
+                  {selectedRoomTypeData.name}
                 </Badge>
               )}
             </CardTitle>
@@ -295,10 +337,14 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
               </div>
             </div>
 
+            {/* Competitor breakdown */}
             <div className="border-t border-border/50 pt-4">
               <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
                 <BuildingIcon className="h-4 w-4 text-cyan-400" />
                 Competitor Price Breakdown
+                {selectedRoomType !== "all" && selectedRoomTypeData && (
+                  <span className="text-xs text-muted-foreground">for {selectedRoomTypeData.name}</span>
+                )}
               </h4>
 
               {loadingCompetitors ? (
@@ -325,11 +371,10 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
                           />
                           <div>
                             <div className="font-medium">{comp.competitor_hotel_name}</div>
-                            {comp.star_rating && (
-                              <div className="text-xs text-muted-foreground">
-                                {"★".repeat(comp.star_rating)} ({comp.star_rating} stars)
-                              </div>
-                            )}
+                            <div className="text-xs text-muted-foreground">
+                              {comp.star_rating && `${"★".repeat(comp.star_rating)} `}
+                              {priceData?.room_type && `• ${priceData.room_type}`}
+                            </div>
                           </div>
                         </div>
                         <div className="text-right">
@@ -389,9 +434,17 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
         </Card>
       )}
 
+      {/* Price Recommendations Summary */}
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
-          <CardTitle className="text-lg">Price Recommendations Summary</CardTitle>
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>Price Recommendations Summary</span>
+            {selectedRoomType !== "all" && selectedRoomTypeData && (
+              <Badge variant="outline" style={{ borderColor: selectedRoomTypeData.display_color }}>
+                {selectedRoomTypeData.name}
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2 max-h-64 overflow-y-auto">

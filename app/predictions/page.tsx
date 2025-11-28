@@ -19,13 +19,14 @@ import { PredictionChat } from "./prediction-chat"
 export default async function PredictionsPage() {
   const supabase = await createClient()
 
-  const [{ data: predictions }, { data: hotels }] = await Promise.all([
+  const [{ data: predictions }, { data: hotels }, { data: roomTypes }] = await Promise.all([
     supabase
       .from("price_predictions")
       .select("*, hotels (name)")
       .order("prediction_date", { ascending: true })
       .gte("prediction_date", new Date().toISOString().split("T")[0]),
     supabase.from("hotels").select("id, name, base_price, location"),
+    supabase.from("hotel_room_types").select("*").eq("is_active", true),
   ])
 
   const getDemandColor = (demand: string | null) => {
@@ -43,7 +44,6 @@ export default async function PredictionsPage() {
     }
   }
 
-  // Group predictions by hotel
   const predictionsByHotel =
     predictions?.reduce((acc: any, pred: any) => {
       const hotelId = pred.hotel_id
@@ -66,7 +66,7 @@ export default async function PredictionsPage() {
             AI Price Predictions
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
-            AI-powered demand forecasting with market intelligence from Google Trends and international data sources
+            AI-powered demand forecasting with market intelligence - includes room type analysis
           </p>
         </div>
         <GeneratePredictionsButton hotels={hotels || []} />
@@ -94,7 +94,6 @@ export default async function PredictionsPage() {
 
         {/* Daily Predictions Tab */}
         <TabsContent value="daily" className="space-y-6">
-          {/* Prediction Chart */}
           <Card>
             <CardHeader>
               <CardTitle>30-Day Price Forecast</CardTitle>
@@ -107,7 +106,6 @@ export default async function PredictionsPage() {
             </CardContent>
           </Card>
 
-          {/* Predictions by Hotel */}
           {Object.keys(predictionsByHotel).length === 0 ? (
             <Card>
               <CardContent className="py-16 text-center">
@@ -188,7 +186,7 @@ export default async function PredictionsPage() {
 
         {/* Monthly Predictions Tab */}
         <TabsContent value="monthly">
-          <YearlyPredictions hotels={hotels || []} />
+          <YearlyPredictions hotels={hotels || []} roomTypes={roomTypes || []} />
         </TabsContent>
 
         {/* Market Intelligence Tab */}
