@@ -1,10 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,38 +14,34 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError("")
 
-    console.log("[v0] Starting login process...")
-
     try {
+      const supabase = createClient()
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      console.log("[v0] Login result - error:", error, "data:", data)
-
       if (error) {
-        setError(error.message || "Failed to sign in")
+        console.log("[v0] Login error:", error.message)
+        setError(error.message)
         setLoading(false)
         return
       }
 
-      if (!data?.user) {
-        setError("Invalid credentials")
+      if (data?.user) {
+        console.log("[v0] Login successful!")
+        window.location.href = "/dashboard"
+      } else {
+        setError("Login failed - please try again")
         setLoading(false)
-        return
       }
-
-      console.log("[v0] Login successful, redirecting to dashboard...")
-      window.location.href = "/dashboard"
     } catch (err: any) {
       console.log("[v0] Login exception:", err)
       setError(err.message || "An unexpected error occurred")
