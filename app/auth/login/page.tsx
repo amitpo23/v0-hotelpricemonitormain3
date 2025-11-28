@@ -8,6 +8,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
+function CockpitIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2v4" />
+      <path d="M12 18v4" />
+      <path d="M2 12h4" />
+      <path d="M18 12h4" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 12l3-3" />
+    </svg>
+  )
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -47,22 +69,13 @@ export default function LoginPage() {
       <Card className="w-full max-w-md bg-card border-border">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
+            <div className="w-12 h-12 bg-slate-900 border border-cyan-500/30 rounded-xl flex items-center justify-center">
+              <CockpitIcon className="w-7 h-7 text-cyan-400" />
             </div>
-            <span className="text-xl font-bold text-foreground">Autopilot</span>
+            <span className="text-2xl font-bold text-foreground">Cockpit</span>
           </div>
-          <CardTitle className="text-2xl text-foreground">Welcome Back</CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Sign in to your hotel revenue management account
-          </CardDescription>
+          <CardTitle className="text-2xl text-foreground">Welcome Back, Captain</CardTitle>
+          <CardDescription className="text-muted-foreground">Sign in to your revenue command center</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -102,17 +115,17 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+              className="w-full bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-600 hover:to-emerald-600"
               disabled={loading}
             >
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? "Entering Cockpit..." : "Enter Cockpit"}
             </Button>
           </form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Don't have access?{" "}
             <Link href="/auth/signup" className="text-cyan-400 hover:text-cyan-300">
-              Request Access
+              Request Clearance
             </Link>
           </div>
         </CardContent>

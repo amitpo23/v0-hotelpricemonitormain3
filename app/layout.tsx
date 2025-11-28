@@ -8,9 +8,9 @@ const geistSans = Geist({ subsets: ["latin"] })
 const geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Autopilot | AI Revenue Management",
+  title: "Cockpit | Hotel Revenue Command Center",
   description:
-    "AI-powered revenue optimization for hotels. Analyze competitors, predict demand, and maximize revenue automatically.",
+    "Your hotel revenue command center. Navigate pricing, monitor competitors, and let Autopilot optimize your rates automatically.",
     generator: 'v0.app'
 }
 

@@ -126,69 +126,152 @@ export default async function PredictionsPage() {
             </Card>
           ) : (
             <div className="space-y-6">
-              {Object.entries(predictionsByHotel).map(([hotelId, data]: [string, any]) => (
-                <Card key={hotelId}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CalendarIcon className="h-5 w-5 text-blue-500" />
-                      {data.hotelName}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                      {data.predictions.slice(0, 14).map((pred: any) => (
-                        <div key={pred.id} className={`p-3 rounded-lg border ${getDemandColor(pred.predicted_demand)}`}>
-                          <div className="text-xs font-medium mb-1">
-                            {new Date(pred.prediction_date).toLocaleDateString("en-US", {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                            })}
+              {Object.entries(predictionsByHotel).map(([hotelId, data]: [string, any]) => {
+                const hotel = hotels?.find((h: any) => h.id === hotelId)
+                const basePrice = hotel?.base_price || 0
+
+                return (
+                  <Card key={hotelId}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <CalendarIcon className="h-5 w-5 text-blue-500" />
+                            {data.hotelName}
+                          </CardTitle>
+                          {basePrice > 0 && (
+                            <CardDescription className="mt-1">
+                              Current base price: <span className="font-semibold text-cyan-500">${basePrice}</span>
+                              /night
+                            </CardDescription>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-muted-foreground">Avg. Confidence</div>
+                          <div className="text-lg font-semibold text-purple-500">
+                            {(
+                              (data.predictions.reduce((sum: number, p: any) => sum + (p.confidence_score || 0), 0) /
+                                data.predictions.length) *
+                              100
+                            ).toFixed(0)}
+                            %
                           </div>
-                          <div className="text-xl font-bold">${pred.predicted_price}</div>
-                          <div className="text-xs capitalize mt-1">{pred.predicted_demand || "medium"} demand</div>
-                          {pred.confidence_score && (
-                            <div className="text-xs opacity-75 mt-1">
-                              {(pred.confidence_score * 100).toFixed(0)}% conf.
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                        {data.predictions.slice(0, 14).map((pred: any) => {
+                          const priceDiff =
+                            basePrice > 0 ? (((pred.predicted_price - basePrice) / basePrice) * 100).toFixed(0) : null
+                          const confidencePercent = (pred.confidence_score * 100).toFixed(0)
+
+                          return (
+                            <div
+                              key={pred.id}
+                              className={`p-3 rounded-lg border ${getDemandColor(pred.predicted_demand)}`}
+                            >
+                              <div className="text-xs font-medium mb-1">
+                                {new Date(pred.prediction_date).toLocaleDateString("en-US", {
+                                  weekday: "short",
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </div>
+                              <div className="text-xl font-bold">${pred.predicted_price}</div>
+                              {priceDiff && (
+                                <div
+                                  className={`text-xs ${Number(priceDiff) >= 0 ? "text-green-700" : "text-red-700"}`}
+                                >
+                                  {Number(priceDiff) >= 0 ? "+" : ""}
+                                  {priceDiff}% vs base
+                                </div>
+                              )}
+                              <div className="text-xs capitalize mt-1">
+                                {(pred.predicted_demand || "medium").replace("_", " ")} Demand
+                              </div>
+                              <div
+                                className={`text-xs mt-1 font-medium ${
+                                  Number(confidencePercent) >= 80
+                                    ? "text-green-700"
+                                    : Number(confidencePercent) >= 65
+                                      ? "text-yellow-700"
+                                      : "text-orange-700"
+                                }`}
+                              >
+                                {confidencePercent}% conf.
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {basePrice > 0 && (
+                        <div className="mt-4 pt-4 border-t flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                          <div className="flex items-center gap-2">
+                            <DollarSignIcon className="h-5 w-5 text-cyan-500" />
+                            <span className="text-sm text-slate-300">Current Hotel Price:</span>
+                            <span className="text-lg font-bold text-cyan-400">${basePrice}</span>
+                            <span className="text-sm text-slate-400">/night</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-slate-400">Predicted Range</div>
+                            <div className="text-sm font-medium">
+                              ${Math.min(...data.predictions.slice(0, 14).map((p: any) => p.predicted_price))} - $
+                              {Math.max(...data.predictions.slice(0, 14).map((p: any) => p.predicted_price))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {data.predictions[0]?.factors && (
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="text-sm font-medium mb-2">Factors Considered:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {data.predictions[0].factors.seasonality && (
+                              <Badge variant="outline">Seasonality: {data.predictions[0].factors.seasonality}</Badge>
+                            )}
+                            {data.predictions[0].factors.competitor_avg && (
+                              <Badge variant="outline">
+                                Competitor Avg: ${data.predictions[0].factors.competitor_avg}
+                              </Badge>
+                            )}
+                            {data.predictions[0].factors.occupancy_rate !== undefined && (
+                              <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950">
+                                Occupancy: {data.predictions[0].factors.occupancy_rate}%
+                              </Badge>
+                            )}
+                            {data.predictions[0].factors.lead_time_factor && (
+                              <Badge variant="outline" className="bg-purple-50 dark:bg-purple-950">
+                                Lead Time: {data.predictions[0].factors.lead_time_factor}x
+                              </Badge>
+                            )}
+                            {data.predictions[0].factors.events?.map((event: string, i: number) => (
+                              <Badge key={i} variant="outline" className="bg-purple-50 dark:bg-purple-950">
+                                {event}
+                              </Badge>
+                            ))}
+                          </div>
+                          {data.predictions[0].factors.confidence_breakdown && (
+                            <div className="mt-3 pt-3 border-t border-dashed">
+                              <div className="text-xs text-muted-foreground mb-2">Confidence Breakdown:</div>
+                              <div className="flex flex-wrap gap-2 text-xs">
+                                {Object.entries(data.predictions[0].factors.confidence_breakdown).map(
+                                  ([key, value]: [string, any]) => (
+                                    <span key={key} className="bg-slate-700/50 px-2 py-1 rounded">
+                                      {key.replace(/_/g, " ")}: {value}
+                                    </span>
+                                  ),
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
-                      ))}
-                    </div>
-
-                    {data.predictions[0]?.factors && (
-                      <div className="mt-4 pt-4 border-t">
-                        <div className="text-sm font-medium mb-2">Factors Considered:</div>
-                        <div className="flex flex-wrap gap-2">
-                          {data.predictions[0].factors.seasonality && (
-                            <Badge variant="outline">Seasonality: {data.predictions[0].factors.seasonality}</Badge>
-                          )}
-                          {data.predictions[0].factors.competitor_avg && (
-                            <Badge variant="outline">
-                              Competitor Avg: ${data.predictions[0].factors.competitor_avg}
-                            </Badge>
-                          )}
-                          {data.predictions[0].factors.market_trend && (
-                            <Badge variant="outline" className="bg-blue-50">
-                              Market: {data.predictions[0].factors.market_trend}
-                            </Badge>
-                          )}
-                          {data.predictions[0].factors.google_trend && (
-                            <Badge variant="outline" className="bg-green-50">
-                              Google Trend: {data.predictions[0].factors.google_trend}
-                            </Badge>
-                          )}
-                          {data.predictions[0].factors.events?.map((event: string, i: number) => (
-                            <Badge key={i} variant="outline" className="bg-purple-50">
-                              {event}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </TabsContent>

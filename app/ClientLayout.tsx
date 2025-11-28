@@ -10,7 +10,6 @@ import {
   IconBot,
   IconChart,
   IconBuilding,
-  IconPlane,
   IconCalendar,
   IconTarget,
   IconUsers,
@@ -31,6 +30,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+function CockpitIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2v4" />
+      <path d="M12 18v4" />
+      <path d="M2 12h4" />
+      <path d="M18 12h4" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 12l3-3" />
+    </svg>
+  )
+}
+
 function NavContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -38,7 +59,8 @@ function NavContent({ children }: { children: React.ReactNode }) {
 
   // Don't show nav on auth pages
   const isAuthPage = pathname?.startsWith("/auth")
-  if (isAuthPage) {
+  const isLandingPage = pathname === "/"
+  if (isAuthPage || isLandingPage) {
     return <>{children}</>
   }
 
@@ -51,18 +73,15 @@ function NavContent({ children }: { children: React.ReactNode }) {
     <>
       <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
+          <Link href="/dashboard" className="flex items-center gap-2.5 group">
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-500 blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative bg-gradient-to-r from-cyan-500 to-blue-500 p-2 rounded-lg">
-                <IconPlane className="h-5 w-5 text-white" />
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-emerald-500 blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
+              <div className="relative bg-slate-900 border border-cyan-500/30 p-2 rounded-lg">
+                <CockpitIcon className="h-5 w-5 text-cyan-400" />
               </div>
             </div>
             <div>
-              <span className="font-bold text-xl tracking-tight">Autopilot</span>
-              <span className="text-[10px] ml-1.5 px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded font-medium">
-                AI
-              </span>
+              <span className="font-bold text-xl tracking-tight">Cockpit</span>
             </div>
           </Link>
 
@@ -73,8 +92,8 @@ function NavContent({ children }: { children: React.ReactNode }) {
             <NavLink href="/bookings" icon={<IconBook className="h-4 w-4" />} label="Bookings" />
             <NavLink href="/hotels" icon={<IconBuilding className="h-4 w-4" />} label="Properties" />
             <NavLink href="/competitors" icon={<IconUsers className="h-4 w-4" />} label="Competitors" />
-            <NavLink href="/scans" icon={<IconSearch className="h-4 w-4" />} label="Scans" />
-            <NavLink href="/autopilot" icon={<IconBot className="h-4 w-4" />} label="Rules" highlight />
+            <NavLink href="/scans" icon={<IconSearch className="h-4 w-4" />} label="Radar" />
+            <NavLink href="/autopilot" icon={<IconBot className="h-4 w-4" />} label="Autopilot" highlight />
             <NavLink href="/predictions" icon={<IconChart className="h-4 w-4" />} label="Predictions" />
             <NavLink href="/alerts" icon={<IconBell className="h-4 w-4" />} label="Alerts" />
             {user?.is_admin && (
@@ -113,7 +132,7 @@ function NavContent({ children }: { children: React.ReactNode }) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="text-sm text-slate-300 hover:text-white">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center text-white font-medium mr-2">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500 to-emerald-500 flex items-center justify-center text-white font-medium mr-2">
                       {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "U"}
                     </div>
                     <ChevronDownIcon className="h-4 w-4 text-slate-400" />
@@ -187,7 +206,7 @@ function NavLink({
           isActive
             ? "bg-slate-800 text-white"
             : highlight
-              ? "bg-gradient-to-r from-cyan-500/10 to-blue-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20"
+              ? "bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-emerald-500/20"
               : "text-slate-400 hover:text-white hover:bg-slate-800/50"
         }`}
     >
