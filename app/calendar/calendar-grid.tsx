@@ -26,6 +26,17 @@ interface CalendarGridProps {
   competitors: any[]
 }
 
+const COMPETITOR_COLORS = [
+  "#f97316", // orange
+  "#8b5cf6", // purple
+  "#22c55e", // green
+  "#ec4899", // pink
+  "#eab308", // yellow
+  "#3b82f6", // blue
+  "#ef4444", // red
+  "#14b8a6", // teal
+]
+
 export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: CalendarGridProps) {
   const [selectedHotel, setSelectedHotel] = useState<string>(hotels[0]?.id || "")
   const [selectedRoomType, setSelectedRoomType] = useState<string>("all")
@@ -36,6 +47,11 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
 
   const hotelRoomTypes = roomTypes.filter((rt) => rt.hotel_id === selectedHotel)
   const hotelCompetitors = competitors.filter((c) => c.hotel_id === selectedHotel)
+
+  const competitorsWithColors = hotelCompetitors.map((comp, index) => ({
+    ...comp,
+    display_color: comp.display_color || COMPETITOR_COLORS[index % COMPETITOR_COLORS.length],
+  }))
 
   useEffect(() => {
     if (selectedHotel && selectedDay) {
@@ -116,6 +132,11 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
     return colors[level] || colors.medium
   }
 
+  const getCompetitorAvg = () => {
+    if (competitorPrices.length === 0) return 0
+    return Math.round(competitorPrices.reduce((sum, cp) => sum + (cp.price || 0), 0) / competitorPrices.length)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -125,6 +146,7 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
             onValueChange={(v) => {
               setSelectedHotel(v)
               setSelectedRoomType("all")
+              setSelectedDay(null)
             }}
           >
             <SelectTrigger className="w-48 bg-background/50">
@@ -213,19 +235,30 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
         </div>
       )}
 
-      {/* Competitor legend */}
-      {hotelCompetitors.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
-          <span className="text-sm text-muted-foreground">Tracking:</span>
-          {hotelCompetitors.map((comp) => (
-            <div key={comp.id} className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: comp.display_color || "#f97316" }} />
-              <span className="text-sm">{comp.competitor_hotel_name}</span>
-              {comp.star_rating && (
-                <span className="text-xs text-muted-foreground">{"★".repeat(comp.star_rating)}</span>
-              )}
+      {competitorsWithColors.length > 0 && (
+        <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+          <div className="flex items-center gap-2 mb-2">
+            <BuildingIcon className="h-4 w-4 text-cyan-400" />
+            <span className="text-sm font-medium">Competitors Tracked:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {competitorsWithColors.map((comp) => (
+              <div
+                key={comp.id}
+                className="flex items-center gap-2 px-2 py-1 rounded-md"
+                style={{ backgroundColor: `${comp.display_color}20`, borderLeft: `3px solid ${comp.display_color}` }}
+              >
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: comp.display_color }} />
+                <span className="text-sm font-medium">{comp.competitor_hotel_name}</span>
+                {comp.star_rating && <span className="text-xs text-yellow-500">{"★".repeat(comp.star_rating)}</span>}
+              </div>
+            ))}
+            {/* Average indicator */}
+            <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-cyan-500/20 border-l-[3px] border-cyan-500">
+              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" />
+              <span className="text-sm font-medium text-cyan-400">Market Average</span>
             </div>
-          ))}
+          </div>
         </div>
       )}
 
@@ -255,7 +288,7 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
                   onClick={() => setSelectedDay(priceData)}
                   className={`aspect-square p-1 rounded-lg border ${dayColor} ${
                     isToday(day) ? "ring-2 ring-cyan-500" : ""
-                  } hover:bg-accent/50 transition-colors cursor-pointer`}
+                  } ${selectedDay?.date === format(day, "yyyy-MM-dd") ? "ring-2 ring-yellow-500" : ""} hover:bg-accent/50 transition-colors cursor-pointer`}
                 >
                   <div className="h-full flex flex-col">
                     <div className="flex items-center justify-between">
@@ -298,9 +331,8 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
         </CardContent>
       </Card>
 
-      {/* Day Details */}
       {selectedDay && (
-        <Card className="border-border/50 bg-card/50 border-cyan-500/50">
+        <Card className="border-border/50 bg-card/50 border-l-4 border-l-cyan-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <DollarSignIcon className="h-5 w-5 text-cyan-400" />
@@ -316,91 +348,170 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-3 gap-4 mb-6">
-              <div className="space-y-2">
-                <h4 className="font-semibold text-sm text-muted-foreground">Our Price</h4>
+            {/* Price comparison cards */}
+            <div className="grid md:grid-cols-4 gap-4 mb-6">
+              {/* Our Price */}
+              <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+                <h4 className="font-semibold text-sm text-cyan-400 mb-1">Our Price</h4>
                 <p className="text-3xl font-bold text-cyan-400">${selectedDay.our_price}</p>
               </div>
-              <div className="space-y-2">
-                <h4 className="font-semibold text-sm text-muted-foreground">Competitor Range</h4>
-                <p className="text-xl">
+
+              {/* Market Average */}
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <h4 className="font-semibold text-sm text-blue-400 mb-1">Market Average</h4>
+                <p className="text-3xl font-bold text-blue-400">${selectedDay.avg_competitor_price}</p>
+                <p
+                  className={`text-xs mt-1 ${selectedDay.our_price < selectedDay.avg_competitor_price ? "text-green-400" : selectedDay.our_price > selectedDay.avg_competitor_price ? "text-red-400" : "text-muted-foreground"}`}
+                >
+                  {selectedDay.our_price < selectedDay.avg_competitor_price
+                    ? `${Math.round((1 - selectedDay.our_price / selectedDay.avg_competitor_price) * 100)}% below avg`
+                    : selectedDay.our_price > selectedDay.avg_competitor_price
+                      ? `${Math.round((selectedDay.our_price / selectedDay.avg_competitor_price - 1) * 100)}% above avg`
+                      : "At market price"}
+                </p>
+              </div>
+
+              {/* Price Range */}
+              <div className="p-4 rounded-lg bg-slate-500/10 border border-slate-500/30">
+                <h4 className="font-semibold text-sm text-slate-400 mb-1">Competitor Range</h4>
+                <p className="text-xl font-bold">
                   ${selectedDay.min_competitor_price} - ${selectedDay.max_competitor_price}
                 </p>
-                <p className="text-sm text-muted-foreground">Avg: ${selectedDay.avg_competitor_price}</p>
               </div>
-              <div className="space-y-2">
-                <h4 className="font-semibold text-sm text-muted-foreground">Recommendation</h4>
-                <div className="flex items-center gap-2">
+
+              {/* Recommendation */}
+              <div
+                className={`p-4 rounded-lg border ${
+                  selectedDay.autopilot_action === "increase"
+                    ? "bg-green-500/10 border-green-500/30"
+                    : selectedDay.autopilot_action === "decrease"
+                      ? "bg-red-500/10 border-red-500/30"
+                      : "bg-yellow-500/10 border-yellow-500/30"
+                }`}
+              >
+                <h4 className="font-semibold text-sm text-yellow-400 mb-1 flex items-center gap-2">
+                  Autopilot Suggests
                   {getRecommendationIcon(selectedDay)}
-                  <span className="text-2xl font-bold text-yellow-400">${selectedDay.recommended_price}</span>
-                </div>
+                </h4>
+                <p className="text-3xl font-bold text-yellow-400">${selectedDay.recommended_price}</p>
               </div>
             </div>
 
-            {/* Competitor breakdown */}
+            {/* Competitor breakdown by color */}
             <div className="border-t border-border/50 pt-4">
               <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
                 <BuildingIcon className="h-4 w-4 text-cyan-400" />
                 Competitor Price Breakdown
-                {selectedRoomType !== "all" && selectedRoomTypeData && (
-                  <span className="text-xs text-muted-foreground">for {selectedRoomTypeData.name}</span>
+                {competitorPrices.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-2">(Avg: ${getCompetitorAvg()})</span>
                 )}
               </h4>
 
               {loadingCompetitors ? (
                 <div className="text-center py-4 text-muted-foreground">Loading competitor details...</div>
-              ) : hotelCompetitors.length > 0 ? (
-                <div className="grid gap-2">
-                  {hotelCompetitors.map((comp) => {
-                    const priceData = competitorPrices.find((cp) => cp.competitor_id === comp.id)
-                    const price = priceData?.price || 0
-                    const priceDiff = price - selectedDay.our_price
-                    const priceDiffPercent =
-                      selectedDay.our_price > 0 ? ((priceDiff / selectedDay.our_price) * 100).toFixed(1) : "0"
+              ) : competitorsWithColors.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Visual comparison bar */}
+                  <div className="p-4 rounded-lg bg-slate-800/50 border border-border/50">
+                    <div className="flex items-center gap-4 mb-3">
+                      <span className="text-sm text-muted-foreground w-20">Price</span>
+                      <div className="flex-1 h-8 bg-slate-700/50 rounded-full relative overflow-hidden">
+                        {/* Our price marker */}
+                        <div
+                          className="absolute top-0 bottom-0 w-1 bg-cyan-500 z-10"
+                          style={{
+                            left: `${Math.min(Math.max(((selectedDay.our_price - selectedDay.min_competitor_price) / (selectedDay.max_competitor_price - selectedDay.min_competitor_price)) * 100, 0), 100)}%`,
+                          }}
+                        />
+                        {/* Competitor markers */}
+                        {competitorsWithColors.map((comp) => {
+                          const priceData = competitorPrices.find((cp) => cp.competitor_id === comp.id)
+                          const price = priceData?.price || 0
+                          if (price === 0) return null
+                          const position =
+                            ((price - selectedDay.min_competitor_price) /
+                              (selectedDay.max_competitor_price - selectedDay.min_competitor_price)) *
+                            100
+                          return (
+                            <div
+                              key={comp.id}
+                              className="absolute top-1 bottom-1 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                              style={{
+                                left: `calc(${Math.min(Math.max(position, 0), 95)}% - 12px)`,
+                                backgroundColor: comp.display_color,
+                              }}
+                              title={`${comp.competitor_hotel_name}: $${price}`}
+                            >
+                              {comp.competitor_hotel_name.charAt(0).toUpperCase()}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>${selectedDay.min_competitor_price}</span>
+                      <span className="text-cyan-400">Us: ${selectedDay.our_price}</span>
+                      <span>${selectedDay.max_competitor_price}</span>
+                    </div>
+                  </div>
 
-                    return (
-                      <div
-                        key={comp.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50"
-                        style={{ borderLeftColor: comp.display_color || "#f97316", borderLeftWidth: "4px" }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-4 h-4 rounded-full"
-                            style={{ backgroundColor: comp.display_color || "#f97316" }}
-                          />
-                          <div>
-                            <div className="font-medium">{comp.competitor_hotel_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {comp.star_rating && `${"★".repeat(comp.star_rating)} `}
-                              {priceData?.room_type && `• ${priceData.room_type}`}
+                  {/* Individual competitor cards */}
+                  <div className="grid gap-2">
+                    {competitorsWithColors.map((comp) => {
+                      const priceData = competitorPrices.find((cp) => cp.competitor_id === comp.id)
+                      const price = priceData?.price || 0
+                      const priceDiff = price - selectedDay.our_price
+                      const priceDiffPercent =
+                        selectedDay.our_price > 0 ? ((priceDiff / selectedDay.our_price) * 100).toFixed(1) : "0"
+
+                      return (
+                        <div
+                          key={comp.id}
+                          className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50"
+                          style={{ borderLeftColor: comp.display_color, borderLeftWidth: "4px" }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
+                              style={{ backgroundColor: comp.display_color }}
+                            >
+                              {comp.competitor_hotel_name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-medium">{comp.competitor_hotel_name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {comp.star_rating && (
+                                  <span className="text-yellow-500">{"★".repeat(comp.star_rating)} </span>
+                                )}
+                                {priceData?.room_type && `• ${priceData.room_type}`}
+                              </div>
                             </div>
                           </div>
+                          <div className="text-right">
+                            {price > 0 ? (
+                              <>
+                                <div className="font-bold text-lg">${price}</div>
+                                <div
+                                  className={`text-xs ${
+                                    priceDiff > 0
+                                      ? "text-green-400"
+                                      : priceDiff < 0
+                                        ? "text-red-400"
+                                        : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {priceDiff > 0 ? "+" : ""}
+                                  {priceDiffPercent}% vs us
+                                </div>
+                              </>
+                            ) : (
+                              <div className="text-muted-foreground text-sm">No data</div>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          {price > 0 ? (
-                            <>
-                              <div className="font-bold">${price}</div>
-                              <div
-                                className={`text-xs ${
-                                  priceDiff > 0
-                                    ? "text-green-400"
-                                    : priceDiff < 0
-                                      ? "text-red-400"
-                                      : "text-muted-foreground"
-                                }`}
-                              >
-                                {priceDiff > 0 ? "+" : ""}
-                                {priceDiffPercent}% vs us
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-muted-foreground text-sm">No price data</div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
@@ -438,7 +549,7 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
           <CardTitle className="text-lg flex items-center justify-between">
-            <span>Price Recommendations Summary</span>
+            <span>Autopilot Recommendations Summary</span>
             {selectedRoomType !== "all" && selectedRoomTypeData && (
               <Badge variant="outline" style={{ borderColor: selectedRoomTypeData.display_color }}>
                 {selectedRoomTypeData.name}
@@ -449,39 +560,38 @@ export function CalendarGrid({ hotels, dailyPrices, roomTypes, competitors }: Ca
         <CardContent>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {hotelPrices
-              .filter((p) => p.autopilot_action && p.autopilot_action !== "maintain")
-              .slice(0, 15)
-              .map((price) => (
+              .filter((p) => p.autopilot_action !== "maintain" && new Date(p.date) >= new Date())
+              .slice(0, 10)
+              .map((p) => (
                 <div
-                  key={price.id}
-                  onClick={() => setSelectedDay(price)}
-                  className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50 hover:border-cyan-500/50 cursor-pointer transition-colors"
+                  key={p.date}
+                  className={`flex items-center justify-between p-2 rounded-lg ${
+                    p.autopilot_action === "increase" ? "bg-green-500/10" : "bg-red-500/10"
+                  }`}
                 >
-                  <div className="flex items-center gap-3">
-                    {getRecommendationIcon(price)}
-                    <div>
-                      <div className="font-medium">{format(new Date(price.date), "MMM d, yyyy")}</div>
-                      <div className="text-xs text-muted-foreground truncate max-w-md">
-                        {price.price_recommendation}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">${price.our_price}</span>
-                      <span className="mx-2">→</span>
-                      <span className="text-yellow-400 font-bold">${price.recommended_price}</span>
-                    </div>
-                    <Badge variant="outline" className={getDemandBadge(price.demand_level)}>
-                      {price.demand_level}
+                  <div className="flex items-center gap-2">
+                    {p.autopilot_action === "increase" ? (
+                      <TrendingUpIcon className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <TrendingDownIcon className="h-4 w-4 text-red-500" />
+                    )}
+                    <span>{format(new Date(p.date), "MMM d")}</span>
+                    <Badge variant="outline" className={getDemandBadge(p.demand_level)}>
+                      {p.demand_level}
                     </Badge>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-muted-foreground">${p.our_price}</span>
+                    <span>→</span>
+                    <span className="font-bold text-yellow-400">${p.recommended_price}</span>
                   </div>
                 </div>
               ))}
-            {hotelPrices.filter((p) => p.autopilot_action && p.autopilot_action !== "maintain").length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                No price recommendations available. Click "Run Full Scan" to analyze 180 days.
-              </div>
+            {hotelPrices.filter((p) => p.autopilot_action !== "maintain" && new Date(p.date) >= new Date()).length ===
+              0 && (
+              <p className="text-center text-muted-foreground py-4">
+                No price changes recommended. Run a scan to get recommendations.
+              </p>
             )}
           </div>
         </CardContent>
