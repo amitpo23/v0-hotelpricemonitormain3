@@ -53,22 +53,22 @@ export default function Home() {
             </p>
 
             <div className="flex items-center justify-center gap-4">
-              <Link href="/dashboard">
+              <Link href="/auth/login">
                 <Button
                   size="lg"
                   className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-8 py-6 text-lg rounded-xl"
                 >
-                  Launch Dashboard
+                  Get Started
                   <ArrowRightIcon className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Link href="/hotels">
+              <Link href="/auth/signup">
                 <Button
                   size="lg"
                   variant="outline"
                   className="border-slate-700 text-slate-300 hover:bg-slate-800 px-8 py-6 text-lg rounded-xl bg-transparent"
                 >
-                  Add Property
+                  Create Account
                 </Button>
               </Link>
             </div>
