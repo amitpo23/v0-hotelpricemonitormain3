@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,29 +20,23 @@ export default function LoginPage() {
     setError("")
 
     try {
-      const supabase = createClient()
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       })
 
-      if (error) {
-        console.log("[v0] Login error:", error.message)
-        setError(error.message)
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || "Login failed")
         setLoading(false)
         return
       }
 
-      if (data?.user) {
-        console.log("[v0] Login successful!")
-        window.location.href = "/dashboard"
-      } else {
-        setError("Login failed - please try again")
-        setLoading(false)
-      }
+      // Success - redirect to dashboard
+      window.location.href = "/dashboard"
     } catch (err: any) {
-      console.log("[v0] Login exception:", err)
       setError(err.message || "An unexpected error occurred")
       setLoading(false)
     }

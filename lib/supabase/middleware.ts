@@ -18,10 +18,7 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Check for auth cookie from Supabase SDK
-  const hasAuthCookie = request.cookies
-    .getAll()
-    .some((cookie) => cookie.name.includes("sb-") && cookie.name.includes("-auth-token"))
+  const hasAuthCookie = request.cookies.has("sb-auth-token")
 
   if (!hasAuthCookie) {
     const url = request.nextUrl.clone()

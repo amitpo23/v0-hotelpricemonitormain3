@@ -4,7 +4,12 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { Loader2Icon, RadarIcon, CheckCircleIcon, BuildingIcon, BedDoubleIcon } from "@/components/icons"
+import { Loader2Icon, RadarIcon, CheckCircleIcon, BedDoubleIcon } from "@/components/icons"
+
+const DATA_SOURCES = [
+  { name: "Booking.com", color: "#003580" },
+  { name: "Expedia", color: "#FFCC00" },
+]
 
 interface RunScraperButtonProps {
   hotelId: string
@@ -28,7 +33,7 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
         body: JSON.stringify({
           hotelId,
           roomTypeId,
-          autoDetectRoomTypes: true, // Enable auto-detection
+          autoDetectRoomTypes: true,
         }),
       })
 
@@ -58,7 +63,7 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
           {isRunning ? (
             <>
               <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-              Scanning all room types...
+              Scanning...
             </>
           ) : (
             <>
@@ -81,62 +86,62 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
         {result?.error && <span className="text-sm text-red-400">{result.error}</span>}
       </div>
 
-      {result && !result.error && result.roomTypes && result.roomTypes.length > 0 && (
-        <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
-          <div className="flex items-center gap-2 mb-2">
-            <BedDoubleIcon className="h-4 w-4 text-cyan-400" />
-            <span className="text-sm font-medium text-cyan-400">{result.roomTypesScanned} Room Types Detected</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {result.roomTypes.map((rt: any) => (
-              <Badge
-                key={rt.id || rt.name}
-                variant="secondary"
-                className="bg-background/50 text-foreground border"
-                style={{
-                  borderLeftColor: rt.color || "#06b6d4",
-                  borderLeftWidth: "3px",
-                }}
-              >
-                {rt.name}
-              </Badge>
-            ))}
-          </div>
-          {/* Show price averages */}
-          {result.roomTypeAverages && (
-            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-              {result.roomTypeAverages.map((avg: any) => (
-                <div key={avg.roomTypeId || avg.roomType} className="text-xs text-muted-foreground">
-                  <span className="font-medium">{avg.roomType}:</span> ${avg.avgOurPrice} avg
-                </div>
+      {result && !result.error && (
+        <div className="flex flex-wrap gap-4">
+          <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700">
+            <div className="text-xs text-muted-foreground mb-2">Data Sources</div>
+            <div className="flex gap-2">
+              {DATA_SOURCES.map((source) => (
+                <Badge
+                  key={source.name}
+                  className={source.name === "Booking.com" ? "bg-[#003580] text-white" : "bg-[#FFCC00] text-black"}
+                >
+                  {source.name === "Booking.com" ? "Booking" : "Expedia"}
+                </Badge>
               ))}
             </div>
-          )}
-        </div>
-      )}
+          </div>
 
-      {result && !result.error && result.competitors && (
-        <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700">
-          <div className="flex items-center gap-2 mb-2">
-            <BuildingIcon className="h-4 w-4 text-cyan-400" />
-            <span className="text-sm font-medium text-cyan-400">Tracking {result.competitorCount} Competitors</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {result.competitors.map((comp: any) => (
-              <Badge
-                key={comp.name}
-                variant="secondary"
-                className="bg-cyan-500/10 text-cyan-300 border-cyan-500/20"
-                style={{
-                  borderLeftColor: comp.color || "#06b6d4",
-                  borderLeftWidth: "3px",
-                }}
-              >
-                {comp.name} {comp.stars && `${"★".repeat(comp.stars)}`}
-                {comp.roomTypes?.length > 0 && ` (${comp.roomTypes.length} rooms)`}
-              </Badge>
-            ))}
-          </div>
+          {/* Room types detected */}
+          {result.roomTypes && result.roomTypes.length > 0 && (
+            <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <BedDoubleIcon className="h-4 w-4 text-cyan-400" />
+                <span className="text-xs text-muted-foreground">{result.roomTypesScanned} Room Types</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {result.roomTypes.map((rt: any) => (
+                  <Badge
+                    key={rt.id || rt.name}
+                    variant="secondary"
+                    className="bg-background/50 text-foreground border text-xs"
+                    style={{ borderLeftColor: rt.color || "#06b6d4", borderLeftWidth: "3px" }}
+                  >
+                    {rt.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Competitors */}
+          {result.competitors && result.competitors.length > 0 && (
+            <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+              <div className="text-xs text-muted-foreground mb-2">{result.competitorCount} Competitors</div>
+              <div className="flex flex-wrap gap-1.5">
+                {result.competitors.map((comp: any) => (
+                  <Badge
+                    key={comp.name}
+                    variant="secondary"
+                    className="bg-background/50 text-foreground border text-xs"
+                    style={{ borderLeftColor: comp.color || "#f97316", borderLeftWidth: "3px" }}
+                  >
+                    {comp.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

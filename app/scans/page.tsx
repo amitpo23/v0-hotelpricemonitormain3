@@ -11,11 +11,15 @@ import {
   ZapIcon,
   RefreshCwIcon,
   TrendingUpIcon,
-  AlertTriangleIcon,
 } from "@/components/icons"
 import Link from "next/link"
 import { RunScanButton } from "./run-scan-button"
 import { BatchScanButton } from "./batch-scan-button"
+
+const DATA_SOURCES = [
+  { name: "Booking.com", color: "#003580" },
+  { name: "Expedia", color: "#FFCC00" },
+]
 
 export default async function ScansPage() {
   const supabase = await createClient()
@@ -27,13 +31,14 @@ export default async function ScansPage() {
 
   const { data: recentScans } = await supabase
     .from("scans")
-    .select(`*, scan_configs (hotel_id, hotels (name))`)
+    .select(`*, scan_configs (hotel_id, hotels (name)), hotels (name)`)
     .order("started_at", { ascending: false })
-    .limit(10)
+    .limit(20)
 
   const { data: recentResults } = await supabase
     .from("scan_results")
     .select("*")
+    .in("source", ["Booking.com", "Expedia"])
     .order("scraped_at", { ascending: false })
     .limit(20)
 
@@ -50,7 +55,7 @@ export default async function ScansPage() {
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
             Price Scanner
           </h1>
-          <p className="text-muted-foreground">Real-time competitor price monitoring and market analysis</p>
+          <p className="text-muted-foreground">Real-time competitor price monitoring from Booking.com & Expedia</p>
         </div>
         <div className="flex gap-3">
           <BatchScanButton />
@@ -80,7 +85,7 @@ export default async function ScansPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Scans Today</p>
+                <p className="text-sm text-muted-foreground">Scans Completed</p>
                 <p className="text-3xl font-bold text-green-400">{completedScans}</p>
               </div>
               <RefreshCwIcon className="h-8 w-8 text-green-500" />
@@ -100,14 +105,17 @@ export default async function ScansPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
+        <Card className="bg-gradient-to-br from-orange-500/10 to-yellow-500/10 border-orange-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Sources Tracked</p>
-                <p className="text-3xl font-bold text-orange-400">6</p>
+                <p className="text-sm text-muted-foreground">Data Sources</p>
+                <p className="text-3xl font-bold text-orange-400">2</p>
               </div>
-              <AlertTriangleIcon className="h-8 w-8 text-orange-500" />
+              <div className="flex flex-col gap-1">
+                <Badge className="bg-[#003580] text-white text-xs">Booking</Badge>
+                <Badge className="bg-[#FFCC00] text-black text-xs">Expedia</Badge>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -156,9 +164,6 @@ export default async function ScansPage() {
                             <CalendarIcon className="h-3 w-3" />
                             {new Date(config.check_in_date).toLocaleDateString()} -{" "}
                             {new Date(config.check_out_date).toLocaleDateString()}
-                            {config.hotels?.location && (
-                              <span className="ml-2 text-cyan-500">• {config.hotels.location}</span>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -181,7 +186,7 @@ export default async function ScansPage() {
           <Card>
             <CardHeader>
               <CardTitle>Latest Price Data</CardTitle>
-              <CardDescription>Most recent competitor prices collected</CardDescription>
+              <CardDescription>Recent prices from Booking.com & Expedia</CardDescription>
             </CardHeader>
             <CardContent>
               {!recentResults || recentResults.length === 0 ? (
@@ -201,11 +206,21 @@ export default async function ScansPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentResults.slice(0, 10).map((result: any) => (
-                        <tr key={result.id} className="border-b border-border/50">
-                          <td className="py-2 px-3 font-medium">{result.source}</td>
+                      {recentResults.slice(0, 10).map((result: any, idx: number) => (
+                        <tr key={result.id || idx} className="border-b border-border/50">
                           <td className="py-2 px-3">
-                            <span className="text-cyan-400 font-mono">${Number(result.price).toFixed(2)}</span>
+                            <Badge
+                              className={
+                                result.source === "Booking.com" ? "bg-[#003580] text-white" : "bg-[#FFCC00] text-black"
+                              }
+                            >
+                              {result.source === "Booking.com" ? "Booking" : "Expedia"}
+                            </Badge>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="text-cyan-400 font-mono font-bold">
+                              ${Number(result.price).toFixed(0)}
+                            </span>
                           </td>
                           <td className="py-2 px-3 text-sm text-muted-foreground">{result.room_type}</td>
                           <td className="py-2 px-3">
@@ -240,7 +255,9 @@ export default async function ScansPage() {
                   {recentScans.map((scan: any) => (
                     <div key={scan.id} className="p-3 bg-accent/50 rounded-lg">
                       <div className="flex justify-between items-start mb-1">
-                        <span className="font-medium text-sm">{scan.scan_configs?.hotels?.name || "Manual Scan"}</span>
+                        <span className="font-medium text-sm">
+                          {scan.hotels?.name || scan.scan_configs?.hotels?.name || "Calendar Scan"}
+                        </span>
                         <Badge
                           variant={
                             scan.status === "completed"
@@ -266,6 +283,9 @@ export default async function ScansPage() {
                           s
                         </div>
                       )}
+                      {scan.results_count && (
+                        <div className="text-xs text-muted-foreground mt-1">{scan.results_count} prices collected</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -280,9 +300,21 @@ export default async function ScansPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {["Booking.com", "Expedia", "Hotels.com", "Agoda", "Trip.com", "Direct Website"].map((source) => (
-                  <div key={source} className="flex items-center justify-between p-2 rounded-lg bg-accent/30">
-                    <span className="text-sm font-medium">{source}</span>
+                {DATA_SOURCES.map((source) => (
+                  <div
+                    key={source.name}
+                    className="flex items-center justify-between p-3 rounded-lg"
+                    style={{ backgroundColor: `${source.color}15`, borderLeft: `4px solid ${source.color}` }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                        style={{ backgroundColor: source.color, color: source.name === "Expedia" ? "#000" : "#fff" }}
+                      >
+                        {source.name[0]}
+                      </div>
+                      <span className="font-medium">{source.name}</span>
+                    </div>
                     <Badge variant="outline" className="text-green-400 border-green-400/50">
                       Active
                     </Badge>
