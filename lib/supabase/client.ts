@@ -29,6 +29,9 @@ class SupabaseClient {
           },
         })
         const user = await response.json()
+        if (user.error || !user.id) {
+          return { data: { user: null }, error: user.error || null }
+        }
         return { data: { user }, error: null }
       } catch (error) {
         return { data: { user: null }, error }
@@ -36,6 +39,7 @@ class SupabaseClient {
     },
     signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
       try {
+        console.log("[v0] Attempting sign in for:", email)
         const response = await fetch(`${this.url}/auth/v1/token?grant_type=password`, {
           method: "POST",
           headers: {
@@ -44,39 +48,77 @@ class SupabaseClient {
           },
           body: JSON.stringify({ email, password }),
         })
+
         const data = await response.json()
+        console.log("[v0] Sign in response status:", response.status)
+        console.log("[v0] Sign in response data:", JSON.stringify(data).substring(0, 200))
+
+        // Check for error in response
+        if (!response.ok || data.error || data.error_description) {
+          const errorMessage = data.error_description || data.error || data.msg || "Authentication failed"
+          console.log("[v0] Sign in error:", errorMessage)
+          return { data: { user: null, session: null }, error: { message: errorMessage } }
+        }
+
+        // Success - store token
         if (data.access_token && typeof window !== "undefined") {
           localStorage.setItem("supabase-auth-token", data.access_token)
+          localStorage.setItem("supabase-refresh-token", data.refresh_token || "")
+          console.log("[v0] Token stored successfully")
         }
-        return { data: { user: data.user, session: data }, error: data.error ? data : null }
-      } catch (error) {
-        return { data: null, error }
+
+        return { data: { user: data.user, session: data }, error: null }
+      } catch (error: any) {
+        console.log("[v0] Sign in exception:", error)
+        return { data: { user: null, session: null }, error: { message: error.message || "Network error" } }
       }
     },
     signUp: async ({ email, password, options }: { email: string; password: string; options?: any }) => {
       try {
+        console.log("[v0] Attempting sign up for:", email)
         const response = await fetch(`${this.url}/auth/v1/signup`, {
           method: "POST",
           headers: {
             apikey: this.key,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ email, password, ...options }),
+          body: JSON.stringify({
+            email,
+            password,
+            email_confirm: true,
+            data: options?.data || {},
+          }),
         })
+
         const data = await response.json()
-        return { data: { user: data.user, session: data }, error: data.error ? data : null }
-      } catch (error) {
-        return { data: null, error }
+        console.log("[v0] Sign up response status:", response.status)
+
+        if (!response.ok || data.error || data.error_description) {
+          const errorMessage = data.error_description || data.error || data.msg || "Sign up failed"
+          return { data: { user: null, session: null }, error: { message: errorMessage } }
+        }
+
+        return { data: { user: data.user || data, session: data }, error: null }
+      } catch (error: any) {
+        console.log("[v0] Sign up exception:", error)
+        return { data: { user: null, session: null }, error: { message: error.message || "Network error" } }
       }
     },
     signOut: async () => {
       if (typeof window !== "undefined") {
         localStorage.removeItem("supabase-auth-token")
+        localStorage.removeItem("supabase-refresh-token")
       }
       return { error: null }
     },
     onAuthStateChange: (callback: (event: string, session: any) => void) => {
-      // Simplified auth state change listener
+      // Check initial state
+      if (typeof window !== "undefined") {
+        const token = localStorage.getItem("supabase-auth-token")
+        if (token) {
+          callback("SIGNED_IN", { access_token: token })
+        }
+      }
       return { data: { subscription: { unsubscribe: () => {} } } }
     },
   }

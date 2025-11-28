@@ -24,19 +24,35 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    console.log("[v0] Starting login process...")
 
-    if (error) {
-      setError(error.message)
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      console.log("[v0] Login result - error:", error, "data:", data)
+
+      if (error) {
+        setError(error.message || "Failed to sign in")
+        setLoading(false)
+        return
+      }
+
+      if (!data?.user) {
+        setError("Invalid credentials")
+        setLoading(false)
+        return
+      }
+
+      console.log("[v0] Login successful, redirecting to dashboard...")
+      window.location.href = "/dashboard"
+    } catch (err: any) {
+      console.log("[v0] Login exception:", err)
+      setError(err.message || "An unexpected error occurred")
       setLoading(false)
-      return
     }
-
-    router.push("/dashboard")
-    router.refresh()
   }
 
   return (
