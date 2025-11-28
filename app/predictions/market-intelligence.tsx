@@ -162,11 +162,11 @@ export function MarketIntelligence({ hotels }: MarketIntelligenceProps) {
           <CardContent>
             <div className="space-y-3">
               {MARKET_INTEL.priceData.data.map((item, i) => (
-                <div key={i} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                  <span className="text-sm">{item.metric}</span>
+                <div key={i} className="flex justify-between items-center p-3 bg-slate-800 rounded-lg">
+                  <span className="text-sm text-slate-200">{item.metric}</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold">{item.value}</span>
-                    <Badge variant="outline" className="text-xs">
+                    <span className="font-bold text-white">{item.value}</span>
+                    <Badge variant="outline" className="text-xs border-cyan-500 text-cyan-400">
                       {item.trend}
                     </Badge>
                   </div>
@@ -184,11 +184,11 @@ export function MarketIntelligence({ hotels }: MarketIntelligenceProps) {
           <CardContent>
             <div className="space-y-3">
               {MARKET_INTEL.demandData.data.map((item, i) => (
-                <div key={i} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                  <span className="text-sm">{item.metric}</span>
+                <div key={i} className="flex justify-between items-center p-3 bg-slate-800 rounded-lg">
+                  <span className="text-sm text-slate-200">{item.metric}</span>
                   <div className="text-right">
-                    <span className="font-bold block">{item.value}</span>
-                    <span className="text-xs text-muted-foreground">{item.detail}</span>
+                    <span className="font-bold block text-white">{item.value}</span>
+                    <span className="text-xs text-cyan-400">{item.detail}</span>
                   </div>
                 </div>
               ))}
@@ -209,7 +209,7 @@ export function MarketIntelligence({ hotels }: MarketIntelligenceProps) {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {MARKET_INTEL.touristOrigins.data.map((country, i) => (
-              <div key={i} className="text-center p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+              <div key={i} className="text-center p-4 bg-slate-800 rounded-lg">
                 <div className="text-2xl mb-2">
                   {country.country === "USA" && "🇺🇸"}
                   {country.country === "UK" && "🇬🇧"}
@@ -217,9 +217,9 @@ export function MarketIntelligence({ hotels }: MarketIntelligenceProps) {
                   {country.country === "France" && "🇫🇷"}
                   {country.country === "Switzerland" && "🇨🇭"}
                 </div>
-                <div className="font-bold">{country.country}</div>
-                <div className="text-2xl font-bold text-cyan-500">{country.percentage}%</div>
-                <div className="text-xs text-muted-foreground">Avg spend: {country.avgSpend}</div>
+                <div className="font-bold text-white">{country.country}</div>
+                <div className="text-2xl font-bold text-cyan-400">{country.percentage}%</div>
+                <div className="text-xs text-slate-400">Avg spend: {country.avgSpend}</div>
               </div>
             ))}
           </div>
@@ -237,11 +237,11 @@ export function MarketIntelligence({ hotels }: MarketIntelligenceProps) {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {MARKET_INTEL.events.data.map((event, i) => (
-              <div key={i} className="p-4 border rounded-lg">
-                <div className="font-bold mb-1">{event.event}</div>
-                <div className="text-xs text-muted-foreground mb-2">{event.month}</div>
-                <div className="text-sm text-green-600 font-medium">{event.impact}</div>
-                <div className="text-sm text-orange-600">Price: {event.priceEffect}</div>
+              <div key={i} className="p-4 border border-slate-700 rounded-lg bg-slate-800">
+                <div className="font-bold mb-1 text-white">{event.event}</div>
+                <div className="text-xs text-slate-400 mb-2">{event.month}</div>
+                <div className="text-sm text-green-400 font-medium">{event.impact}</div>
+                <div className="text-sm text-orange-400">Price: {event.priceEffect}</div>
               </div>
             ))}
           </div>
@@ -249,10 +249,10 @@ export function MarketIntelligence({ hotels }: MarketIntelligenceProps) {
       </Card>
 
       {/* AI Recommendations */}
-      <Card className="border-2 border-purple-200 bg-purple-50/50 dark:bg-purple-950/20">
+      <Card className="border-2 border-purple-500/30 bg-purple-950/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUpIcon className="h-5 w-5 text-purple-500" />
+            <TrendingUpIcon className="h-5 w-5 text-purple-400" />
             AI-Powered Recommendations
           </CardTitle>
           <CardDescription>Based on market analysis and historical data</CardDescription>
@@ -260,12 +260,12 @@ export function MarketIntelligence({ hotels }: MarketIntelligenceProps) {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {MARKET_INTEL.recommendations.map((rec, i) => (
-              <div key={i} className="p-4 bg-white dark:bg-slate-800 rounded-lg border">
+              <div key={i} className="p-4 bg-slate-800 rounded-lg border border-slate-700">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold">{rec.title}</span>
+                  <span className="font-bold text-white">{rec.title}</span>
                   <Badge variant={rec.priority === "high" ? "destructive" : "secondary"}>{rec.priority}</Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">{rec.description}</p>
+                <p className="text-sm text-slate-300">{rec.description}</p>
               </div>
             ))}
           </div>
