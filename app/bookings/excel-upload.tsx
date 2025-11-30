@@ -2,9 +2,9 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   UploadIcon,
   FileSpreadsheetIcon,
@@ -27,7 +26,6 @@ import {
   CalendarIcon,
   BedDoubleIcon,
   BarChart3Icon,
-  RefreshCwIcon,
 } from "lucide-react"
 
 interface Hotel {
@@ -49,10 +47,8 @@ interface ParsedBooking {
   booking_source: string
   booking_date: string
   status: string
-  confirmation_number?: string
   isValid: boolean
   errors: string[]
-  isDuplicate?: boolean
 }
 
 interface ColumnMapping {
@@ -68,7 +64,6 @@ interface ColumnMapping {
   booking_source: string
   booking_date: string
   status: string
-  confirmation_number: string
 }
 
 interface ImportAnalytics {
@@ -78,98 +73,9 @@ interface ImportAnalytics {
   avgNightlyRate: number
   avgStayLength: number
   occupancyByMonth: Record<string, { roomNights: number; revenue: number; bookings: number }>
-  bookingPace: Record<string, number>
+  bookingPace: Record<string, number> // bookings per day
   sourceBreakdown: Record<string, { count: number; revenue: number }>
   roomTypeBreakdown: Record<string, { count: number; revenue: number; avgRate: number }>
-  newBookings: number
-  duplicateBookings: number
-}
-
-const PMS_COLUMN_MAPPING: Record<string, keyof ColumnMapping> = {
-  // Hebrew columns - exact matches from PMS
-  "שם אורח": "guest_name",
-  "שם האורח": "guest_name",
-  "שם לקוח": "guest_name",
-  אורח: "guest_name",
-  לקוח: "guest_name",
-  "תאריך כניסה": "check_in_date",
-  כניסה: "check_in_date",
-  מתאריך: "check_in_date",
-  "תאריך הגעה": "check_in_date",
-  "תאריך יציאה": "check_out_date",
-  יציאה: "check_out_date",
-  "עד תאריך": "check_out_date",
-  "תאריך עזיבה": "check_out_date",
-  "סוג חדר": "room_type",
-  קטגוריה: "room_type",
-  סוג: "room_type",
-  חדר: "room_number",
-  "מספר חדר": "room_number",
-  "חדר מספר": "room_number",
-  "כמות חדרים": "room_count",
-  חדרים: "room_count",
-  כמות: "room_count",
-  "מספר לילות": "nights",
-  לילות: "nights",
-  ימים: "nights",
-  "מחיר ללילה": "nightly_rate",
-  תעריף: "nightly_rate",
-  "מחיר לילה": "nightly_rate",
-  ללילה: "nightly_rate",
-  'סה"כ': "total_price",
-  "סה״כ": "total_price",
-  סהכ: "total_price",
-  סכום: "total_price",
-  מחיר: "total_price",
-  תשלום: "total_price",
-  'סה"כ לתשלום': "total_price",
-  "מקור הזמנה": "booking_source",
-  מקור: "booking_source",
-  ערוץ: "booking_source",
-  אתר: "booking_source",
-  OTA: "booking_source",
-  "תאריך הזמנה": "booking_date",
-  "תאריך ביצוע": "booking_date",
-  "נוצר בתאריך": "booking_date",
-  סטטוס: "status",
-  מצב: "status",
-  "מספר הזמנה": "confirmation_number",
-  "מספר אישור": "confirmation_number",
-  אישור: "confirmation_number",
-  // English columns
-  "Guest Name": "guest_name",
-  Guest: "guest_name",
-  Customer: "guest_name",
-  "Check In": "check_in_date",
-  "Check-In": "check_in_date",
-  Checkin: "check_in_date",
-  Arrival: "check_in_date",
-  "Check Out": "check_out_date",
-  "Check-Out": "check_out_date",
-  Checkout: "check_out_date",
-  Departure: "check_out_date",
-  "Room Type": "room_type",
-  Category: "room_type",
-  Room: "room_number",
-  "Room No": "room_number",
-  "Room Number": "room_number",
-  Rooms: "room_count",
-  Qty: "room_count",
-  Nights: "nights",
-  Rate: "nightly_rate",
-  "Night Rate": "nightly_rate",
-  ADR: "nightly_rate",
-  Total: "total_price",
-  Amount: "total_price",
-  Revenue: "total_price",
-  Price: "total_price",
-  Source: "booking_source",
-  Channel: "booking_source",
-  "Booking Date": "booking_date",
-  Created: "booking_date",
-  Status: "status",
-  Confirmation: "confirmation_number",
-  "Confirmation Number": "confirmation_number",
 }
 
 export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
@@ -181,8 +87,6 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
   const [rawData, setRawData] = useState<any[]>([])
   const [parsedBookings, setParsedBookings] = useState<ParsedBooking[]>([])
   const [analytics, setAnalytics] = useState<ImportAnalytics | null>(null)
-  const [existingBookings, setExistingBookings] = useState<Set<string>>(new Set())
-  const [autoMappingSuccess, setAutoMappingSuccess] = useState(false)
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
     guest_name: "",
     check_in_date: "",
@@ -196,39 +100,10 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
     booking_source: "",
     booking_date: "",
     status: "",
-    confirmation_number: "",
   })
   const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ success: number; failed: number; skipped: number } | null>(null)
+  const [importResult, setImportResult] = useState<{ success: number; failed: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (selectedHotel) {
-      loadExistingBookings(selectedHotel)
-    }
-  }, [selectedHotel])
-
-  const loadExistingBookings = async (hotelId: string) => {
-    try {
-      const response = await fetch(`/api/bookings?hotel_id=${hotelId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const bookingKeys = new Set<string>()
-        data.bookings?.forEach((b: any) => {
-          // Create unique key from guest + check_in + check_out + total
-          const key = `${b.guest_name?.toLowerCase()}_${b.check_in_date}_${b.check_out_date}_${b.total_price}`
-          bookingKeys.add(key)
-          // Also add by confirmation number if exists
-          if (b.confirmation_number) {
-            bookingKeys.add(`conf_${b.confirmation_number}`)
-          }
-        })
-        setExistingBookings(bookingKeys)
-      }
-    } catch (error) {
-      console.error("Error loading existing bookings:", error)
-    }
-  }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -253,18 +128,7 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
         const autoMapping = autoMapColumns(data.headers)
         setColumnMapping(autoMapping)
 
-        // Check if we have all required fields mapped
-        const requiredFields = ["check_in_date", "check_out_date", "total_price"]
-        const mappedRequired = requiredFields.every((field) => autoMapping[field as keyof ColumnMapping])
-
-        if (mappedRequired) {
-          setAutoMappingSuccess(true)
-          // Skip mapping step and go directly to preview
-          applyMappingWithData(autoMapping, data.rows)
-        } else {
-          setAutoMappingSuccess(false)
-          setStep("mapping")
-        }
+        setStep("mapping")
       } else {
         alert("Failed to parse Excel file")
       }
@@ -288,43 +152,31 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
       booking_source: "",
       booking_date: "",
       status: "",
-      confirmation_number: "",
+    }
+
+    // Extended patterns for Hebrew PMS systems
+    const patterns: Record<keyof ColumnMapping, RegExp[]> = {
+      guest_name: [/guest/i, /name/i, /שם/i, /אורח/i, /לקוח/i, /שם אורח/i, /שם הלקוח/i, /customer/i],
+      check_in_date: [/check.?in/i, /arrival/i, /כניסה/i, /הגעה/i, /from/i, /תאריך כניסה/i, /מתאריך/i, /תחילה/i],
+      check_out_date: [/check.?out/i, /departure/i, /יציאה/i, /עזיבה/i, /to/i, /תאריך יציאה/i, /עד תאריך/i, /סיום/i],
+      room_type: [/room.?type/i, /category/i, /סוג.?חדר/i, /קטגוריה/i, /type/i, /חדר סוג/i],
+      room_number: [/room.?no/i, /room.?num/i, /חדר/i, /מספר חדר/i, /room$/i, /חדר מספר/i],
+      room_count: [/room.?count/i, /rooms/i, /qty/i, /כמות/i, /חדרים/i, /מספר חדרים/i],
+      nights: [/nights/i, /לילות/i, /מספר לילות/i, /duration/i, /ימים/i],
+      nightly_rate: [/rate/i, /night/i, /מחיר.?לילה/i, /תעריף/i, /ללילה/i, /מחיר ללילה/i, /adr/i],
+      total_price: [/total/i, /price/i, /amount/i, /סה"כ/i, /סכום/i, /מחיר/i, /תשלום/i, /סה״כ/i, /סהכ/i, /revenue/i],
+      booking_source: [/source/i, /channel/i, /ota/i, /מקור/i, /ערוץ/i, /אתר/i, /booking.?source/i, /מקור הזמנה/i],
+      booking_date: [/booking.?date/i, /created/i, /תאריך הזמנה/i, /נוצר/i, /הוזמן/i, /reservation.?date/i],
+      status: [/status/i, /סטטוס/i, /מצב/i, /state/i, /confirmed/i, /cancelled/i],
     }
 
     headers.forEach((header) => {
-      const trimmedHeader = header.trim()
-
-      // First try exact match from PMS mapping
-      if (PMS_COLUMN_MAPPING[trimmedHeader]) {
-        const field = PMS_COLUMN_MAPPING[trimmedHeader]
-        if (!mapping[field]) {
-          mapping[field] = header
-        }
-        return
-      }
-
-      // Try case-insensitive match
-      const lowerHeader = trimmedHeader.toLowerCase()
-      for (const [pmsColumn, field] of Object.entries(PMS_COLUMN_MAPPING)) {
-        if (pmsColumn.toLowerCase() === lowerHeader) {
-          if (!mapping[field]) {
-            mapping[field] = header
+      const normalizedHeader = header.trim()
+      for (const [field, regexList] of Object.entries(patterns)) {
+        if (regexList.some((regex) => regex.test(normalizedHeader))) {
+          if (!mapping[field as keyof ColumnMapping]) {
+            mapping[field as keyof ColumnMapping] = header
           }
-          return
-        }
-      }
-
-      // Try partial match for common patterns
-      for (const [pmsColumn, field] of Object.entries(PMS_COLUMN_MAPPING)) {
-        if (
-          trimmedHeader.includes(pmsColumn) ||
-          pmsColumn.includes(trimmedHeader) ||
-          lowerHeader.includes(pmsColumn.toLowerCase())
-        ) {
-          if (!mapping[field]) {
-            mapping[field] = header
-          }
-          return
         }
       }
     })
@@ -332,34 +184,17 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
     return mapping
   }
 
-  const applyMappingWithData = (mapping: ColumnMapping, data: any[]) => {
-    const bookings = processBookings(mapping, data)
-    setParsedBookings(bookings)
-
-    const validBookings = bookings.filter((b) => b.isValid)
-    const analyticsData = calculateAnalytics(validBookings, bookings)
-    setAnalytics(analyticsData)
-
-    setStep("preview")
-  }
-
   const applyMapping = () => {
-    applyMappingWithData(columnMapping, rawData)
-  }
-
-  const processBookings = (mapping: ColumnMapping, data: any[]): ParsedBooking[] => {
-    return data.map((row) => {
+    const bookings: ParsedBooking[] = rawData.map((row) => {
       const errors: string[] = []
 
-      const checkIn = parseDate(row[mapping.check_in_date])
-      const checkOut = parseDate(row[mapping.check_out_date])
-      const bookingDate = parseDate(row[mapping.booking_date]) || new Date().toISOString().split("T")[0]
-      const roomCount = Number.parseInt(row[mapping.room_count]) || 1
-      const nightsFromColumn = Number.parseInt(row[mapping.nights]) || 0
-      const nightlyRate = parseNumber(row[mapping.nightly_rate])
-      const totalPrice = parseNumber(row[mapping.total_price])
-      const guestName = row[mapping.guest_name] || "אורח"
-      const confirmationNumber = row[mapping.confirmation_number] || ""
+      const checkIn = parseDate(row[columnMapping.check_in_date])
+      const checkOut = parseDate(row[columnMapping.check_out_date])
+      const bookingDate = parseDate(row[columnMapping.booking_date]) || new Date().toISOString().split("T")[0]
+      const roomCount = Number.parseInt(row[columnMapping.room_count]) || 1
+      const nightsFromColumn = Number.parseInt(row[columnMapping.nights]) || 0
+      const nightlyRate = parseNumber(row[columnMapping.nightly_rate])
+      const totalPrice = parseNumber(row[columnMapping.total_price])
 
       const calculatedNights = nightsFromColumn || calculateNights(checkIn, checkOut)
       const calculatedRate =
@@ -373,29 +208,31 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
       }
       if (calculatedTotal <= 0 && calculatedRate <= 0) errors.push("מחיר חסר")
 
-      const bookingKey = `${guestName.toLowerCase()}_${checkIn}_${checkOut}_${calculatedTotal}`
-      const isDuplicate =
-        existingBookings.has(bookingKey) || (confirmationNumber && existingBookings.has(`conf_${confirmationNumber}`))
-
       return {
-        guest_name: guestName,
+        guest_name: row[columnMapping.guest_name] || "אורח",
         check_in_date: checkIn || "",
         check_out_date: checkOut || "",
-        room_type: row[mapping.room_type] || "Standard",
-        room_number: row[mapping.room_number] || "",
+        room_type: row[columnMapping.room_type] || "Standard",
+        room_number: row[columnMapping.room_number] || "",
         room_count: roomCount,
         nights: calculatedNights,
         nightly_rate: calculatedRate,
         total_price: calculatedTotal,
-        booking_source: row[mapping.booking_source] || "PMS Import",
+        booking_source: row[columnMapping.booking_source] || "PMS Import",
         booking_date: bookingDate,
-        status: parseStatus(row[mapping.status]),
-        confirmation_number: confirmationNumber,
+        status: parseStatus(row[columnMapping.status]),
         isValid: errors.length === 0,
         errors,
-        isDuplicate,
       }
     })
+
+    setParsedBookings(bookings)
+
+    const validBookings = bookings.filter((b) => b.isValid)
+    const analyticsData = calculateAnalytics(validBookings)
+    setAnalytics(analyticsData)
+
+    setStep("preview")
   }
 
   const parseStatus = (status: any): string => {
@@ -452,12 +289,9 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
     return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
-  const calculateAnalytics = (validBookings: ParsedBooking[], allBookings: ParsedBooking[]): ImportAnalytics => {
-    const newBookings = validBookings.filter((b) => !b.isDuplicate)
-    const duplicates = allBookings.filter((b) => b.isDuplicate)
-
+  const calculateAnalytics = (bookings: ParsedBooking[]): ImportAnalytics => {
     const analytics: ImportAnalytics = {
-      totalBookings: validBookings.length,
+      totalBookings: bookings.length,
       totalRevenue: 0,
       totalRoomNights: 0,
       avgNightlyRate: 0,
@@ -466,93 +300,112 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
       bookingPace: {},
       sourceBreakdown: {},
       roomTypeBreakdown: {},
-      newBookings: newBookings.length,
-      duplicateBookings: duplicates.length,
     }
 
-    newBookings.forEach((booking) => {
+    let totalNights = 0
+    let totalRateSum = 0
+
+    bookings.forEach((booking) => {
+      if (booking.status === "cancelled") return
+
       analytics.totalRevenue += booking.total_price
-      analytics.totalRoomNights += booking.nights * booking.room_count
+      const roomNights = booking.nights * booking.room_count
+      analytics.totalRoomNights += roomNights
+      totalNights += booking.nights
+      totalRateSum += booking.nightly_rate
 
-      // By source
-      if (!analytics.sourceBreakdown[booking.booking_source]) {
-        analytics.sourceBreakdown[booking.booking_source] = { count: 0, revenue: 0 }
+      // Occupancy by month
+      if (booking.check_in_date) {
+        const month = booking.check_in_date.substring(0, 7) // YYYY-MM
+        if (!analytics.occupancyByMonth[month]) {
+          analytics.occupancyByMonth[month] = { roomNights: 0, revenue: 0, bookings: 0 }
+        }
+        analytics.occupancyByMonth[month].roomNights += roomNights
+        analytics.occupancyByMonth[month].revenue += booking.total_price
+        analytics.occupancyByMonth[month].bookings += 1
       }
-      analytics.sourceBreakdown[booking.booking_source].count++
-      analytics.sourceBreakdown[booking.booking_source].revenue += booking.total_price
 
-      // By room type
-      if (!analytics.roomTypeBreakdown[booking.room_type]) {
-        analytics.roomTypeBreakdown[booking.room_type] = { count: 0, revenue: 0, avgRate: 0 }
+      // Booking pace (by booking date)
+      if (booking.booking_date) {
+        const date = booking.booking_date
+        analytics.bookingPace[date] = (analytics.bookingPace[date] || 0) + 1
       }
-      analytics.roomTypeBreakdown[booking.room_type].count++
-      analytics.roomTypeBreakdown[booking.room_type].revenue += booking.total_price
 
-      // By month (for occupancy)
-      const month = booking.check_in_date.substring(0, 7)
-      if (!analytics.occupancyByMonth[month]) {
-        analytics.occupancyByMonth[month] = { roomNights: 0, revenue: 0, bookings: 0 }
+      // Source breakdown
+      const source = booking.booking_source || "Direct"
+      if (!analytics.sourceBreakdown[source]) {
+        analytics.sourceBreakdown[source] = { count: 0, revenue: 0 }
       }
-      analytics.occupancyByMonth[month].roomNights += booking.nights * booking.room_count
-      analytics.occupancyByMonth[month].revenue += booking.total_price
-      analytics.occupancyByMonth[month].bookings++
+      analytics.sourceBreakdown[source].count += 1
+      analytics.sourceBreakdown[source].revenue += booking.total_price
 
-      // Booking pace
-      if (!analytics.bookingPace[booking.booking_date]) {
-        analytics.bookingPace[booking.booking_date] = 0
+      // Room type breakdown
+      const roomType = booking.room_type || "Standard"
+      if (!analytics.roomTypeBreakdown[roomType]) {
+        analytics.roomTypeBreakdown[roomType] = { count: 0, revenue: 0, avgRate: 0 }
       }
-      analytics.bookingPace[booking.booking_date]++
+      analytics.roomTypeBreakdown[roomType].count += 1
+      analytics.roomTypeBreakdown[roomType].revenue += booking.total_price
     })
 
-    if (newBookings.length > 0) {
-      analytics.avgNightlyRate = analytics.totalRevenue / analytics.totalRoomNights
-      analytics.avgStayLength = analytics.totalRoomNights / newBookings.length
+    const confirmedBookings = bookings.filter((b) => b.status !== "cancelled")
+    analytics.avgNightlyRate = confirmedBookings.length > 0 ? totalRateSum / confirmedBookings.length : 0
+    analytics.avgStayLength = confirmedBookings.length > 0 ? totalNights / confirmedBookings.length : 0
 
-      // Calculate avg rate per room type
-      for (const type of Object.keys(analytics.roomTypeBreakdown)) {
-        const data = analytics.roomTypeBreakdown[type]
-        data.avgRate = data.revenue / data.count
-      }
-    }
+    // Calculate average rate per room type
+    Object.keys(analytics.roomTypeBreakdown).forEach((type) => {
+      const data = analytics.roomTypeBreakdown[type]
+      data.avgRate = data.count > 0 ? data.revenue / data.count : 0
+    })
 
     return analytics
   }
 
-  const handleImport = async () => {
-    if (!selectedHotel) return
+  const importBookings = async () => {
+    if (!selectedHotel) {
+      alert("Please select a hotel")
+      return
+    }
 
     setImporting(true)
     setStep("importing")
 
-    const newBookings = parsedBookings.filter((b) => b.isValid && !b.isDuplicate)
+    const validBookings = parsedBookings.filter((b) => b.isValid && b.status !== "cancelled")
 
     try {
       const response = await fetch("/api/bookings/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          hotel_id: selectedHotel,
-          bookings: newBookings,
-          analytics,
+          hotelId: selectedHotel,
+          bookings: validBookings.map((b) => ({
+            guest_name: b.guest_name,
+            check_in_date: b.check_in_date,
+            check_out_date: b.check_out_date,
+            room_type: b.room_type,
+            room_number: b.room_number,
+            room_count: b.room_count,
+            nights: b.nights,
+            nightly_rate: b.nightly_rate,
+            total_price: b.total_price,
+            booking_source: b.booking_source,
+            booking_date: b.booking_date,
+            status: b.status,
+          })),
+          analytics: analytics,
         }),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        setImportResult({
-          success: result.imported || newBookings.length,
-          failed: result.failed || 0,
-          skipped: parsedBookings.filter((b) => b.isDuplicate).length,
-        })
-        setStep("done")
-      } else {
-        alert("Failed to import bookings")
-        setStep("preview")
-      }
+      const result = await response.json()
+      setImportResult({
+        success: result.imported || 0,
+        failed: validBookings.length - (result.imported || 0),
+      })
+      setStep("done")
     } catch (error) {
-      console.error("Error importing:", error)
-      alert("Error importing bookings")
-      setStep("preview")
+      console.error("Import error:", error)
+      setImportResult({ success: 0, failed: validBookings.length })
+      setStep("done")
     } finally {
       setImporting(false)
     }
@@ -566,46 +419,15 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
     setParsedBookings([])
     setAnalytics(null)
     setImportResult(null)
-    setAutoMappingSuccess(false)
-    setColumnMapping({
-      guest_name: "",
-      check_in_date: "",
-      check_out_date: "",
-      room_type: "",
-      room_number: "",
-      room_count: "",
-      nights: "",
-      nightly_rate: "",
-      total_price: "",
-      booking_source: "",
-      booking_date: "",
-      status: "",
-      confirmation_number: "",
-    })
+    setSelectedHotel("")
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
   }
 
-  const mappingFields: { key: keyof ColumnMapping; label: string; required: boolean }[] = [
-    { key: "guest_name", label: "שם אורח", required: false },
-    { key: "check_in_date", label: "תאריך כניסה", required: true },
-    { key: "check_out_date", label: "תאריך יציאה", required: true },
-    { key: "room_type", label: "סוג חדר", required: false },
-    { key: "room_number", label: "מספר חדר", required: false },
-    { key: "room_count", label: "כמות חדרים", required: false },
-    { key: "nights", label: "מספר לילות", required: false },
-    { key: "nightly_rate", label: "מחיר ללילה", required: false },
-    { key: "total_price", label: 'סה"כ', required: true },
-    { key: "booking_source", label: "מקור הזמנה", required: false },
-    { key: "booking_date", label: "תאריך הזמנה", required: false },
-    { key: "status", label: "סטטוס", required: false },
-    { key: "confirmation_number", label: "מספר אישור", required: false },
-  ]
-
-  const validCount = parsedBookings.filter((b) => b.isValid && !b.isDuplicate).length
+  const validCount = parsedBookings.filter((b) => b.isValid).length
   const invalidCount = parsedBookings.filter((b) => !b.isValid).length
-  const duplicateCount = parsedBookings.filter((b) => b.isDuplicate).length
+  const cancelledCount = parsedBookings.filter((b) => b.status === "cancelled").length
 
   return (
     <Dialog
@@ -616,50 +438,47 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 bg-transparent">
-          <FileSpreadsheetIcon className="w-4 h-4 mr-2" />
+        <Button
+          variant="outline"
+          className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 bg-transparent"
+        >
+          <FileSpreadsheetIcon className="h-4 w-4 mr-2" />
           Import from PMS
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700">
         <DialogHeader>
-          <DialogTitle className="text-white flex items-center gap-2">
-            <FileSpreadsheetIcon className="w-5 h-5 text-cyan-400" />
+          <DialogTitle className="flex items-center gap-2 text-white">
+            <FileSpreadsheetIcon className="h-5 w-5 text-emerald-400" />
             ייבוא הזמנות ממערכת PMS
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            העלה קובץ אקסל עם נתוני הזמנות ממערכת ה-PMS שלך
-          </DialogDescription>
+          <DialogDescription>העלה קובץ אקסל עם נתוני הזמנות ממערכת ה-PMS שלך</DialogDescription>
         </DialogHeader>
 
-        {/* Progress Steps */}
-        <div className="flex items-center justify-center gap-2 my-4">
-          {[
-            { key: "upload", num: 1 },
-            { key: "mapping", num: 2 },
-            { key: "preview", num: 3 },
-            { key: "done", num: 4 },
-          ].map(({ key, num }) => (
-            <div key={key} className="flex items-center gap-2">
+        {/* Step indicator */}
+        <div className="flex items-center justify-between mb-6">
+          {["upload", "mapping", "preview", "done"].map((s, i) => (
+            <div key={s} className="flex items-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  step === key || (key === "mapping" && autoMappingSuccess && step === "preview")
+                  step === s
                     ? "bg-cyan-500 text-white"
-                    : step === "importing" || step === "done"
-                      ? "bg-cyan-500/20 text-cyan-400"
+                    : ["upload", "mapping", "preview", "importing", "done"].indexOf(step) > i
+                      ? "bg-emerald-500 text-white"
                       : "bg-slate-700 text-slate-400"
                 }`}
               >
-                {(step === "done" && key !== "done") ||
-                (key === "upload" && step !== "upload") ||
-                (key === "mapping" && (step === "preview" || step === "importing" || step === "done")) ||
-                (key === "preview" && (step === "importing" || step === "done")) ? (
-                  <CheckCircleIcon className="w-4 h-4" />
-                ) : (
-                  num
-                )}
+                {["upload", "mapping", "preview", "importing", "done"].indexOf(step) > i ? "✓" : i + 1}
               </div>
-              {num < 4 && <div className="w-12 h-0.5 bg-slate-700" />}
+              {i < 3 && (
+                <div
+                  className={`w-16 h-0.5 mx-2 ${
+                    ["upload", "mapping", "preview", "importing", "done"].indexOf(step) > i
+                      ? "bg-emerald-500"
+                      : "bg-slate-700"
+                  }`}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -670,12 +489,12 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-2">בחר מלון</label>
               <Select value={selectedHotel} onValueChange={setSelectedHotel}>
-                <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                  <SelectValue placeholder="בחר מלון" />
+                <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectValue placeholder="בחר מלון..." />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600">
+                <SelectContent>
                   {hotels.map((hotel) => (
-                    <SelectItem key={hotel.id} value={hotel.id} className="text-white hover:bg-slate-700">
+                    <SelectItem key={hotel.id} value={hotel.id}>
                       {hotel.name}
                     </SelectItem>
                   ))}
@@ -684,92 +503,105 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
             </div>
 
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                selectedHotel
-                  ? "border-cyan-500/50 hover:border-cyan-500 cursor-pointer"
-                  : "border-slate-600 opacity-50"
-              }`}
-              onClick={() => selectedHotel && fileInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-cyan-500/50 transition-colors cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
             >
-              <UploadIcon className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-              <p className="text-slate-300 mb-2">גרור קובץ אקסל לכאן או לחץ לבחירה</p>
-              <p className="text-slate-500 text-sm">תומך בפורמטים: .xlsx, .xls, .csv</p>
+              <UploadIcon className="h-12 w-12 mx-auto text-slate-500 mb-4" />
+              <p className="text-lg font-medium text-slate-300 mb-2">גרור קובץ אקסל לכאן או לחץ לבחירה</p>
+              <p className="text-sm text-slate-500">תומך בקבצי .xlsx, .xls, .csv</p>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={handleFileSelect}
                 className="hidden"
-                disabled={!selectedHotel}
               />
             </div>
 
-            <Alert className="bg-slate-800/50 border-cyan-500/30">
-              <RefreshCwIcon className="w-4 h-4 text-cyan-400" />
-              <AlertDescription className="text-slate-300 mr-2">
-                <strong className="text-cyan-400">עדכון יומי:</strong> המערכת מזהה אוטומטית הזמנות קיימות ומייבאת רק
-                הזמנות חדשות. ניתן להעלות את אותו פורמט PMS מדי יום.
-              </AlertDescription>
-            </Alert>
-
-            {file && (
-              <div className="flex items-center gap-2 p-3 bg-slate-800 rounded-lg">
-                <FileSpreadsheetIcon className="w-5 h-5 text-green-400" />
-                <span className="text-white">{file.name}</span>
-                <Badge variant="secondary" className="ml-auto">
-                  {(file.size / 1024).toFixed(1)} KB
-                </Badge>
-              </div>
-            )}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-slate-300">עמודות נתמכות (עברית/אנגלית)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-2 text-sm text-slate-400">
+                  <div>• שם אורח / Guest Name</div>
+                  <div>• תאריך כניסה / Check-in</div>
+                  <div>• תאריך יציאה / Check-out</div>
+                  <div>• סוג חדר / Room Type</div>
+                  <div>• מספר חדר / Room Number</div>
+                  <div>• מספר לילות / Nights</div>
+                  <div>• מחיר ללילה / Nightly Rate</div>
+                  <div>• סה"כ / Total Price</div>
+                  <div>• מקור הזמנה / Booking Source</div>
+                  <div>• תאריך הזמנה / Booking Date</div>
+                  <div>• סטטוס / Status</div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
-        {/* Step 2: Column Mapping (only if auto-mapping failed) */}
+        {/* Step 2: Column Mapping */}
         {step === "mapping" && (
           <div className="space-y-4">
-            <div className="text-center mb-4">
-              <h3 className="text-lg font-medium text-white mb-2">מיפוי עמודות</h3>
-              <p className="text-slate-400 text-sm">בחר איזה עמודה מתאימה לכל שדה. המערכת ניסתה לזהות אוטומטית.</p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              {mappingFields.map(({ key, label, required }) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    {label} {required && <span className="text-red-400">*</span>}
-                  </label>
-                  <Select
-                    value={columnMapping[key] || "__none__"}
-                    onValueChange={(value) =>
-                      setColumnMapping((prev) => ({ ...prev, [key]: value === "__none__" ? "" : value }))
-                    }
-                  >
-                    <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
-                      <SelectValue placeholder="-- לא ממופה --" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-600">
-                      <SelectItem value="__none__" className="text-slate-400">
-                        -- לא ממופה --
-                      </SelectItem>
-                      {headers.map((header) => (
-                        <SelectItem key={header} value={header} className="text-white hover:bg-slate-700">
-                          {header}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-sm text-slate-300">מיפוי עמודות</CardTitle>
+                <CardDescription>בחר איזה עמודה מתאימה לכל שדה. המערכת ניסתה לזהות אוטומטית.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4">
+                  {Object.entries({
+                    guest_name: "שם אורח",
+                    check_in_date: "תאריך כניסה *",
+                    check_out_date: "תאריך יציאה *",
+                    room_type: "סוג חדר",
+                    room_number: "מספר חדר",
+                    room_count: "כמות חדרים",
+                    nights: "מספר לילות",
+                    nightly_rate: "מחיר ללילה",
+                    total_price: 'סה"כ *',
+                    booking_source: "מקור הזמנה",
+                    booking_date: "תאריך הזמנה",
+                    status: "סטטוס",
+                  }).map(([key, label]) => (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-slate-400 mb-1">{label}</label>
+                      <Select
+                        value={columnMapping[key as keyof ColumnMapping] || "__none__"}
+                        onValueChange={(value) =>
+                          setColumnMapping((prev) => ({
+                            ...prev,
+                            [key]: value === "__none__" ? "" : value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectValue placeholder="בחר עמודה..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">-- לא ממופה --</SelectItem>
+                          {headers.map((header) => (
+                            <SelectItem key={header} value={header}>
+                              {header}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </CardContent>
+            </Card>
 
-            <div className="flex justify-between mt-6">
-              <Button variant="outline" onClick={() => setStep("upload")} className="border-slate-600">
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep("upload")}>
                 חזרה
               </Button>
               <Button
                 onClick={applyMapping}
-                className="bg-cyan-600 hover:bg-cyan-700"
-                disabled={!columnMapping.check_in_date || !columnMapping.check_out_date || !columnMapping.total_price}
+                disabled={!columnMapping.check_in_date || !columnMapping.check_out_date}
+                className="bg-cyan-500 hover:bg-cyan-600"
               >
                 תצוגה מקדימה
               </Button>
@@ -777,162 +609,176 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
           </div>
         )}
 
-        {/* Step 3: Preview */}
+        {/* Step 3: Preview with Analytics */}
         {step === "preview" && (
           <div className="space-y-4">
-            {duplicateCount > 0 && (
-              <Alert className="bg-yellow-500/10 border-yellow-500/30">
-                <RefreshCwIcon className="w-4 h-4 text-yellow-400" />
-                <AlertDescription className="text-yellow-200 mr-2">
-                  נמצאו <strong>{duplicateCount}</strong> הזמנות שכבר קיימות במערכת - הן לא ייובאו. יייובאו רק{" "}
-                  <strong>{validCount}</strong> הזמנות חדשות.
-                </AlertDescription>
-              </Alert>
-            )}
+            {/* Status badges */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <Badge className="bg-emerald-500/20 text-emerald-400">
+                <CheckCircleIcon className="h-3 w-3 mr-1" />
+                {validCount} תקינות
+              </Badge>
+              {invalidCount > 0 && (
+                <Badge className="bg-red-500/20 text-red-400">
+                  <AlertCircleIcon className="h-3 w-3 mr-1" />
+                  {invalidCount} שגיאות
+                </Badge>
+              )}
+              {cancelledCount > 0 && (
+                <Badge className="bg-yellow-500/20 text-yellow-400">{cancelledCount} ביטולים</Badge>
+              )}
+            </div>
 
-            {/* Analytics Summary */}
+            {/* Analytics Cards */}
             {analytics && (
-              <div className="grid grid-cols-4 gap-4 mb-4">
-                <Card className="bg-slate-800 border-slate-700">
+              <div className="grid grid-cols-4 gap-4">
+                <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-5 h-5 text-cyan-400" />
-                      <div>
-                        <p className="text-slate-400 text-xs">הזמנות חדשות</p>
-                        <p className="text-xl font-bold text-white">{analytics.newBookings}</p>
-                      </div>
+                    <div className="flex items-center gap-2 text-slate-400 text-sm mb-1">
+                      <CalendarIcon className="h-4 w-4" />
+                      סה"כ הזמנות
                     </div>
+                    <p className="text-2xl font-bold text-white">{analytics.totalBookings}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-slate-800 border-slate-700">
+                <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <TrendingUpIcon className="w-5 h-5 text-green-400" />
-                      <div>
-                        <p className="text-slate-400 text-xs">הכנסות חדשות</p>
-                        <p className="text-xl font-bold text-white">${analytics.totalRevenue.toLocaleString()}</p>
-                      </div>
+                    <div className="flex items-center gap-2 text-slate-400 text-sm mb-1">
+                      <TrendingUpIcon className="h-4 w-4" />
+                      סה"כ הכנסות
                     </div>
+                    <p className="text-2xl font-bold text-emerald-400">₪{analytics.totalRevenue.toLocaleString()}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-slate-800 border-slate-700">
+                <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <BedDoubleIcon className="w-5 h-5 text-purple-400" />
-                      <div>
-                        <p className="text-slate-400 text-xs">לילות חדר</p>
-                        <p className="text-xl font-bold text-white">{analytics.totalRoomNights}</p>
-                      </div>
+                    <div className="flex items-center gap-2 text-slate-400 text-sm mb-1">
+                      <BedDoubleIcon className="h-4 w-4" />
+                      לילות חדר
                     </div>
+                    <p className="text-2xl font-bold text-cyan-400">{analytics.totalRoomNights}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-slate-800 border-slate-700">
+                <Card className="bg-slate-800/50 border-slate-700">
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <BarChart3Icon className="w-5 h-5 text-orange-400" />
-                      <div>
-                        <p className="text-slate-400 text-xs">ADR ממוצע</p>
-                        <p className="text-xl font-bold text-white">${analytics.avgNightlyRate.toFixed(0)}</p>
-                      </div>
+                    <div className="flex items-center gap-2 text-slate-400 text-sm mb-1">
+                      <BarChart3Icon className="h-4 w-4" />
+                      ADR ממוצע
                     </div>
+                    <p className="text-2xl font-bold text-white">₪{analytics.avgNightlyRate.toFixed(0)}</p>
                   </CardContent>
                 </Card>
               </div>
             )}
 
-            {/* Bookings Preview Table */}
-            <div className="max-h-64 overflow-auto">
+            {/* Source breakdown */}
+            {analytics && Object.keys(analytics.sourceBreakdown).length > 0 && (
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-slate-300">פילוח לפי מקור הזמנה</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-4 gap-3">
+                    {Object.entries(analytics.sourceBreakdown).map(([source, data]) => (
+                      <div key={source} className="bg-slate-700/50 rounded-lg p-3">
+                        <p className="text-white font-medium truncate">{source}</p>
+                        <p className="text-sm text-slate-400">{data.count} הזמנות</p>
+                        <p className="text-sm text-emerald-400">₪{data.revenue.toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Room type breakdown */}
+            {analytics && Object.keys(analytics.roomTypeBreakdown).length > 0 && (
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-slate-300">פילוח לפי סוג חדר</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-4 gap-3">
+                    {Object.entries(analytics.roomTypeBreakdown).map(([type, data]) => (
+                      <div key={type} className="bg-slate-700/50 rounded-lg p-3">
+                        <p className="text-white font-medium truncate">{type}</p>
+                        <p className="text-sm text-slate-400">{data.count} הזמנות</p>
+                        <p className="text-sm text-cyan-400">ADR: ₪{data.avgRate.toFixed(0)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Bookings table */}
+            <div className="max-h-64 overflow-auto rounded-lg border border-slate-700">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-700">
+                  <TableRow className="bg-slate-800">
                     <TableHead className="text-slate-300">סטטוס</TableHead>
                     <TableHead className="text-slate-300">אורח</TableHead>
                     <TableHead className="text-slate-300">כניסה</TableHead>
                     <TableHead className="text-slate-300">יציאה</TableHead>
                     <TableHead className="text-slate-300">לילות</TableHead>
-                    <TableHead className="text-slate-300">סה"כ</TableHead>
+                    <TableHead className="text-slate-300">סוג חדר</TableHead>
                     <TableHead className="text-slate-300">מקור</TableHead>
+                    <TableHead className="text-right text-slate-300">סה"כ</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {parsedBookings.slice(0, 20).map((booking, idx) => (
+                  {parsedBookings.slice(0, 30).map((booking, i) => (
                     <TableRow
-                      key={idx}
-                      className={`border-slate-700 ${
-                        booking.isDuplicate ? "opacity-50 bg-yellow-500/5" : booking.isValid ? "" : "bg-red-500/10"
-                      }`}
+                      key={i}
+                      className={
+                        !booking.isValid ? "bg-red-500/10" : booking.status === "cancelled" ? "bg-yellow-500/10" : ""
+                      }
                     >
                       <TableCell>
-                        {booking.isDuplicate ? (
-                          <Badge variant="outline" className="border-yellow-500 text-yellow-400 text-xs">
-                            כפילות
-                          </Badge>
-                        ) : booking.isValid ? (
-                          <CheckCircleIcon className="w-4 h-4 text-green-400" />
+                        {booking.isValid ? (
+                          booking.status === "cancelled" ? (
+                            <Badge variant="outline" className="text-yellow-400 border-yellow-400">
+                              ביטול
+                            </Badge>
+                          ) : (
+                            <CheckCircleIcon className="h-4 w-4 text-emerald-400" />
+                          )
                         ) : (
-                          <AlertCircleIcon className="w-4 h-4 text-red-400" />
+                          <div className="flex items-center gap-1">
+                            <AlertCircleIcon className="h-4 w-4 text-red-400" />
+                            <span className="text-xs text-red-400">{booking.errors[0]}</span>
+                          </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-white">{booking.guest_name}</TableCell>
+                      <TableCell className="text-slate-300">{booking.guest_name}</TableCell>
                       <TableCell className="text-slate-300">{booking.check_in_date}</TableCell>
                       <TableCell className="text-slate-300">{booking.check_out_date}</TableCell>
                       <TableCell className="text-slate-300">{booking.nights}</TableCell>
-                      <TableCell className="text-white">${booking.total_price.toFixed(0)}</TableCell>
+                      <TableCell className="text-slate-300">{booking.room_type}</TableCell>
                       <TableCell className="text-slate-300">{booking.booking_source}</TableCell>
+                      <TableCell className="text-right text-slate-300">
+                        ₪{booking.total_price.toLocaleString()}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              {parsedBookings.length > 20 && (
-                <p className="text-slate-400 text-sm text-center py-2">
-                  מציג 20 מתוך {parsedBookings.length} הזמנות...
-                </p>
-              )}
             </div>
 
-            {/* Summary */}
-            <div className="flex items-center justify-between bg-slate-800 rounded-lg p-4">
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="w-4 h-4 text-green-400" />
-                  <span className="text-green-400">{validCount} הזמנות חדשות תקינות</span>
-                </div>
-                {duplicateCount > 0 && (
-                  <div className="flex items-center gap-2">
-                    <RefreshCwIcon className="w-4 h-4 text-yellow-400" />
-                    <span className="text-yellow-400">{duplicateCount} כפילויות (לא ייובאו)</span>
-                  </div>
-                )}
-                {invalidCount > 0 && (
-                  <div className="flex items-center gap-2">
-                    <AlertCircleIcon className="w-4 h-4 text-red-400" />
-                    <span className="text-red-400">{invalidCount} שגיאות</span>
-                  </div>
-                )}
-              </div>
-            </div>
+            {parsedBookings.length > 30 && (
+              <p className="text-sm text-slate-500 text-center">מציג 30 מתוך {parsedBookings.length} הזמנות</p>
+            )}
 
-            <div className="flex justify-between mt-4">
-              <Button
-                variant="outline"
-                onClick={() => setStep(autoMappingSuccess ? "upload" : "mapping")}
-                className="border-slate-600"
-              >
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep("mapping")}>
                 חזרה
               </Button>
               <Button
-                onClick={handleImport}
-                className="bg-cyan-600 hover:bg-cyan-700"
-                disabled={validCount === 0 || importing}
+                onClick={importBookings}
+                disabled={validCount === 0}
+                className="bg-emerald-500 hover:bg-emerald-600"
               >
-                {importing ? (
-                  <>
-                    <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
-                    מייבא...
-                  </>
-                ) : (
-                  `ייבוא ${validCount} הזמנות`
-                )}
+                ייבא {validCount - cancelledCount} הזמנות
               </Button>
             </div>
           </div>
@@ -940,44 +786,45 @@ export function ExcelUpload({ hotels }: { hotels: Hotel[] }) {
 
         {/* Step 4: Importing */}
         {step === "importing" && (
-          <div className="text-center py-12">
-            <Loader2Icon className="w-16 h-16 mx-auto text-cyan-400 animate-spin mb-4" />
-            <p className="text-white text-lg">מייבא הזמנות...</p>
-            <p className="text-slate-400">אנא המתן</p>
+          <div className="py-12 text-center">
+            <Loader2Icon className="h-12 w-12 mx-auto text-cyan-400 animate-spin mb-4" />
+            <p className="text-lg text-slate-300">מייבא הזמנות...</p>
+            <p className="text-sm text-slate-500 mt-2">זה עשוי לקחת רגע</p>
           </div>
         )}
 
         {/* Step 5: Done */}
         {step === "done" && importResult && (
-          <div className="text-center py-8">
-            <CheckCircleIcon className="w-16 h-16 mx-auto text-green-400 mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">הייבוא הושלם בהצלחה!</h3>
-            <div className="flex justify-center gap-6 mb-6">
-              <div>
-                <p className="text-3xl font-bold text-green-400">{importResult.success}</p>
-                <p className="text-slate-400 text-sm">הזמנות חדשות יובאו</p>
-              </div>
-              {importResult.skipped > 0 && (
-                <div>
-                  <p className="text-3xl font-bold text-yellow-400">{importResult.skipped}</p>
-                  <p className="text-slate-400 text-sm">כפילויות דולגו</p>
-                </div>
-              )}
-              {importResult.failed > 0 && (
-                <div>
-                  <p className="text-3xl font-bold text-red-400">{importResult.failed}</p>
-                  <p className="text-slate-400 text-sm">נכשלו</p>
-                </div>
-              )}
-            </div>
-
+          <div className="py-8 text-center">
+            {importResult.success > 0 ? (
+              <>
+                <CheckCircleIcon className="h-16 w-16 mx-auto text-emerald-400 mb-4" />
+                <p className="text-xl font-medium text-white mb-2">הייבוא הושלם בהצלחה!</p>
+                <p className="text-slate-400">
+                  יובאו {importResult.success} הזמנות
+                  {importResult.failed > 0 && ` (${importResult.failed} נכשלו)`}
+                </p>
+                {analytics && (
+                  <div className="mt-4 p-4 bg-slate-800 rounded-lg inline-block">
+                    <p className="text-emerald-400 text-lg font-medium">₪{analytics.totalRevenue.toLocaleString()}</p>
+                    <p className="text-slate-400 text-sm">סה"כ הכנסות מיובאות</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <AlertCircleIcon className="h-16 w-16 mx-auto text-red-400 mb-4" />
+                <p className="text-xl font-medium text-white mb-2">הייבוא נכשל</p>
+                <p className="text-slate-400">לא ניתן היה לייבא את ההזמנות. נסה שוב.</p>
+              </>
+            )}
             <Button
+              className="mt-6"
               onClick={() => {
-                setOpen(false)
                 resetDialog()
+                setOpen(false)
                 window.location.reload()
               }}
-              className="bg-cyan-600 hover:bg-cyan-700"
             >
               סגור
             </Button>
