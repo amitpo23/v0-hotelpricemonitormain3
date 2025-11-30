@@ -14,12 +14,15 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     "אורח",
     "לקוח",
     "שם מלא",
+    "שם",
     "guest",
     "guest name",
     "customer",
     "customer name",
     "name",
     "full name",
+    "client",
+    "client name",
   ],
   check_in_date: [
     "תאריך כניסה",
@@ -36,6 +39,8 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     "arrival date",
     "from",
     "start date",
+    "from date",
+    "תאריך התחלה",
   ],
   check_out_date: [
     "תאריך יציאה",
@@ -52,8 +57,24 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     "departure date",
     "to",
     "end date",
+    "to date",
+    "תאריך סיום",
   ],
-  room_type: ["סוג חדר", "סוג", "קטגוריה", "חדר סוג", "טיפוס חדר", "room type", "type", "category", "room category"],
+  room_type: [
+    "סוג חדר",
+    "סוג",
+    "קטגוריה",
+    "חדר סוג",
+    "טיפוס חדר",
+    "חדר",
+    "room type",
+    "type",
+    "category",
+    "room category",
+    "room",
+    "unit type",
+    "יחידה",
+  ],
   total_price: [
     'סה"כ',
     "סה״כ",
@@ -64,12 +85,15 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     'סה"כ לתשלום',
     "סכום כולל",
     "מחיר כולל",
+    "הכנסה",
     "total",
     "total price",
     "amount",
     "price",
     "revenue",
     "sum",
+    "grand total",
+    "סכום סופי",
   ],
   booking_source: [
     "מקור",
@@ -83,8 +107,10 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     "channel",
     "ota",
     "origin",
+    "platform",
+    "פלטפורמה",
   ],
-  status: ["סטטוס", "מצב", "סטאטוס", "status", "state", "booking status"],
+  status: ["סטטוס", "מצב", "סטאטוס", "status", "state", "booking status", "מצב הזמנה"],
   booking_date: [
     "תאריך הזמנה",
     "תאריך ההזמנה",
@@ -95,6 +121,8 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     "reservation date",
     "created",
     "booked on",
+    "created at",
+    "נוצר בתאריך",
   ],
 }
 
@@ -104,10 +132,13 @@ function normalizeColumnName(name: string): string {
     .trim()
     .toLowerCase()
     .replace(/[\s_-]+/g, " ")
+    .replace(/['"״׳]/g, "") // Remove quotes
 }
 
 function findColumnMapping(headers: string[]): Record<string, number> {
   const mapping: Record<string, number> = {}
+
+  console.log("[v0] Headers found:", headers)
 
   headers.forEach((header, index) => {
     const normalized = normalizeColumnName(header)
@@ -116,20 +147,24 @@ function findColumnMapping(headers: string[]): Record<string, number> {
       if (mapping[field] !== undefined) continue
 
       for (const alias of aliases) {
-        if (normalized === normalizeColumnName(alias) || normalized.includes(normalizeColumnName(alias))) {
+        const normalizedAlias = normalizeColumnName(alias)
+        if (normalized === normalizedAlias || normalized.includes(normalizedAlias)) {
           mapping[field] = index
+          console.log(`[v0] Mapped "${header}" -> ${field} (index ${index})`)
           break
         }
       }
     }
   })
 
+  console.log("[v0] Final column mapping:", mapping)
   return mapping
 }
 
 function parseDate(value: any): string | null {
   if (!value) return null
 
+  // Excel serial date number
   if (typeof value === "number") {
     const date = new Date((value - 25569) * 86400 * 1000)
     if (!isNaN(date.getTime())) {
@@ -142,14 +177,23 @@ function parseDate(value: any): string | null {
   }
 
   const strValue = String(value).trim()
+
+  // Try ISO format first
   const isoDate = new Date(strValue)
   if (!isNaN(isoDate.getTime())) {
     return isoDate.toISOString().split("T")[0]
   }
 
+  // Try DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const parts = strValue.split(/[/.-]/)
   if (parts.length === 3) {
-    const [d, m, y] = parts
+    let [d, m, y] = parts
+
+    // If first part is 4 digits, it's YYYY-MM-DD
+    if (d.length === 4) {
+      ;[y, m, d] = parts
+    }
+
     const year = y.length === 2 ? `20${y}` : y
     const parsed = new Date(`${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`)
     if (!isNaN(parsed.getTime())) {
@@ -157,6 +201,7 @@ function parseDate(value: any): string | null {
     }
   }
 
+  console.log(`[v0] Could not parse date: "${value}"`)
   return null
 }
 
@@ -183,6 +228,7 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
+      Prefer: "return=representation",
       ...options.headers,
     },
   })
@@ -195,6 +241,8 @@ export async function POST(request: Request) {
     const file = formData.get("file") as File
     const hotelId = formData.get("hotelId") as string
 
+    console.log("[v0] Starting import for hotel:", hotelId)
+
     if (!file || !hotelId) {
       return NextResponse.json({ error: "Missing file or hotel ID" }, { status: 400 })
     }
@@ -206,6 +254,8 @@ export async function POST(request: Request) {
     const sheet = workbook.Sheets[sheetName]
     const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
 
+    console.log("[v0] Total rows in file:", rawData.length)
+
     if (rawData.length < 2) {
       return NextResponse.json({ error: "הקובץ ריק או חסרות שורות נתונים" }, { status: 400 })
     }
@@ -213,10 +263,34 @@ export async function POST(request: Request) {
     const headers = rawData[0].map((h) => String(h || ""))
     const columnMap = findColumnMapping(headers)
 
+    if (columnMap.check_in_date === undefined) {
+      console.log("[v0] check_in_date not found in mapping, searching for date columns...")
+      // Find first column with date-like values
+      for (let i = 0; i < headers.length; i++) {
+        const testValue = rawData[1]?.[i]
+        if (parseDate(testValue)) {
+          columnMap.check_in_date = i
+          console.log(`[v0] Found date in column ${i}: ${headers[i]}`)
+          break
+        }
+      }
+    }
+
+    if (columnMap.check_out_date === undefined && columnMap.check_in_date !== undefined) {
+      // Assume checkout is the next column after checkin
+      const nextCol = columnMap.check_in_date + 1
+      if (nextCol < headers.length && parseDate(rawData[1]?.[nextCol])) {
+        columnMap.check_out_date = nextCol
+        console.log(`[v0] Assuming checkout is column ${nextCol}: ${headers[nextCol]}`)
+      }
+    }
+
     if (columnMap.check_in_date === undefined || columnMap.check_out_date === undefined) {
       return NextResponse.json(
         {
-          error: "לא נמצאו עמודות תאריך כניסה/יציאה. וודא שהקובץ מכיל עמודות: תאריך כניסה, תאריך יציאה",
+          error: `לא נמצאו עמודות תאריך. עמודות שנמצאו: ${headers.join(", ")}`,
+          headers: headers,
+          mapping: columnMap,
         },
         { status: 400 },
       )
@@ -235,10 +309,11 @@ export async function POST(request: Request) {
     // Parse rows
     const bookingsToInsert: any[] = []
     let skipped = 0
+    let parseErrors = 0
 
     for (let i = 1; i < rawData.length; i++) {
       const row = rawData[i]
-      if (!row || row.length === 0) continue
+      if (!row || row.length === 0 || row.every((cell) => !cell)) continue
 
       const getValue = (field: string) => {
         const idx = columnMap[field]
@@ -248,9 +323,18 @@ export async function POST(request: Request) {
       const checkIn = parseDate(getValue("check_in_date"))
       const checkOut = parseDate(getValue("check_out_date"))
 
-      if (!checkIn || !checkOut) continue
+      if (!checkIn || !checkOut) {
+        parseErrors++
+        if (i < 5) {
+          // Log first few errors
+          console.log(
+            `[v0] Row ${i} parse error - checkIn: ${getValue("check_in_date")} -> ${checkIn}, checkOut: ${getValue("check_out_date")} -> ${checkOut}`,
+          )
+        }
+        continue
+      }
 
-      const guestName = String(getValue("guest_name") || "אורח").trim()
+      const guestName = String(getValue("guest_name") || `אורח ${i}`).trim()
       const totalPrice = parseNumber(getValue("total_price"))
       const status = parseStatus(getValue("status"))
 
@@ -279,28 +363,45 @@ export async function POST(request: Request) {
       })
     }
 
-    // Insert bookings
+    console.log(
+      `[v0] Parsed ${bookingsToInsert.length} valid bookings, ${skipped} skipped (duplicates/cancelled), ${parseErrors} parse errors`,
+    )
+
+    // Insert bookings in batches
     let imported = 0
 
     if (bookingsToInsert.length > 0) {
-      const insertRes = await supabaseFetch("/bookings", {
-        method: "POST",
-        body: JSON.stringify(bookingsToInsert),
-      })
+      // Insert in batches of 100
+      const batchSize = 100
+      for (let i = 0; i < bookingsToInsert.length; i += batchSize) {
+        const batch = bookingsToInsert.slice(i, i + batchSize)
+        const insertRes = await supabaseFetch("/bookings", {
+          method: "POST",
+          body: JSON.stringify(batch),
+        })
 
-      if (insertRes.ok) {
-        imported = bookingsToInsert.length
-      } else {
-        const errorText = await insertRes.text()
-        console.error("[v0] Insert error:", errorText)
+        if (insertRes.ok) {
+          imported += batch.length
+        } else {
+          const errorText = await insertRes.text()
+          console.error("[v0] Insert error:", errorText)
+        }
       }
     }
+
+    console.log(`[v0] Import complete: ${imported} imported`)
 
     return NextResponse.json({
       success: true,
       imported,
-      failed: skipped,
+      failed: skipped + parseErrors,
       total: rawData.length - 1,
+      debug: {
+        headers,
+        mapping: columnMap,
+        parseErrors,
+        skipped,
+      },
     })
   } catch (error) {
     console.error("[v0] PMS import error:", error)

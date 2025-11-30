@@ -22,13 +22,26 @@ interface Hotel {
   total_rooms?: number
 }
 
+interface ImportResult {
+  success: number
+  failed: number
+  total: number
+  debug?: {
+    headers: string[]
+    mapping: Record<string, number>
+    parseErrors: number
+    skipped: number
+  }
+}
+
 export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onImportComplete?: () => void }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<"upload" | "importing" | "done">("upload")
   const [selectedHotel, setSelectedHotel] = useState<string>("")
   const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ success: number; failed: number; total: number } | null>(null)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<{ headers?: string[]; mapping?: Record<string, number> } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,6 +56,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
     setImporting(true)
     setStep("importing")
     setError(null)
+    setDebugInfo(null)
 
     const formData = new FormData()
     formData.append("file", selectedFile)
@@ -57,6 +71,9 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
       const result = await response.json()
 
       if (!response.ok) {
+        if (result.headers || result.mapping) {
+          setDebugInfo({ headers: result.headers, mapping: result.mapping })
+        }
         throw new Error(result.error || "Failed to import")
       }
 
@@ -64,6 +81,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
         success: result.imported || 0,
         failed: result.failed || 0,
         total: result.total || 0,
+        debug: result.debug,
       })
       setStep("done")
 
@@ -83,6 +101,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
     setStep("upload")
     setImportResult(null)
     setError(null)
+    setDebugInfo(null)
     setSelectedHotel("")
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
@@ -119,9 +138,35 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
         {step === "upload" && (
           <div className="space-y-4">
             {error && (
-              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 flex items-center gap-2">
-                <AlertCircleIcon className="h-5 w-5 text-red-400" />
-                <span className="text-red-300 text-sm">{error}</span>
+              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircleIcon className="h-5 w-5 text-red-400" />
+                  <span className="text-red-300 text-sm">{error}</span>
+                </div>
+                {debugInfo?.headers && (
+                  <div className="mt-3 pt-3 border-t border-red-500/30">
+                    <p className="text-xs text-red-300 mb-2">עמודות שנמצאו בקובץ:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {debugInfo.headers.slice(0, 15).map((h, i) => (
+                        <Badge key={i} variant="outline" className="text-xs border-red-500/50 text-red-300">
+                          {h || "(ריק)"}
+                        </Badge>
+                      ))}
+                    </div>
+                    {debugInfo.mapping && Object.keys(debugInfo.mapping).length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs text-amber-300">עמודות שזוהו:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {Object.entries(debugInfo.mapping).map(([field, idx]) => (
+                            <Badge key={field} variant="outline" className="text-xs border-amber-500/50 text-amber-300">
+                              {field}: {debugInfo.headers?.[idx] || idx}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -205,7 +250,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
                 {importResult.failed > 0 && (
                   <div className="text-center">
                     <div className="text-3xl font-bold text-amber-400">{importResult.failed}</div>
-                    <div className="text-sm text-slate-400">נדלגו (כפילויות)</div>
+                    <div className="text-sm text-slate-400">נדלגו (כפילויות/שגיאות)</div>
                   </div>
                 )}
                 <div className="text-center">
@@ -213,6 +258,23 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
                   <div className="text-sm text-slate-400">סה״כ בקובץ</div>
                 </div>
               </div>
+
+              {importResult.success === 0 && importResult.debug && (
+                <div className="mt-6 text-left bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                  <p className="text-sm text-amber-300 font-medium mb-2">שים לב: לא יובאו רשומות</p>
+                  {importResult.debug.parseErrors > 0 && (
+                    <p className="text-xs text-amber-200">שגיאות פרסור: {importResult.debug.parseErrors}</p>
+                  )}
+                  <p className="text-xs text-slate-400 mt-2">עמודות שזוהו:</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {Object.entries(importResult.debug.mapping).map(([field, idx]) => (
+                      <Badge key={field} variant="outline" className="text-xs border-amber-500/50 text-amber-300">
+                        {field}: עמודה {idx}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <Button onClick={() => setOpen(false)} className="bg-emerald-600 hover:bg-emerald-700">
               סגור
