@@ -69,6 +69,33 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
   booking_date: ["תאריך הזמנה", "תאריך ההזמנה", "נוצר בתאריך", "booking date", "reservation date", "created"],
 }
 
+const MONTH_NAMES: Record<string, number> = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+}
+
 function normalizeColumnName(name: string): string {
   return name
     .toString()
@@ -133,47 +160,84 @@ function findColumnMapping(headers: string[]): Record<string, number> {
 }
 
 function parseDate(value: any): string | null {
-  if (!value) return null
+  if (value === null || value === undefined || value === "") return null
 
   // Excel serial date number
-  if (typeof value === "number") {
+  if (typeof value === "number" && value > 0) {
     const date = new Date((value - 25569) * 86400 * 1000)
-    if (!isNaN(date.getTime())) {
+    if (!isNaN(date.getTime()) && date.getFullYear() > 1990 && date.getFullYear() < 2100) {
       return date.toISOString().split("T")[0]
     }
   }
 
-  if (value instanceof Date) {
+  // JS Date object
+  if (value instanceof Date && !isNaN(value.getTime())) {
     return value.toISOString().split("T")[0]
   }
 
   const strValue = String(value).trim()
-  if (!strValue) return null
+  if (!strValue || strValue === "0" || strValue === "null" || strValue === "undefined") return null
 
-  // Try ISO format first
-  const isoDate = new Date(strValue)
-  if (!isNaN(isoDate.getTime()) && strValue.includes("-")) {
-    return isoDate.toISOString().split("T")[0]
+  const monthNameMatch = strValue.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/)
+  if (monthNameMatch) {
+    const day = Number.parseInt(monthNameMatch[1])
+    const monthName = monthNameMatch[2].toLowerCase()
+    const year = Number.parseInt(monthNameMatch[3])
+    const month = MONTH_NAMES[monthName]
+
+    if (month && day >= 1 && day <= 31 && year >= 2000 && year <= 2100) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    }
   }
 
-  // Try DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
-  const parts = strValue.split(/[/.-]/)
-  if (parts.length === 3) {
-    let [d, m, y] = parts.map((p) => p.trim())
-
-    // If first part is 4 digits, it's YYYY-MM-DD
-    if (d.length === 4) {
-      ;[y, m, d] = parts.map((p) => p.trim())
-    }
-
-    const year = y.length === 2 ? `20${y}` : y
-    const month = m.padStart(2, "0")
-    const day = d.padStart(2, "0")
-
-    const parsed = new Date(`${year}-${month}-${day}`)
+  // Try native Date parsing for ISO formats (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)
+  if (strValue.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const parsed = new Date(strValue)
     if (!isNaN(parsed.getTime())) {
-      return `${year}-${month}-${day}`
+      return parsed.toISOString().split("T")[0]
     }
+  }
+
+  // Split by common delimiters
+  const parts = strValue.split(/[/.\-\s]+/).filter((p) => p.length > 0)
+
+  if (parts.length >= 3) {
+    let day: string, month: string, year: string
+
+    // Check if first part looks like a year (4 digits or starts with 19/20)
+    if (parts[0].length === 4 || parts[0].startsWith("19") || parts[0].startsWith("20")) {
+      year = parts[0]
+      month = parts[1]
+      day = parts[2]
+    } else {
+      day = parts[0]
+      month = parts[1]
+      year = parts[2]
+    }
+
+    // Handle 2-digit year
+    if (year.length === 2) {
+      year = `20${year}`
+    }
+
+    const monthNum = MONTH_NAMES[month.toLowerCase()]
+    if (monthNum) {
+      month = String(monthNum)
+    }
+
+    const y = Number.parseInt(year)
+    const m = Number.parseInt(month)
+    const d = Number.parseInt(day)
+
+    if (y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+    }
+  }
+
+  // Last resort: try native Date parsing
+  const lastTry = new Date(strValue)
+  if (!isNaN(lastTry.getTime()) && lastTry.getFullYear() > 1990) {
+    return lastTry.toISOString().split("T")[0]
   }
 
   return null
@@ -221,12 +285,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing file or hotel ID" }, { status: 400 })
     }
 
-    // Parse Excel file
+    // Parse Excel file with cellDates option
     const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: "array", cellDates: true })
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: true, dateNF: "yyyy-mm-dd" })
     const sheetName = workbook.SheetNames[0]
     const sheet = workbook.Sheets[sheetName]
-    const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
+    const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, dateNF: "yyyy-mm-dd" }) as any[][]
 
     console.log("[v0] Total rows in file:", rawData.length)
 
@@ -247,41 +311,52 @@ export async function POST(request: Request) {
     const headers = rawData[headerRowIndex].map((h) => String(h || "").trim())
     const columnMap = findColumnMapping(headers)
 
+    console.log("[v0] First data row:", rawData[headerRowIndex + 1])
+    console.log("[v0] Column map:", columnMap)
+
     if (columnMap.check_in_date === undefined || columnMap.check_out_date === undefined) {
       console.log("[v0] Date columns not found by name, searching by content...")
 
       const dateColumns: number[] = []
-      const firstDataRow = rawData[headerRowIndex + 1]
+      // Check first 5 data rows
+      for (let rowIdx = headerRowIndex + 1; rowIdx < Math.min(headerRowIndex + 6, rawData.length); rowIdx++) {
+        const testRow = rawData[rowIdx]
+        if (!testRow) continue
 
-      if (firstDataRow) {
-        for (let i = 0; i < firstDataRow.length; i++) {
-          if (parseDate(firstDataRow[i])) {
+        for (let i = 0; i < testRow.length; i++) {
+          if (dateColumns.includes(i)) continue
+          const parsed = parseDate(testRow[i])
+          if (parsed) {
             dateColumns.push(i)
+            console.log(`[v0] Found date in column ${i}: ${testRow[i]} -> ${parsed}`)
           }
         }
       }
 
-      console.log("[v0] Found date columns by content:", dateColumns)
+      // Sort and assign
+      dateColumns.sort((a, b) => a - b)
+      console.log("[v0] Date columns found:", dateColumns)
 
       if (dateColumns.length >= 2) {
         if (columnMap.check_in_date === undefined) {
           columnMap.check_in_date = dateColumns[0]
-          console.log(`[v0] Auto-assigned check_in_date to column ${dateColumns[0]}`)
         }
         if (columnMap.check_out_date === undefined) {
           columnMap.check_out_date = dateColumns[1]
-          console.log(`[v0] Auto-assigned check_out_date to column ${dateColumns[1]}`)
         }
       }
     }
 
-    // Validate required fields
     if (columnMap.check_in_date === undefined || columnMap.check_out_date === undefined) {
+      const firstRow = rawData[headerRowIndex + 1]
+      const errorSample = firstRow ? firstRow.map((v, i) => `[${i}]=${v}`).join(", ") : "no data"
+
       return NextResponse.json(
         {
-          error: `לא נמצאו עמודות תאריך. עמודות שנמצאו: ${headers.join(", ")}`,
+          error: `לא נמצאו עמודות תאריך`,
           headers,
           mapping: columnMap,
+          firstRowSample: errorSample,
         },
         { status: 400 },
       )
@@ -301,6 +376,7 @@ export async function POST(request: Request) {
     const bookingsToInsert: any[] = []
     let skipped = 0
     let parseErrors = 0
+    const errorSamples: string[] = []
 
     for (let i = headerRowIndex + 1; i < rawData.length; i++) {
       const row = rawData[i]
@@ -318,14 +394,8 @@ export async function POST(request: Request) {
 
       if (!checkIn || !checkOut) {
         parseErrors++
-        if (parseErrors <= 3) {
-          console.log(`[v0] Row ${i} parse error:`, {
-            checkInRaw,
-            checkIn,
-            checkOutRaw,
-            checkOut,
-            row: row.slice(0, 10),
-          })
+        if (errorSamples.length < 3) {
+          errorSamples.push(`Row ${i}: checkIn=[${checkInRaw}]->${checkIn}, checkOut=[${checkOutRaw}]->${checkOut}`)
         }
         continue
       }
@@ -333,11 +403,6 @@ export async function POST(request: Request) {
       const guestName = String(getValue("guest_name") || `אורח ${i}`).trim()
       const totalPrice = parseNumber(getValue("total_price"))
       const status = parseStatus(getValue("status"))
-
-      if (status === "cancelled") {
-        skipped++
-        continue
-      }
 
       const key = `${guestName}|${checkIn}|${checkOut}|${totalPrice}`
       if (existingSet.has(key)) {
@@ -362,9 +427,13 @@ export async function POST(request: Request) {
     console.log(
       `[v0] Parsed ${bookingsToInsert.length} valid bookings, ${skipped} skipped, ${parseErrors} parse errors`,
     )
+    if (errorSamples.length > 0) {
+      console.log("[v0] Error samples:", errorSamples)
+    }
 
     // Insert bookings in batches
     let imported = 0
+    const insertErrors: string[] = []
 
     if (bookingsToInsert.length > 0) {
       const batchSize = 100
@@ -380,6 +449,7 @@ export async function POST(request: Request) {
         } else {
           const errorText = await insertRes.text()
           console.error("[v0] Insert error:", errorText)
+          insertErrors.push(errorText)
         }
       }
     }
@@ -396,6 +466,8 @@ export async function POST(request: Request) {
         mapping: columnMap,
         parseErrors,
         skipped,
+        errorSamples,
+        insertErrors: insertErrors.slice(0, 2),
       },
     })
   } catch (error) {

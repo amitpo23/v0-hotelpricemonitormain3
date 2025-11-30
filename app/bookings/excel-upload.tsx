@@ -31,6 +31,8 @@ interface ImportResult {
     mapping: Record<string, number>
     parseErrors: number
     skipped: number
+    errorSamples?: string[]
+    insertErrors?: string[]
   }
 }
 
@@ -41,7 +43,11 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<{ headers?: string[]; mapping?: Record<string, number> } | null>(null)
+  const [debugInfo, setDebugInfo] = useState<{
+    headers?: string[]
+    mapping?: Record<string, number>
+    firstRowSample?: string
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,8 +77,8 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
       const result = await response.json()
 
       if (!response.ok) {
-        if (result.headers || result.mapping) {
-          setDebugInfo({ headers: result.headers, mapping: result.mapping })
+        if (result.headers || result.mapping || result.firstRowSample) {
+          setDebugInfo({ headers: result.headers, mapping: result.mapping, firstRowSample: result.firstRowSample })
         }
         throw new Error(result.error || "Failed to import")
       }
@@ -134,7 +140,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
           <DialogDescription className="text-slate-400">העלה קובץ אקסל - המערכת תזהה ותייבא אוטומטית</DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: Upload - Select hotel and file */}
+        {/* Step 1: Upload */}
         {step === "upload" && (
           <div className="space-y-4">
             {error && (
@@ -159,10 +165,18 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
                         <div className="flex flex-wrap gap-1 mt-1">
                           {Object.entries(debugInfo.mapping).map(([field, idx]) => (
                             <Badge key={field} variant="outline" className="text-xs border-amber-500/50 text-amber-300">
-                              {field}: {debugInfo.headers?.[idx] || idx}
+                              {field}: {debugInfo.headers?.[idx as number] || idx}
                             </Badge>
                           ))}
                         </div>
+                      </div>
+                    )}
+                    {debugInfo.firstRowSample && (
+                      <div className="mt-2">
+                        <p className="text-xs text-slate-400">שורה ראשונה:</p>
+                        <p className="text-xs text-slate-300 font-mono bg-slate-800 p-2 rounded mt-1 overflow-x-auto">
+                          {debugInfo.firstRowSample}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -250,26 +264,53 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
                 {importResult.failed > 0 && (
                   <div className="text-center">
                     <div className="text-3xl font-bold text-amber-400">{importResult.failed}</div>
-                    <div className="text-sm text-slate-400">נדלגו (כפילויות/שגיאות)</div>
+                    <div className="text-sm text-slate-400">ndlugo (cifluyyot/shguyot)</div>
                   </div>
                 )}
                 <div className="text-center">
                   <div className="text-3xl font-bold text-slate-400">{importResult.total}</div>
-                  <div className="text-sm text-slate-400">סה״כ בקובץ</div>
+                  <div className="text-sm text-slate-400">suma bekvutz</div>
                 </div>
               </div>
 
               {importResult.success === 0 && importResult.debug && (
-                <div className="mt-6 text-left bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
-                  <p className="text-sm text-amber-300 font-medium mb-2">שים לב: לא יובאו רשומות</p>
+                <div className="mt-6 text-left bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <p className="text-sm text-amber-300 font-medium mb-2">shim leh: lo yuvu rekamot</p>
                   {importResult.debug.parseErrors > 0 && (
-                    <p className="text-xs text-amber-200">שגיאות פרסור: {importResult.debug.parseErrors}</p>
+                    <p className="text-xs text-amber-200">shguyot parser: {importResult.debug.parseErrors}</p>
                   )}
-                  <p className="text-xs text-slate-400 mt-2">עמודות שזוהו:</p>
+
+                  {importResult.debug.errorSamples && importResult.debug.errorSamples.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-amber-500/30">
+                      <p className="text-xs text-red-300 mb-2">dugmay leshguyot:</p>
+                      <div className="space-y-1">
+                        {importResult.debug.errorSamples.map((sample, i) => (
+                          <p key={i} className="text-xs text-slate-300 font-mono bg-slate-800/50 p-2 rounded">
+                            {sample}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {importResult.debug.insertErrors && importResult.debug.insertErrors.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-amber-500/30">
+                      <p className="text-xs text-red-300 mb-2">shguyot hachnasah leDB:</p>
+                      <div className="space-y-1">
+                        {importResult.debug.insertErrors.map((err, i) => (
+                          <p key={i} className="text-xs text-red-300 font-mono bg-slate-800/50 p-2 rounded">
+                            {err}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-slate-400 mt-3">amudot shezavu:</p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {Object.entries(importResult.debug.mapping).map(([field, idx]) => (
                       <Badge key={field} variant="outline" className="text-xs border-amber-500/50 text-amber-300">
-                        {field}: עמודה {idx}
+                        {field}: amuda {idx}
                       </Badge>
                     ))}
                   </div>
@@ -277,7 +318,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
               )}
             </div>
             <Button onClick={() => setOpen(false)} className="bg-emerald-600 hover:bg-emerald-700">
-              סגור
+              sogor
             </Button>
           </div>
         )}
