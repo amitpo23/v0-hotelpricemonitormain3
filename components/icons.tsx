@@ -779,6 +779,17 @@ export function IconFileSpreadsheet({ className }: { className?: string }) {
   )
 }
 
+export function IconPercent({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <line x1="19" y1="5" x2="5" y2="19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
+    </svg>
+  )
+}
+
 export { IconSpinner as Spinner }
 export { IconUpload as Upload }
 export { IconFileSpreadsheet as FileSpreadsheet }
+export { IconPercent as PercentIcon }

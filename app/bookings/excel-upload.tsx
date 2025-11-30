@@ -275,14 +275,14 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
 
               {importResult.success === 0 && importResult.debug && (
                 <div className="mt-6 text-left bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 max-h-64 overflow-y-auto">
-                  <p className="text-sm text-amber-300 font-medium mb-2">shim leh: lo yuvu rekamot</p>
+                  <p className="text-sm text-amber-300 font-medium mb-2">שים לב: לא יובאו רשומות</p>
                   {importResult.debug.parseErrors > 0 && (
-                    <p className="text-xs text-amber-200">shguyot parser: {importResult.debug.parseErrors}</p>
+                    <p className="text-xs text-amber-200">שגיאות פרסור: {importResult.debug.parseErrors}</p>
                   )}
 
                   {importResult.debug.errorSamples && importResult.debug.errorSamples.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-amber-500/30">
-                      <p className="text-xs text-red-300 mb-2">dugmay leshguyot:</p>
+                      <p className="text-xs text-red-300 mb-2">דוגמאות לשגיאות:</p>
                       <div className="space-y-1">
                         {importResult.debug.errorSamples.map((sample, i) => (
                           <p key={i} className="text-xs text-slate-300 font-mono bg-slate-800/50 p-2 rounded">
@@ -295,7 +295,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
 
                   {importResult.debug.insertErrors && importResult.debug.insertErrors.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-amber-500/30">
-                      <p className="text-xs text-red-300 mb-2">shguyot hachnasah leDB:</p>
+                      <p className="text-xs text-red-300 mb-2">שגיאות הכנסה לDB:</p>
                       <div className="space-y-1">
                         {importResult.debug.insertErrors.map((err, i) => (
                           <p key={i} className="text-xs text-red-300 font-mono bg-slate-800/50 p-2 rounded">
@@ -306,11 +306,11 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
                     </div>
                   )}
 
-                  <p className="text-xs text-slate-400 mt-3">amudot shezavu:</p>
+                  <p className="text-xs text-slate-400 mt-3">עמודות שזוהו:</p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {Object.entries(importResult.debug.mapping).map(([field, idx]) => (
                       <Badge key={field} variant="outline" className="text-xs border-amber-500/50 text-amber-300">
-                        {field}: amuda {idx}
+                        {field}: עמודה {idx}
                       </Badge>
                     ))}
                   </div>
@@ -318,7 +318,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
               )}
             </div>
             <Button onClick={() => setOpen(false)} className="bg-emerald-600 hover:bg-emerald-700">
-              sogor
+              סגור
             </Button>
           </div>
         )}

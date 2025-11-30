@@ -9,8 +9,6 @@ import {
   DollarSignIcon,
   ZapIcon,
   AlertTriangleIcon,
-  ArrowUpRightIcon,
-  ArrowDownRightIcon,
   BarChartIcon,
   BuildingIcon,
   BrainIcon,
@@ -21,6 +19,9 @@ import {
   TargetIcon,
   CalendarIcon,
   UsersIcon,
+  CalendarDaysIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
 } from "@/components/icons"
 import { DashboardCharts } from "./dashboard-charts"
 
@@ -30,6 +31,7 @@ export default async function DashboardPage() {
   const now = new Date()
   const currentMonth = now.getMonth() + 1
   const currentYear = now.getFullYear()
+  const today = now.toISOString().split("T")[0]
 
   const [
     { data: hotels },
@@ -44,6 +46,8 @@ export default async function DashboardPage() {
     { data: budgets },
     { data: competitors },
     { data: competitorPrices },
+    { data: allBookings },
+    { data: confirmedBookings },
   ] = await Promise.all([
     supabase.from("hotels").select("*"),
     supabase.from("scan_results").select("*").order("scraped_at", { ascending: false }).limit(100),
@@ -65,7 +69,114 @@ export default async function DashboardPage() {
       .select("*")
       .gte("date", now.toISOString().split("T")[0])
       .order("date", { ascending: true }),
+    // Get all bookings for stats
+    supabase
+      .from("bookings")
+      .select("*"),
+    // Get confirmed future bookings
+    supabase
+      .from("bookings")
+      .select("*")
+      .eq("status", "confirmed")
+      .gte("check_in_date", today),
   ])
+
+  const totalBookings = allBookings?.length || 0
+  const confirmedCount = allBookings?.filter((b: any) => b.status === "confirmed").length || 0
+  const cancelledCount = allBookings?.filter((b: any) => b.status === "cancelled").length || 0
+  const cancelRate = totalBookings > 0 ? (cancelledCount / totalBookings) * 100 : 0
+
+  const totalRevenue = allBookings?.reduce((sum: number, b: any) => sum + Number(b.total_price || 0), 0) || 0
+  const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0
+
+  // Calculate total nights and ADR
+  const totalNights =
+    allBookings?.reduce((sum: number, b: any) => {
+      const checkIn = new Date(b.check_in_date)
+      const checkOut = new Date(b.check_out_date)
+      const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
+      return sum + (nights > 0 ? nights : 0)
+    }, 0) || 0
+  const avgNightlyRate = totalNights > 0 ? totalRevenue / totalNights : 0
+
+  // Future bookings stats
+  const futureBookingsCount = confirmedBookings?.length || 0
+  const futureRevenue = confirmedBookings?.reduce((sum: number, b: any) => sum + Number(b.total_price || 0), 0) || 0
+
+  // Bookings by source
+  const bookingsBySource: Record<string, { count: number; revenue: number }> = {}
+  allBookings?.forEach((b: any) => {
+    const source = b.booking_source || "Direct"
+    if (!bookingsBySource[source]) {
+      bookingsBySource[source] = { count: 0, revenue: 0 }
+    }
+    bookingsBySource[source].count++
+    bookingsBySource[source].revenue += Number(b.total_price || 0)
+  })
+
+  // By Check-in Date
+  const byCheckIn: Record<string, { total: number; confirmed: number; cancelled: number; revenue: number }> = {}
+  // By Check-out Date
+  const byCheckOut: Record<string, { bookings: number; revenue: number }> = {}
+  // By Booking Date
+  const byBookingDate: Record<string, { total: number; confirmed: number; cancelled: number; revenue: number }> = {}
+
+  allBookings?.forEach((b: any) => {
+    const checkInMonth = b.check_in_date?.substring(0, 7) // YYYY-MM
+    const checkOutMonth = b.check_out_date?.substring(0, 7)
+    const bookingMonth = b.booking_date?.substring(0, 7)
+    const price = Number(b.total_price || 0)
+    const isConfirmed = b.status === "confirmed"
+
+    // By Check-in
+    if (checkInMonth) {
+      if (!byCheckIn[checkInMonth]) {
+        byCheckIn[checkInMonth] = { total: 0, confirmed: 0, cancelled: 0, revenue: 0 }
+      }
+      byCheckIn[checkInMonth].total++
+      if (isConfirmed) {
+        byCheckIn[checkInMonth].confirmed++
+        byCheckIn[checkInMonth].revenue += price
+      } else {
+        byCheckIn[checkInMonth].cancelled++
+      }
+    }
+
+    // By Check-out (confirmed only)
+    if (checkOutMonth && isConfirmed) {
+      if (!byCheckOut[checkOutMonth]) {
+        byCheckOut[checkOutMonth] = { bookings: 0, revenue: 0 }
+      }
+      byCheckOut[checkOutMonth].bookings++
+      byCheckOut[checkOutMonth].revenue += price
+    }
+
+    // By Booking Date
+    if (bookingMonth) {
+      if (!byBookingDate[bookingMonth]) {
+        byBookingDate[bookingMonth] = { total: 0, confirmed: 0, cancelled: 0, revenue: 0 }
+      }
+      byBookingDate[bookingMonth].total++
+      if (isConfirmed) {
+        byBookingDate[bookingMonth].confirmed++
+        byBookingDate[bookingMonth].revenue += price
+      } else {
+        byBookingDate[bookingMonth].cancelled++
+      }
+    }
+  })
+
+  // Sort months
+  const sortedCheckInMonths = Object.keys(byCheckIn).sort()
+  const sortedCheckOutMonths = Object.keys(byCheckOut).sort()
+  const sortedBookingMonths = Object.keys(byBookingDate).sort()
+
+  // Helper function to format month
+  const formatMonth = (monthStr: string) => {
+    const [year, month] = monthStr.split("-")
+    const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1)
+    return date.toLocaleString("he-IL", { month: "short", year: "numeric" })
+  }
 
   // Calculate statistics
   const totalHotels = hotels?.length || 0
@@ -77,7 +188,7 @@ export default async function DashboardPage() {
     dailyPrices && dailyPrices.length > 0
       ? dailyPrices.reduce((sum: number, d: any) => sum + Number(d.our_price || 0), 0) /
         dailyPrices.filter((d: any) => d.our_price).length
-      : 0
+      : avgNightlyRate // Fallback to booking ADR
 
   const avgCompetitorPrice =
     dailyPrices && dailyPrices.length > 0
@@ -96,13 +207,14 @@ export default async function DashboardPage() {
   const targetOccupancy = currentBudget?.target_occupancy || 0
   const targetADR = currentBudget?.target_adr || 0
 
-  // Calculate actual revenue this month
+  // Calculate actual revenue this month from bookings
   const monthStart = new Date(currentYear, currentMonth - 1, 1)
+  const monthEnd = new Date(currentYear, currentMonth, 0)
   const actualRevenue =
-    revenue?.reduce((sum: number, r: any) => {
-      const rDate = new Date(r.date)
-      if (rDate >= monthStart) {
-        return sum + Number(r.revenue || 0)
+    allBookings?.reduce((sum: number, b: any) => {
+      const checkIn = new Date(b.check_in_date)
+      if (checkIn >= monthStart && checkIn <= monthEnd && b.status === "confirmed") {
+        return sum + Number(b.total_price || 0)
       }
       return sum
     }, 0) || 0
@@ -110,11 +222,27 @@ export default async function DashboardPage() {
   const budgetProgress = targetRevenue > 0 ? (actualRevenue / targetRevenue) * 100 : 0
   const budgetGap = targetRevenue - actualRevenue
 
-  // Occupancy calculation
-  const avgOccupancy =
-    revenue && revenue.length > 0
-      ? revenue.reduce((sum: number, r: any) => sum + Number(r.occupancy_rate || 0), 0) / revenue.length
-      : 0
+  // Occupancy calculation based on bookings
+  const hotel = hotels?.[0]
+  const totalRooms = hotel?.total_rooms || 50
+  const daysInMonth = monthEnd.getDate()
+  const totalRoomNights = totalRooms * daysInMonth
+
+  const bookedNightsThisMonth =
+    allBookings?.reduce((sum: number, b: any) => {
+      const checkIn = new Date(b.check_in_date)
+      const checkOut = new Date(b.check_out_date)
+      if (b.status === "confirmed") {
+        // Calculate overlap with current month
+        const overlapStart = checkIn < monthStart ? monthStart : checkIn
+        const overlapEnd = checkOut > monthEnd ? monthEnd : checkOut
+        const nights = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24))
+        return sum + (nights > 0 ? nights : 0)
+      }
+      return sum
+    }, 0) || 0
+
+  const avgOccupancy = totalRoomNights > 0 ? (bookedNightsThisMonth / totalRoomNights) * 100 : 0
 
   // Price trend from daily_prices
   const priceTrend =
@@ -159,6 +287,41 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      <Card className="mb-8 bg-gradient-to-r from-green-500/10 via-cyan-500/10 to-blue-500/10 border-green-500/20">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-6">
+              <div>
+                <div className="text-sm text-slate-400">Total Revenue</div>
+                <div className="text-2xl font-bold text-green-400">₪{totalRevenue.toLocaleString()}</div>
+              </div>
+              <div className="h-8 w-px bg-slate-700" />
+              <div>
+                <div className="text-sm text-slate-400">Total Bookings</div>
+                <div className="text-2xl font-bold text-white">{totalBookings}</div>
+              </div>
+              <div className="h-8 w-px bg-slate-700" />
+              <div>
+                <div className="text-sm text-slate-400">Avg per Booking</div>
+                <div className="text-2xl font-bold text-cyan-400">₪{avgBookingValue.toFixed(0)}</div>
+              </div>
+              <div className="h-8 w-px bg-slate-700" />
+              <div>
+                <div className="text-sm text-slate-400">ADR (Avg/Night)</div>
+                <div className="text-2xl font-bold text-purple-400">₪{avgNightlyRate.toFixed(0)}</div>
+              </div>
+              <div className="h-8 w-px bg-slate-700" />
+              <div>
+                <div className="text-sm text-slate-400">Cancel Rate</div>
+                <div className={`text-2xl font-bold ${cancelRate > 20 ? "text-red-400" : "text-yellow-400"}`}>
+                  {cancelRate.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Autopilot Status Banner */}
       <Card className="mb-8 bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-purple-500/10 border-cyan-500/20">
         <CardContent className="py-4">
@@ -183,36 +346,43 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
 
-      {currentBudget && (
-        <Card className="mb-8 bg-slate-900/50 border-slate-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-white">
-              <TargetIcon className="h-5 w-5 text-cyan-400" />
-              Budget Progress -{" "}
-              {new Date(currentYear, currentMonth - 1).toLocaleString("default", { month: "long", year: "numeric" })}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-4 gap-6">
-              <div>
-                <div className="text-sm text-slate-400 mb-1">Target Revenue</div>
-                <div className="text-2xl font-bold text-white">${targetRevenue.toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-sm text-slate-400 mb-1">Actual Revenue</div>
-                <div className="text-2xl font-bold text-green-400">${actualRevenue.toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-sm text-slate-400 mb-1">Gap to Target</div>
-                <div className={`text-2xl font-bold ${budgetGap > 0 ? "text-red-400" : "text-green-400"}`}>
-                  {budgetGap > 0 ? "-" : "+"}${Math.abs(budgetGap).toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-slate-400 mb-1">Progress</div>
-                <div className="text-2xl font-bold text-cyan-400">{budgetProgress.toFixed(1)}%</div>
+      <Card className="mb-8 bg-slate-900/50 border-slate-800">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-white">
+            <TargetIcon className="h-5 w-5 text-cyan-400" />
+            Budget Progress -{" "}
+            {new Date(currentYear, currentMonth - 1).toLocaleString("default", { month: "long", year: "numeric" })}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-5 gap-6">
+            <div>
+              <div className="text-sm text-slate-400 mb-1">Target Revenue</div>
+              <div className="text-2xl font-bold text-white">
+                {targetRevenue > 0 ? `₪${targetRevenue.toLocaleString()}` : "Not Set"}
               </div>
             </div>
+            <div>
+              <div className="text-sm text-slate-400 mb-1">Booked Revenue</div>
+              <div className="text-2xl font-bold text-green-400">₪{actualRevenue.toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-sm text-slate-400 mb-1">Gap to Target</div>
+              <div className={`text-2xl font-bold ${budgetGap > 0 ? "text-red-400" : "text-green-400"}`}>
+                {targetRevenue > 0 ? (budgetGap > 0 ? "-" : "+") + "₪" + Math.abs(budgetGap).toLocaleString() : "N/A"}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-slate-400 mb-1">Occupancy</div>
+              <div className="text-2xl font-bold text-cyan-400">{avgOccupancy.toFixed(1)}%</div>
+            </div>
+            <div>
+              <div className="text-sm text-slate-400 mb-1">Future Bookings</div>
+              <div className="text-2xl font-bold text-purple-400">{futureBookingsCount}</div>
+              <div className="text-xs text-slate-500">₪{futureRevenue.toLocaleString()}</div>
+            </div>
+          </div>
+          {targetRevenue > 0 && (
             <div className="mt-4">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-slate-400">Monthly Progress</span>
@@ -232,16 +402,12 @@ export default async function DashboardPage() {
                   style={{ width: `${Math.min(budgetProgress, 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-xs mt-2">
-                <span className="text-slate-500">Target Occupancy: {targetOccupancy}%</span>
-                <span className="text-slate-500">Target ADR: ${targetADR}</span>
-              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Key Metrics - Updated with more data */}
+      {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         <MetricCard
           icon={<BuildingIcon className="h-4 w-4" />}
@@ -250,27 +416,27 @@ export default async function DashboardPage() {
           color="cyan"
         />
         <MetricCard
-          icon={<DollarSignIcon className="h-4 w-4" />}
-          label="Our Avg Price"
-          value={avgOurPrice > 0 ? `$${avgOurPrice.toFixed(0)}` : "N/A"}
-          trend={priceTrend}
+          icon={<CalendarDaysIcon className="h-4 w-4" />}
+          label="Confirmed"
+          value={confirmedCount.toString()}
+          subtext={`of ${totalBookings}`}
           color="green"
         />
         <MetricCard
-          icon={<UsersIcon className="h-4 w-4" />}
-          label="Competitor Avg"
-          value={avgCompetitorPrice > 0 ? `$${avgCompetitorPrice.toFixed(0)}` : "N/A"}
-          color="yellow"
+          icon={<DollarSignIcon className="h-4 w-4" />}
+          label="ADR"
+          value={`₪${avgNightlyRate.toFixed(0)}`}
+          color="purple"
         />
         <MetricCard
           icon={<ZapIcon className="h-4 w-4" />}
           label="Active Rules"
           value={activeRules.toString()}
-          color="purple"
+          color="yellow"
         />
         <MetricCard
           icon={<BarChartIcon className="h-4 w-4" />}
-          label="Avg Occupancy"
+          label="Occupancy"
           value={`${avgOccupancy.toFixed(0)}%`}
           color="blue"
         />
@@ -284,6 +450,42 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
+        <Card className="bg-slate-900/50 border-slate-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <TrendingUpIcon className="h-5 w-5 text-green-400" />
+              Revenue by Channel
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {Object.entries(bookingsBySource)
+                .sort((a, b) => b[1].revenue - a[1].revenue)
+                .slice(0, 6)
+                .map(([source, data]) => {
+                  const percentage = totalRevenue > 0 ? (data.revenue / totalRevenue) * 100 : 0
+                  return (
+                    <div key={source} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-300">{source}</span>
+                        <span className="text-slate-400">
+                          {data.count} bookings · ₪{data.revenue.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Price Position vs Competitors */}
         <Card className="bg-slate-900/50 border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
@@ -313,92 +515,15 @@ export default async function DashboardPage() {
                     <div className="text-3xl font-bold text-slate-300">${avgCompetitorPrice.toFixed(0)}</div>
                   </div>
                 </div>
-                <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${priceTrend > 5 ? "bg-red-500" : priceTrend < -5 ? "bg-green-500" : "bg-cyan-500"}`}
-                    style={{
-                      width: `${Math.min(Math.max((avgOurPrice / (avgCompetitorPrice * 1.5)) * 100, 10), 100)}%`,
-                    }}
-                  />
-                </div>
-                <div className="text-sm text-slate-500">
-                  {priceTrend > 5
-                    ? "You're priced above the market - consider adjusting"
-                    : priceTrend < -5
-                      ? "You're priced below market - opportunity to increase"
-                      : "Your pricing is competitive with the market"}
-                </div>
               </div>
             ) : (
               <div className="text-center py-8">
-                <DollarSignIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-500 mb-3">No price data yet</p>
+                <div className="text-3xl font-bold text-cyan-400 mb-2">${avgNightlyRate.toFixed(0)}</div>
+                <div className="text-slate-400">Your ADR (Average Daily Rate)</div>
+                <div className="text-sm text-slate-500 mt-2">Run a competitor scan to compare prices</div>
                 <Link href="/calendar">
-                  <Button size="sm" className="bg-gradient-to-r from-cyan-500 to-blue-500">
+                  <Button size="sm" className="mt-4 bg-gradient-to-r from-cyan-500 to-blue-500">
                     Run Scan
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Revenue vs Budget */}
-        <Card className="bg-slate-900/50 border-slate-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <TargetIcon className="h-5 w-5 text-cyan-400" />
-              Revenue vs Budget
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {currentBudget ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-slate-800/50 rounded-lg">
-                    <div className="text-sm text-slate-400 mb-1">This Month</div>
-                    <div className="text-2xl font-bold text-green-400">${actualRevenue.toLocaleString()}</div>
-                    <div className="text-xs text-slate-500">of ${targetRevenue.toLocaleString()} target</div>
-                  </div>
-                  <div className="p-4 bg-slate-800/50 rounded-lg">
-                    <div className="text-sm text-slate-400 mb-1">Days Remaining</div>
-                    <div className="text-2xl font-bold text-white">
-                      {new Date(currentYear, currentMonth, 0).getDate() - now.getDate()}
-                    </div>
-                    <div className="text-xs text-slate-500">in this month</div>
-                  </div>
-                </div>
-                <div className="p-4 bg-slate-800/50 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="text-sm text-slate-400">Daily Target to Reach Goal</div>
-                      <div className="text-xl font-bold text-cyan-400">
-                        $
-                        {budgetGap > 0
-                          ? (
-                              budgetGap / Math.max(new Date(currentYear, currentMonth, 0).getDate() - now.getDate(), 1)
-                            ).toFixed(0)
-                          : "0"}
-                        /day
-                      </div>
-                    </div>
-                    <Badge
-                      className={
-                        budgetProgress >= 100 ? "bg-green-500" : budgetProgress >= 75 ? "bg-cyan-500" : "bg-yellow-500"
-                      }
-                    >
-                      {budgetProgress >= 100 ? "On Track" : budgetProgress >= 75 ? "Close" : "Behind"}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <TargetIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-500 mb-3">No budget set for this month</p>
-                <Link href="/budget">
-                  <Button size="sm" className="bg-gradient-to-r from-cyan-500 to-blue-500">
-                    Set Budget
                   </Button>
                 </Link>
               </div>
@@ -407,7 +532,116 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Charts - Pass daily prices data */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+          <CalendarDaysIcon className="h-6 w-6 text-cyan-400" />
+          פירוט חודשי - Monthly Breakdown
+        </h2>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* By Check-in Date */}
+          <Card className="bg-slate-900/50 border-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-white text-lg">
+                <ArrowRightIcon className="h-4 w-4 text-green-400" />
+                לפי תאריך כניסה (Check-in)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {sortedCheckInMonths.map((month) => {
+                  const data = byCheckIn[month]
+                  return (
+                    <div
+                      key={month}
+                      className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0"
+                    >
+                      <div>
+                        <div className="font-medium text-white">{formatMonth(month)}</div>
+                        <div className="text-xs text-slate-400">
+                          {data.confirmed} מאושרות · {data.cancelled} ביטולים
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-green-400">${data.revenue.toLocaleString()}</div>
+                        <div className="text-xs text-slate-500">{data.total} הזמנות</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* By Check-out Date */}
+          <Card className="bg-slate-900/50 border-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-white text-lg">
+                <ArrowLeftIcon className="h-4 w-4 text-blue-400" />
+                לפי תאריך יציאה (Check-out)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {sortedCheckOutMonths.map((month) => {
+                  const data = byCheckOut[month]
+                  return (
+                    <div
+                      key={month}
+                      className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0"
+                    >
+                      <div>
+                        <div className="font-medium text-white">{formatMonth(month)}</div>
+                        <div className="text-xs text-slate-400">מאושרות בלבד</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-blue-400">${data.revenue.toLocaleString()}</div>
+                        <div className="text-xs text-slate-500">{data.bookings} הזמנות</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* By Booking Date */}
+          <Card className="bg-slate-900/50 border-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-white text-lg">
+                <CalendarIcon className="h-4 w-4 text-purple-400" />
+                לפי תאריך הזמנה (Booking Date)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {sortedBookingMonths.map((month) => {
+                  const data = byBookingDate[month]
+                  return (
+                    <div
+                      key={month}
+                      className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0"
+                    >
+                      <div>
+                        <div className="font-medium text-white">{formatMonth(month)}</div>
+                        <div className="text-xs text-slate-400">
+                          {data.confirmed} מאושרות · {data.cancelled} ביטולים
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-purple-400">${data.revenue.toLocaleString()}</div>
+                        <div className="text-xs text-slate-500">{data.total} הזמנות</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Charts */}
       <DashboardCharts
         scanResults={scanResults || []}
         predictions={predictions || []}
@@ -586,6 +820,7 @@ function MetricCard({
   icon,
   label,
   value,
+  subtext,
   trend,
   color,
   alert,
@@ -593,38 +828,36 @@ function MetricCard({
   icon: React.ReactNode
   label: string
   value: string
+  subtext?: string
   trend?: number
   color: string
   alert?: boolean
 }) {
   const colorClasses: Record<string, string> = {
-    cyan: "text-cyan-400",
-    green: "text-green-400",
-    yellow: "text-yellow-400",
-    blue: "text-blue-400",
-    purple: "text-purple-400",
-    red: "text-red-400",
-    slate: "text-slate-400",
+    cyan: "from-cyan-500/20 to-cyan-500/10 border-cyan-500/30 text-cyan-400",
+    green: "from-green-500/20 to-green-500/10 border-green-500/30 text-green-400",
+    yellow: "from-yellow-500/20 to-yellow-500/10 border-yellow-500/30 text-yellow-400",
+    purple: "from-purple-500/20 to-purple-500/10 border-purple-500/30 text-purple-400",
+    blue: "from-blue-500/20 to-blue-500/10 border-blue-500/30 text-blue-400",
+    red: "from-red-500/20 to-red-500/10 border-red-500/30 text-red-400",
+    slate: "from-slate-500/20 to-slate-500/10 border-slate-500/30 text-slate-400",
   }
 
   return (
-    <Card className={`bg-slate-900/50 border-slate-800 ${alert ? "border-red-500/50" : ""}`}>
-      <CardContent className="pt-6">
-        <div className={`flex items-center gap-2 ${colorClasses[color]} mb-1`}>
-          {icon}
-          <span className="text-sm text-slate-500">{label}</span>
-        </div>
-        <div className="text-3xl font-bold text-white">{value}</div>
-        {typeof trend === "number" && trend !== 0 && (
-          <div className={`flex items-center text-sm ${trend >= 0 ? "text-red-400" : "text-green-400"}`}>
-            {trend >= 0 ? <ArrowUpRightIcon className="h-3 w-3" /> : <ArrowDownRightIcon className="h-3 w-3" />}
-            {Math.abs(trend).toFixed(1)}% vs market
+    <Card className={`bg-gradient-to-br ${colorClasses[color]} border relative overflow-hidden`}>
+      {alert && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-2">{icon}</div>
+        <div className="text-2xl font-bold text-white">{value}</div>
+        {subtext && <div className="text-xs text-slate-500">{subtext}</div>}
+        <div className="text-xs text-slate-500 mt-1">{label}</div>
+        {trend !== undefined && (
+          <div
+            className={`text-xs mt-1 ${trend > 0 ? "text-green-400" : trend < 0 ? "text-red-400" : "text-slate-500"}`}
+          >
+            {trend > 0 ? "+" : ""}
+            {trend.toFixed(1)}%
           </div>
-        )}
-        {alert && (
-          <Badge variant="destructive" className="mt-1">
-            Action needed
-          </Badge>
         )}
       </CardContent>
     </Card>
