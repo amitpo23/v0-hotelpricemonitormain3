@@ -1,35 +1,76 @@
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AdminUserList } from "./admin-user-list"
 import { AdminHotelAccess } from "./admin-hotel-access"
+import { Icons } from "@/components/icons"
 
-export default async function AdminPage() {
-  const supabase = await createClient()
+export default function AdminPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [users, setUsers] = useState<any[]>([])
+  const [hotels, setHotels] = useState<any[]>([])
+  const [hotelAccess, setHotelAccess] = useState<any[]>([])
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Check auth and admin status
+        const authRes = await fetch("/api/auth/check")
+        const authData = await authRes.json()
 
-  // Check if user is admin
-  const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single()
+        if (!authData.authenticated) {
+          router.push("/auth/login")
+          return
+        }
 
-  if (!profile?.is_admin) {
-    redirect("/dashboard")
+        if (!authData.isAdmin) {
+          router.push("/dashboard")
+          return
+        }
+
+        setIsAdmin(true)
+
+        // Fetch admin data
+        const [usersRes, hotelsRes, accessRes] = await Promise.all([
+          fetch("/api/admin/users"),
+          fetch("/api/admin/hotels"),
+          fetch("/api/admin/hotel-access"),
+        ])
+
+        const [usersData, hotelsData, accessData] = await Promise.all([
+          usersRes.json(),
+          hotelsRes.json(),
+          accessRes.json(),
+        ])
+
+        setUsers(usersData.users || [])
+        setHotels(hotelsData.hotels || [])
+        setHotelAccess(accessData.access || [])
+      } catch (error) {
+        console.error("Error loading admin data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [router])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Icons.spinner className="h-8 w-8 animate-spin text-cyan-500" />
+      </div>
+    )
   }
 
-  // Fetch all users
-  const { data: users } = await supabase.from("profiles").select("*").order("created_at", { ascending: false })
-
-  // Fetch all hotels
-  const { data: hotels } = await supabase.from("hotels").select("*").order("name")
-
-  // Fetch hotel access records
-  const { data: hotelAccess } = await supabase
-    .from("hotel_user_access")
-    .select("*, hotels(name)")
-    .order("created_at", { ascending: false })
+  if (!isAdmin) {
+    return null
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -45,7 +86,7 @@ export default async function AdminPage() {
             <CardDescription>Approve or reject user access requests</CardDescription>
           </CardHeader>
           <CardContent>
-            <AdminUserList users={users || []} />
+            <AdminUserList users={users} />
           </CardContent>
         </Card>
 
@@ -55,7 +96,7 @@ export default async function AdminPage() {
             <CardDescription>Assign users to specific hotels</CardDescription>
           </CardHeader>
           <CardContent>
-            <AdminHotelAccess hotels={hotels || []} users={users || []} hotelAccess={hotelAccess || []} />
+            <AdminHotelAccess hotels={hotels} users={users} hotelAccess={hotelAccess} />
           </CardContent>
         </Card>
       </div>
