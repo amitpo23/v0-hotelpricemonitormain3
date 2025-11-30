@@ -14,22 +14,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UploadIcon, FileSpreadsheetIcon, CheckCircleIcon, AlertCircleIcon, Loader2Icon } from "lucide-react"
+import { UploadIcon, FileSpreadsheetIcon, CheckCircleIcon, AlertCircleIcon, Loader2Icon } from "@/components/icons"
 
 interface Hotel {
   id: string
   name: string
   total_rooms?: number
-}
-
-interface ParsedBooking {
-  guest_name: string
-  check_in_date: string
-  check_out_date: string
-  room_type: string
-  total_price: number
-  booking_source: string
-  status: string
 }
 
 export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onImportComplete?: () => void }) {
@@ -81,7 +71,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
         onImportComplete()
       }
     } catch (error) {
-      console.error("Import error:", error)
+      console.error("[v0] Import error:", error)
       setError(error instanceof Error ? error.message : "שגיאה בייבוא הקובץ")
       setStep("upload")
     } finally {
@@ -122,10 +112,10 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
             <FileSpreadsheetIcon className="h-5 w-5 text-emerald-400" />
             ייבוא הזמנות ממערכת PMS
           </DialogTitle>
-          <DialogDescription>העלה קובץ אקסל - המערכת תזהה אוטומטית את הפורמט</DialogDescription>
+          <DialogDescription className="text-slate-400">העלה קובץ אקסל - המערכת תזהה ותייבא אוטומטית</DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: Upload */}
+        {/* Step 1: Upload - Select hotel and file */}
         {step === "upload" && (
           <div className="space-y-4">
             {error && (
@@ -138,12 +128,12 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-2">בחר מלון</label>
               <Select value={selectedHotel} onValueChange={setSelectedHotel}>
-                <SelectTrigger className="bg-slate-800 border-slate-700">
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                   <SelectValue placeholder="בחר מלון..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-slate-800 border-slate-700">
                   {hotels.map((hotel) => (
-                    <SelectItem key={hotel.id} value={hotel.id}>
+                    <SelectItem key={hotel.id} value={hotel.id} className="text-white">
                       {hotel.name}
                     </SelectItem>
                   ))}
@@ -176,13 +166,13 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
 
             <Card className="bg-slate-800/50 border-slate-700">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-emerald-400">זיהוי אוטומטי</CardTitle>
+                <CardTitle className="text-sm text-emerald-400">זיהוי אוטומטי של עמודות</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-slate-400">
                 <p>המערכת מזהה אוטומטית עמודות בעברית ובאנגלית:</p>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {["שם אורח", "תאריך כניסה", "תאריך יציאה", "סה״כ", "מקור", "סוג חדר", "סטטוס"].map((col) => (
-                    <Badge key={col} variant="outline" className="text-xs">
+                    <Badge key={col} variant="outline" className="text-xs border-slate-600 text-slate-300">
                       {col}
                     </Badge>
                   ))}
@@ -192,7 +182,7 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
           </div>
         )}
 
-        {/* Importing */}
+        {/* Step 2: Importing */}
         {step === "importing" && (
           <div className="py-12 text-center">
             <Loader2Icon className="h-12 w-12 mx-auto text-cyan-400 animate-spin mb-4" />
@@ -201,13 +191,13 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
           </div>
         )}
 
-        {/* Done */}
+        {/* Step 3: Done */}
         {step === "done" && importResult && (
           <div className="py-8 text-center space-y-6">
             <CheckCircleIcon className="h-16 w-16 mx-auto text-emerald-400" />
             <div>
               <p className="text-xl font-bold text-white mb-2">הייבוא הושלם!</p>
-              <div className="flex justify-center gap-4 mt-4">
+              <div className="flex justify-center gap-6 mt-4">
                 <div className="text-center">
                   <div className="text-3xl font-bold text-emerald-400">{importResult.success}</div>
                   <div className="text-sm text-slate-400">יובאו בהצלחה</div>
@@ -215,9 +205,13 @@ export function ExcelUpload({ hotels, onImportComplete }: { hotels: Hotel[]; onI
                 {importResult.failed > 0 && (
                   <div className="text-center">
                     <div className="text-3xl font-bold text-amber-400">{importResult.failed}</div>
-                    <div className="text-sm text-slate-400">ndlugo (kcifluot)</div>
+                    <div className="text-sm text-slate-400">נדלגו (כפילויות)</div>
                   </div>
                 )}
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-slate-400">{importResult.total}</div>
+                  <div className="text-sm text-slate-400">סה״כ בקובץ</div>
+                </div>
               </div>
             </div>
             <Button onClick={() => setOpen(false)} className="bg-emerald-600 hover:bg-emerald-700">

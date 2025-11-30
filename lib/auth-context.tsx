@@ -45,9 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser()
+        const userResult = await supabase.auth.getUser()
+        const authUser = userResult?.data?.user
 
         if (!authUser) {
           setLoading(false)
@@ -110,13 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     fetchUserData()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    const authStateResult = supabase.auth.onAuthStateChange(() => {
       fetchUserData()
     })
 
-    return () => subscription.unsubscribe()
+    const subscription = authStateResult?.data?.subscription
+
+    return () => {
+      if (subscription?.unsubscribe) {
+        subscription.unsubscribe()
+      }
+    }
   }, [supabase])
 
   const handleSetSelectedHotel = (hotel: Hotel | null) => {

@@ -1,6 +1,9 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import * as XLSX from "xlsx"
+
+const SUPABASE_URL = "https://dqhmraeyisoigxzsitiz.supabase.co"
+const SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxaG1yYWV5aXNvaWd4enNpdGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNTcxODEsImV4cCI6MjA3OTYzMzE4MX0.gOmmQBEpT2GJw97dFmlVBX1CtGpfAhARX71K3NlIx8I"
 
 const COLUMN_MAPPINGS: Record<string, string[]> = {
   guest_name: [
@@ -93,8 +96,6 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     "created",
     "booked on",
   ],
-  nights: ["לילות", "מספר לילות", "כמות לילות", "nights", "num nights", "stay length"],
-  nightly_rate: ["מחיר ללילה", "תעריף", "מחיר לילה", "ללילה", "rate", "nightly rate", "night rate", "adr"],
 }
 
 function normalizeColumnName(name: string): string {
@@ -129,7 +130,6 @@ function findColumnMapping(headers: string[]): Record<string, number> {
 function parseDate(value: any): string | null {
   if (!value) return null
 
-  // Excel serial date number
   if (typeof value === "number") {
     const date = new Date((value - 25569) * 86400 * 1000)
     if (!isNaN(date.getTime())) {
@@ -142,14 +142,11 @@ function parseDate(value: any): string | null {
   }
 
   const strValue = String(value).trim()
-
-  // Try ISO format first
   const isoDate = new Date(strValue)
   if (!isNaN(isoDate.getTime())) {
     return isoDate.toISOString().split("T")[0]
   }
 
-  // Try DD/MM/YYYY or DD.MM.YYYY (common in Israel)
   const parts = strValue.split(/[/.-]/)
   if (parts.length === 3) {
     const [d, m, y] = parts
@@ -179,6 +176,19 @@ function parseStatus(status: any): string {
   return "confirmed"
 }
 
+async function supabaseFetch(path: string, options: RequestInit = {}) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  })
+  return response
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -200,14 +210,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "הקובץ ריק או חסרות שורות נתונים" }, { status: 400 })
     }
 
-    // Get headers and find column mapping
     const headers = rawData[0].map((h) => String(h || ""))
     const columnMap = findColumnMapping(headers)
 
-    console.log("[v0] Headers found:", headers)
-    console.log("[v0] Column mapping:", columnMap)
-
-    // Validate required columns
     if (columnMap.check_in_date === undefined || columnMap.check_out_date === undefined) {
       return NextResponse.json(
         {
@@ -217,16 +222,14 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabase = await createClient()
-
     // Get existing bookings to avoid duplicates
-    const { data: existingBookings } = await supabase
-      .from("bookings")
-      .select("guest_name, check_in_date, check_out_date, total_price")
-      .eq("hotel_id", hotelId)
+    const existingRes = await supabaseFetch(
+      `/bookings?hotel_id=eq.${hotelId}&select=guest_name,check_in_date,check_out_date,total_price`,
+    )
+    const existingBookings = existingRes.ok ? await existingRes.json() : []
 
     const existingSet = new Set(
-      (existingBookings || []).map((b) => `${b.guest_name}|${b.check_in_date}|${b.check_out_date}|${b.total_price}`),
+      existingBookings.map((b: any) => `${b.guest_name}|${b.check_in_date}|${b.check_out_date}|${b.total_price}`),
     )
 
     // Parse rows
@@ -251,13 +254,11 @@ export async function POST(request: Request) {
       const totalPrice = parseNumber(getValue("total_price"))
       const status = parseStatus(getValue("status"))
 
-      // Skip cancelled bookings
       if (status === "cancelled") {
         skipped++
         continue
       }
 
-      // Check for duplicates
       const key = `${guestName}|${checkIn}|${checkOut}|${totalPrice}`
       if (existingSet.has(key)) {
         skipped++
@@ -278,21 +279,20 @@ export async function POST(request: Request) {
       })
     }
 
-    console.log("[v0] Bookings to insert:", bookingsToInsert.length)
-    console.log("[v0] Skipped (duplicates/cancelled):", skipped)
-
-    // Insert bookings in batches
+    // Insert bookings
     let imported = 0
-    const batchSize = 100
 
-    for (let i = 0; i < bookingsToInsert.length; i += batchSize) {
-      const batch = bookingsToInsert.slice(i, i + batchSize)
-      const { error } = await supabase.from("bookings").insert(batch)
+    if (bookingsToInsert.length > 0) {
+      const insertRes = await supabaseFetch("/bookings", {
+        method: "POST",
+        body: JSON.stringify(bookingsToInsert),
+      })
 
-      if (error) {
-        console.error("[v0] Insert error:", error)
+      if (insertRes.ok) {
+        imported = bookingsToInsert.length
       } else {
-        imported += batch.length
+        const errorText = await insertRes.text()
+        console.error("[v0] Insert error:", errorText)
       }
     }
 

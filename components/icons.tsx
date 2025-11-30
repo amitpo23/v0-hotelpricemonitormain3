@@ -478,7 +478,7 @@ export function IconBarChart3({ className }: { className?: string }) {
 export function IconBed({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M2 4v16M2 8h18a2 2 0 012 2v10M2 17h20M6 8v9" />
+      <path d="M2 4v16M2 8h18a2 2 0 012 2v10M2 18h20M6 8v9" />
     </svg>
   )
 }
@@ -576,6 +576,34 @@ export function IconSpinner({ className }: { className?: string }) {
   )
 }
 
+export function IconShield({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  )
+}
+
+export function IconLogOut({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"
+      />
+    </svg>
+  )
+}
+
+export function IconChevronDown({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
 // Aliases for compatibility with lucide-react naming convention
 export {
   IconPlane as PlaneIcon,
@@ -642,6 +670,11 @@ export {
   IconMessageSquare as MessageSquareIcon,
   IconSend as SendIcon,
   IconUser as UserIcon,
+  IconUpload as UploadIcon,
+  IconFileSpreadsheet as FileSpreadsheetIcon,
+  IconShield as ShieldIcon,
+  IconLogOut as LogOutIcon,
+  IconChevronDown as ChevronDownIcon,
 }
 
 // Icons namespace export for compatibility
@@ -711,37 +744,41 @@ export const Icons = {
   user: IconUser,
   plusCircle: PlusCircleIcon,
   spinner: IconSpinner,
+  upload: IconUpload,
+  fileSpreadsheet: IconFileSpreadsheet,
+  shield: IconShield,
+  logOut: IconLogOut,
+  chevronDown: IconChevronDown,
 }
 
-export function ShieldIcon({ className }: { className?: string }) {
+export function IconUpload({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+      />
     </svg>
   )
 }
 
-export function LogOutIcon({ className }: { className?: string }) {
+export function IconFileSpreadsheet({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"
+      />
+      <polyline points="14,2 14,8 20,8" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="16" y2="17" />
+      <line x1="10" y1="9" x2="10" y2="21" />
     </svg>
   )
 }
 
-export function ChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  )
-}
-
-export { ShieldIcon as Shield }
-export { LogOutIcon as LogOut }
-export { ChevronDownIcon as ChevronDown }
-export { IconCheck as Check }
-export { IconX as X }
-export { IconPlus as Plus }
-export { IconTrash as Trash }
-export { IconTrash2 as Trash2 }
+export { IconSpinner as Spinner }
+export { IconUpload as Upload }
+export { IconFileSpreadsheet as FileSpreadsheet }
