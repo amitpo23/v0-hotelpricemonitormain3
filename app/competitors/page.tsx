@@ -181,10 +181,16 @@ export default async function CompetitorsPage() {
                         {comp.notes && <p className="text-sm text-muted-foreground mt-2">{comp.notes}</p>}
 
                         <div className="mt-3 pt-3 border-t flex gap-2">
+                          <Link href={`/competitors/${comp.id}/edit`} className="flex-1">
+                            <Button variant="outline" size="sm" className="w-full bg-transparent text-xs">
+                              <Icons.settings className="w-3 h-3 mr-1" />
+                              Edit
+                            </Button>
+                          </Link>
                           <Link href={`/competitors/${comp.id}/room-types`} className="flex-1">
                             <Button variant="outline" size="sm" className="w-full bg-transparent text-xs">
                               <Icons.bed className="w-3 h-3 mr-1" />
-                              Room Types ({roomTypes.length})
+                              Rooms ({roomTypes.length})
                             </Button>
                           </Link>
                         </div>

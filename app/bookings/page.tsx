@@ -11,6 +11,7 @@ import {
 } from "@/components/icons"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ExcelUpload } from "./excel-upload"
 
 export default async function BookingsPage() {
   const supabase = await createClient()
@@ -51,12 +52,15 @@ export default async function BookingsPage() {
           <h1 className="text-3xl font-bold">Bookings Backlog</h1>
           <p className="text-muted-foreground">צבר הזמנות עתידיות - משפיע על תחזיות המחירים</p>
         </div>
-        <Link href="/bookings/add">
-          <Button className="bg-gradient-to-r from-cyan-500 to-blue-500">
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Add Booking
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <ExcelUpload hotels={hotels || []} />
+          <Link href="/bookings/add">
+            <Button className="bg-gradient-to-r from-cyan-500 to-blue-500">
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Add Booking
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
