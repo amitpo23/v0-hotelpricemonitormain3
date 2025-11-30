@@ -6,41 +6,20 @@ const SUPABASE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxaG1yYWV5aXNvaWd4enNpdGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNTcxODEsImV4cCI6MjA3OTYzMzE4MX0.gOmmQBEpT2GJw97dFmlVBX1CtGpfAhARX71K3NlIx8I"
 
 const COLUMN_MAPPINGS: Record<string, string[]> = {
-  guest_name: [
-    "שם אורח",
-    "שם האורח",
-    "שם לקוח",
-    "שם הלקוח",
-    "אורח",
-    "לקוח",
-    "שם מלא",
-    "שם",
-    "guest",
-    "guest name",
-    "customer",
-    "customer name",
-    "name",
-    "full name",
-    "client",
-    "client name",
-  ],
   check_in_date: [
     "תאריך כניסה",
     "כניסה",
     "הגעה",
     "תאריך הגעה",
     "מתאריך",
-    "תחילה",
     "צ'ק אין",
     "check in",
     "checkin",
     "check-in",
     "arrival",
     "arrival date",
-    "from",
-    "start date",
     "from date",
-    "תאריך התחלה",
+    "start date",
   ],
   check_out_date: [
     "תאריך יציאה",
@@ -48,82 +27,46 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
     "עזיבה",
     "תאריך עזיבה",
     "עד תאריך",
-    "סיום",
     "צ'ק אאוט",
     "check out",
     "checkout",
     "check-out",
     "departure",
     "departure date",
-    "to",
-    "end date",
     "to date",
-    "תאריך סיום",
+    "end date",
   ],
-  room_type: [
-    "סוג חדר",
-    "סוג",
-    "קטגוריה",
-    "חדר סוג",
-    "טיפוס חדר",
-    "חדר",
-    "room type",
-    "type",
-    "category",
-    "room category",
-    "room",
-    "unit type",
-    "יחידה",
+  guest_name: [
+    "שם אורח",
+    "שם האורח",
+    "שם לקוח",
+    "אורח",
+    "לקוח",
+    "שם מלא",
+    "guest name",
+    "guest",
+    "customer name",
+    "customer",
+    "name",
   ],
+  room_type: ["סוג חדר", "סוג", "קטגוריה", "חדר", "יחידה", "room type", "type", "room", "category"],
   total_price: [
     'סה"כ',
     "סה״כ",
     "סהכ",
     "סכום",
-    "מחיר",
-    "תשלום",
-    'סה"כ לתשלום',
-    "סכום כולל",
     "מחיר כולל",
+    "סכום כולל",
     "הכנסה",
     "total",
     "total price",
     "amount",
     "price",
     "revenue",
-    "sum",
-    "grand total",
-    "סכום סופי",
   ],
-  booking_source: [
-    "מקור",
-    "מקור הזמנה",
-    "ערוץ",
-    "אתר",
-    "מקור ההזמנה",
-    "ערוץ הזמנה",
-    "source",
-    "booking source",
-    "channel",
-    "ota",
-    "origin",
-    "platform",
-    "פלטפורמה",
-  ],
-  status: ["סטטוס", "מצב", "סטאטוס", "status", "state", "booking status", "מצב הזמנה"],
-  booking_date: [
-    "תאריך הזמנה",
-    "תאריך ההזמנה",
-    "נוצר",
-    "הוזמן",
-    "תאריך יצירה",
-    "booking date",
-    "reservation date",
-    "created",
-    "booked on",
-    "created at",
-    "נוצר בתאריך",
-  ],
+  booking_source: ["מקור הזמנה", "מקור", "ערוץ", "source", "channel", "booking source", "ota"],
+  status: ["סטטוס", "מצב", "status", "state"],
+  booking_date: ["תאריך הזמנה", "תאריך ההזמנה", "נוצר בתאריך", "booking date", "reservation date", "created"],
 }
 
 function normalizeColumnName(name: string): string {
@@ -132,30 +75,58 @@ function normalizeColumnName(name: string): string {
     .trim()
     .toLowerCase()
     .replace(/[\s_-]+/g, " ")
-    .replace(/['"״׳]/g, "") // Remove quotes
+    .replace(/['"״׳]/g, "")
 }
 
 function findColumnMapping(headers: string[]): Record<string, number> {
   const mapping: Record<string, number> = {}
+  const usedColumns = new Set<number>() // Track which columns are already used
 
   console.log("[v0] Headers found:", headers)
 
-  headers.forEach((header, index) => {
-    const normalized = normalizeColumnName(header)
+  // First pass: exact matches only
+  for (const [field, aliases] of Object.entries(COLUMN_MAPPINGS)) {
+    for (let index = 0; index < headers.length; index++) {
+      if (usedColumns.has(index)) continue // Skip already used columns
 
-    for (const [field, aliases] of Object.entries(COLUMN_MAPPINGS)) {
-      if (mapping[field] !== undefined) continue
+      const header = headers[index]
+      const normalized = normalizeColumnName(header)
 
       for (const alias of aliases) {
         const normalizedAlias = normalizeColumnName(alias)
-        if (normalized === normalizedAlias || normalized.includes(normalizedAlias)) {
+        if (normalized === normalizedAlias) {
           mapping[field] = index
-          console.log(`[v0] Mapped "${header}" -> ${field} (index ${index})`)
+          usedColumns.add(index)
+          console.log(`[v0] Exact match: "${header}" -> ${field} (column ${index})`)
           break
         }
       }
+      if (mapping[field] !== undefined) break
     }
-  })
+  }
+
+  // Second pass: partial matches for fields not yet mapped
+  for (const [field, aliases] of Object.entries(COLUMN_MAPPINGS)) {
+    if (mapping[field] !== undefined) continue // Already mapped
+
+    for (let index = 0; index < headers.length; index++) {
+      if (usedColumns.has(index)) continue // Skip already used columns
+
+      const header = headers[index]
+      const normalized = normalizeColumnName(header)
+
+      for (const alias of aliases) {
+        const normalizedAlias = normalizeColumnName(alias)
+        if (normalized.includes(normalizedAlias) || normalizedAlias.includes(normalized)) {
+          mapping[field] = index
+          usedColumns.add(index)
+          console.log(`[v0] Partial match: "${header}" -> ${field} (column ${index})`)
+          break
+        }
+      }
+      if (mapping[field] !== undefined) break
+    }
+  }
 
   console.log("[v0] Final column mapping:", mapping)
   return mapping
@@ -177,31 +148,34 @@ function parseDate(value: any): string | null {
   }
 
   const strValue = String(value).trim()
+  if (!strValue) return null
 
   // Try ISO format first
   const isoDate = new Date(strValue)
-  if (!isNaN(isoDate.getTime())) {
+  if (!isNaN(isoDate.getTime()) && strValue.includes("-")) {
     return isoDate.toISOString().split("T")[0]
   }
 
   // Try DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const parts = strValue.split(/[/.-]/)
   if (parts.length === 3) {
-    let [d, m, y] = parts
+    let [d, m, y] = parts.map((p) => p.trim())
 
     // If first part is 4 digits, it's YYYY-MM-DD
     if (d.length === 4) {
-      ;[y, m, d] = parts
+      ;[y, m, d] = parts.map((p) => p.trim())
     }
 
     const year = y.length === 2 ? `20${y}` : y
-    const parsed = new Date(`${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`)
+    const month = m.padStart(2, "0")
+    const day = d.padStart(2, "0")
+
+    const parsed = new Date(`${year}-${month}-${day}`)
     if (!isNaN(parsed.getTime())) {
-      return parsed.toISOString().split("T")[0]
+      return `${year}-${month}-${day}`
     }
   }
 
-  console.log(`[v0] Could not parse date: "${value}"`)
   return null
 }
 
@@ -260,36 +234,53 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "הקובץ ריק או חסרות שורות נתונים" }, { status: 400 })
     }
 
-    const headers = rawData[0].map((h) => String(h || ""))
+    // Find header row (first row with content)
+    let headerRowIndex = 0
+    for (let i = 0; i < Math.min(5, rawData.length); i++) {
+      const row = rawData[i]
+      if (row && row.some((cell) => cell && String(cell).length > 0)) {
+        headerRowIndex = i
+        break
+      }
+    }
+
+    const headers = rawData[headerRowIndex].map((h) => String(h || "").trim())
     const columnMap = findColumnMapping(headers)
 
-    if (columnMap.check_in_date === undefined) {
-      console.log("[v0] check_in_date not found in mapping, searching for date columns...")
-      // Find first column with date-like values
-      for (let i = 0; i < headers.length; i++) {
-        const testValue = rawData[1]?.[i]
-        if (parseDate(testValue)) {
-          columnMap.check_in_date = i
-          console.log(`[v0] Found date in column ${i}: ${headers[i]}`)
-          break
+    if (columnMap.check_in_date === undefined || columnMap.check_out_date === undefined) {
+      console.log("[v0] Date columns not found by name, searching by content...")
+
+      const dateColumns: number[] = []
+      const firstDataRow = rawData[headerRowIndex + 1]
+
+      if (firstDataRow) {
+        for (let i = 0; i < firstDataRow.length; i++) {
+          if (parseDate(firstDataRow[i])) {
+            dateColumns.push(i)
+          }
+        }
+      }
+
+      console.log("[v0] Found date columns by content:", dateColumns)
+
+      if (dateColumns.length >= 2) {
+        if (columnMap.check_in_date === undefined) {
+          columnMap.check_in_date = dateColumns[0]
+          console.log(`[v0] Auto-assigned check_in_date to column ${dateColumns[0]}`)
+        }
+        if (columnMap.check_out_date === undefined) {
+          columnMap.check_out_date = dateColumns[1]
+          console.log(`[v0] Auto-assigned check_out_date to column ${dateColumns[1]}`)
         }
       }
     }
 
-    if (columnMap.check_out_date === undefined && columnMap.check_in_date !== undefined) {
-      // Assume checkout is the next column after checkin
-      const nextCol = columnMap.check_in_date + 1
-      if (nextCol < headers.length && parseDate(rawData[1]?.[nextCol])) {
-        columnMap.check_out_date = nextCol
-        console.log(`[v0] Assuming checkout is column ${nextCol}: ${headers[nextCol]}`)
-      }
-    }
-
+    // Validate required fields
     if (columnMap.check_in_date === undefined || columnMap.check_out_date === undefined) {
       return NextResponse.json(
         {
           error: `לא נמצאו עמודות תאריך. עמודות שנמצאו: ${headers.join(", ")}`,
-          headers: headers,
+          headers,
           mapping: columnMap,
         },
         { status: 400 },
@@ -311,7 +302,7 @@ export async function POST(request: Request) {
     let skipped = 0
     let parseErrors = 0
 
-    for (let i = 1; i < rawData.length; i++) {
+    for (let i = headerRowIndex + 1; i < rawData.length; i++) {
       const row = rawData[i]
       if (!row || row.length === 0 || row.every((cell) => !cell)) continue
 
@@ -320,16 +311,21 @@ export async function POST(request: Request) {
         return idx !== undefined ? row[idx] : null
       }
 
-      const checkIn = parseDate(getValue("check_in_date"))
-      const checkOut = parseDate(getValue("check_out_date"))
+      const checkInRaw = getValue("check_in_date")
+      const checkOutRaw = getValue("check_out_date")
+      const checkIn = parseDate(checkInRaw)
+      const checkOut = parseDate(checkOutRaw)
 
       if (!checkIn || !checkOut) {
         parseErrors++
-        if (i < 5) {
-          // Log first few errors
-          console.log(
-            `[v0] Row ${i} parse error - checkIn: ${getValue("check_in_date")} -> ${checkIn}, checkOut: ${getValue("check_out_date")} -> ${checkOut}`,
-          )
+        if (parseErrors <= 3) {
+          console.log(`[v0] Row ${i} parse error:`, {
+            checkInRaw,
+            checkIn,
+            checkOutRaw,
+            checkOut,
+            row: row.slice(0, 10),
+          })
         }
         continue
       }
@@ -364,14 +360,13 @@ export async function POST(request: Request) {
     }
 
     console.log(
-      `[v0] Parsed ${bookingsToInsert.length} valid bookings, ${skipped} skipped (duplicates/cancelled), ${parseErrors} parse errors`,
+      `[v0] Parsed ${bookingsToInsert.length} valid bookings, ${skipped} skipped, ${parseErrors} parse errors`,
     )
 
     // Insert bookings in batches
     let imported = 0
 
     if (bookingsToInsert.length > 0) {
-      // Insert in batches of 100
       const batchSize = 100
       for (let i = 0; i < bookingsToInsert.length; i += batchSize) {
         const batch = bookingsToInsert.slice(i, i + batchSize)
@@ -395,7 +390,7 @@ export async function POST(request: Request) {
       success: true,
       imported,
       failed: skipped + parseErrors,
-      total: rawData.length - 1,
+      total: rawData.length - 1 - headerRowIndex,
       debug: {
         headers,
         mapping: columnMap,
