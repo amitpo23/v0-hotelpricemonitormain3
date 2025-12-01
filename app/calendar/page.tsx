@@ -11,6 +11,7 @@ import {
   BedDoubleIcon,
 } from "@/components/icons"
 import { CalendarGrid } from "./calendar-grid"
+import { RunScraperButton } from "./run-scraper-button"
 
 export default async function CalendarPage() {
   const supabase = await createClient()
@@ -69,6 +70,8 @@ export default async function CalendarPage() {
   const totalBookings = bookings?.length || 0
   const totalRevenue = bookings?.reduce((sum, b) => sum + (b.total_price || 0), 0) || 0
 
+  const firstHotel = hotels?.[0]
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -81,10 +84,13 @@ export default async function CalendarPage() {
           </h1>
           <p className="text-muted-foreground mt-1">180-day price comparison with competitors and occupancy data</p>
         </div>
-        <Badge variant="outline" className="flex items-center gap-2 px-3 py-1">
-          <ClockIcon className="h-4 w-4" />
-          Auto-scan every 5 hours
-        </Badge>
+        <div className="flex items-center gap-4">
+          {firstHotel && <RunScraperButton hotelId={firstHotel.id} hotelName={firstHotel.name} />}
+          <Badge variant="outline" className="flex items-center gap-2 px-3 py-1">
+            <ClockIcon className="h-4 w-4" />
+            Auto-scan every 5 hours
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-5">

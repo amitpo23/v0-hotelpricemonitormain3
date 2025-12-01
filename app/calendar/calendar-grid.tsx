@@ -17,7 +17,6 @@ import {
   BedDoubleIcon,
 } from "@/components/icons"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from "date-fns"
-import { RunScraperButton } from "./run-scraper-button"
 
 interface CalendarGridProps {
   hotels: any[]
@@ -278,14 +277,6 @@ export function CalendarGrid({
               ))}
             </SelectContent>
           </Select>
-
-          {selectedHotel && selectedHotelData && (
-            <RunScraperButton
-              hotelId={selectedHotel}
-              hotelName={selectedHotelData.name}
-              roomTypeId={selectedRoomType !== "all" ? selectedRoomType : undefined}
-            />
-          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -593,14 +584,14 @@ export function CalendarGrid({
                   </div>
                 </div>
               ) : (
-                /* Show all competitors even without prices - need to scan them */
+                /* Updated message to point to main scan button */
                 <div className="grid gap-2">
                   {competitorsWithColors.length > 0 ? (
                     <>
                       {competitorsWithColors.map((comp) => (
                         <div
                           key={comp.id}
-                          className="flex justify-between items-center p-2 rounded text-sm"
+                          className="flex justify-between items-center p-2 rounded text-sm opacity-60"
                           style={{
                             backgroundColor: `${comp.display_color}15`,
                             borderLeft: `3px solid ${comp.display_color}`,
@@ -613,12 +604,16 @@ export function CalendarGrid({
                               <span className="text-xs text-yellow-500">{"★".repeat(comp.star_rating)}</span>
                             )}
                           </div>
-                          <span className="text-muted-foreground text-xs">Run competitor scan</span>
+                          <span className="text-muted-foreground text-xs">No data</span>
                         </div>
                       ))}
-                      <div className="text-center py-2 text-xs text-muted-foreground border-t border-border/50 mt-2">
-                        <AlertTriangleIcon className="h-4 w-4 mx-auto mb-1 text-yellow-500" />
-                        No competitor price data yet - Run a competitor scan to get prices
+                      <div className="text-center py-3 text-sm bg-yellow-500/10 border border-yellow-500/30 rounded-lg mt-2">
+                        <AlertTriangleIcon className="h-5 w-5 mx-auto mb-2 text-yellow-500" />
+                        <p className="text-yellow-400 font-medium">No competitor price data yet</p>
+                        <p className="text-muted-foreground text-xs mt-1">
+                          Click "Run Full Scan (180 Days)" button at the top of the page to scan your hotel and all
+                          competitors together
+                        </p>
                       </div>
                     </>
                   ) : (
