@@ -404,6 +404,23 @@ export function CalendarGrid({
                       )}
                     </div>
 
+                    {dayCompetitorPrices.length > 0 && (
+                      <div className="flex flex-wrap gap-0.5 mt-0.5">
+                        {competitorsWithColors.map((comp) => {
+                          const hasPrice = dayCompetitorPrices.some((p) => p.competitor_id === comp.id)
+                          if (!hasPrice) return null
+                          return (
+                            <div
+                              key={comp.id}
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: comp.display_color }}
+                              title={comp.competitor_hotel_name}
+                            />
+                          )
+                        })}
+                      </div>
+                    )}
+
                     {priceData && (
                       <div className="flex-1 flex flex-col justify-end text-[10px] space-y-0.5">
                         <div className="flex items-center justify-between">
@@ -411,8 +428,14 @@ export function CalendarGrid({
                           <span className="font-medium text-cyan-400">₪{priceData.our_price}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Avg:</span>
-                          <span>₪{competitorAvg || priceData.avg_competitor_price || "-"}</span>
+                          <span className="text-muted-foreground">Comp:</span>
+                          <span className="text-orange-400 font-medium">
+                            {competitorAvg
+                              ? `₪${competitorAvg}`
+                              : priceData.avg_competitor_price
+                                ? `₪${priceData.avg_competitor_price}`
+                                : "-"}
+                          </span>
                         </div>
                         {priceData.recommended_price && priceData.autopilot_action !== "maintain" && (
                           <div className="flex items-center justify-between pt-0.5 border-t border-border/50">
@@ -426,8 +449,8 @@ export function CalendarGrid({
                     {!priceData && dayCompetitorPrices.length > 0 && (
                       <div className="flex-1 flex flex-col justify-end text-[10px]">
                         <div className="flex items-center justify-between">
-                          <span className="text-orange-400">{dayCompetitorPrices.length} prices</span>
-                          <span className="text-muted-foreground">₪{competitorAvg}</span>
+                          <span className="text-orange-400">{dayCompetitorPrices.length}</span>
+                          <span className="text-orange-400 font-medium">₪{competitorAvg}</span>
                         </div>
                       </div>
                     )}

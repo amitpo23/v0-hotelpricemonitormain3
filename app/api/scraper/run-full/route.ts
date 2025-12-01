@@ -233,42 +233,58 @@ export async function POST(request: Request) {
           const prices = generateCompetitorPrice(roomBasePrice, scanDate, comp)
           competitorPrices.push(prices.avgPrice)
 
-          // Store single record per competitor with source breakdown in metadata
           competitorPriceResults.push({
             hotel_id: hotelId,
             competitor_id: comp.id,
             room_type_id: roomType.id,
             date: dateStr,
-            price: prices.avgPrice,
-            source: "combined", // Combined from all sources
+            price: prices.bookingPrice,
+            source: "Booking.com",
             room_type: roomType.name,
             availability: Math.random() > 0.1,
             scraped_at: new Date().toISOString(),
-            source_prices: JSON.stringify({
-              booking: prices.bookingPrice,
-              expedia: prices.expediaPrice,
-            }),
           })
 
-          // Add to scan_results for the scans page (first 7 days only)
+          competitorPriceResults.push({
+            hotel_id: hotelId,
+            competitor_id: comp.id,
+            room_type_id: roomType.id,
+            date: dateStr,
+            price: prices.expediaPrice,
+            source: "Expedia",
+            room_type: roomType.name,
+            availability: Math.random() > 0.1,
+            scraped_at: new Date().toISOString(),
+          })
+
           if (scanRecord && i < 7) {
             scanResults.push({
               scan_id: scanRecord.id,
+              hotel_id: hotelId,
               source: "Booking.com",
               price: prices.bookingPrice,
               room_type: roomType.name,
-              competitor_name: comp.competitor_hotel_name,
               availability: Math.random() > 0.1,
               scraped_at: new Date().toISOString(),
+              metadata: {
+                check_in: dateStr,
+                competitor_id: comp.id,
+                competitor_name: comp.competitor_hotel_name,
+              },
             })
             scanResults.push({
               scan_id: scanRecord.id,
+              hotel_id: hotelId,
               source: "Expedia",
               price: prices.expediaPrice,
               room_type: roomType.name,
-              competitor_name: comp.competitor_hotel_name,
               availability: Math.random() > 0.1,
               scraped_at: new Date().toISOString(),
+              metadata: {
+                check_in: dateStr,
+                competitor_id: comp.id,
+                competitor_name: comp.competitor_hotel_name,
+              },
             })
           }
         }
@@ -299,9 +315,15 @@ export async function POST(request: Request) {
 
     // Batch insert competitor prices (no duplicates now)
     if (competitorPriceResults.length > 0) {
+      console.log(`[v0] Inserting ${competitorPriceResults.length} competitor price records`)
       for (let i = 0; i < competitorPriceResults.length; i += 500) {
         const batch = competitorPriceResults.slice(i, i + 500)
-        await supabase.from("competitor_daily_prices").insert(batch)
+        const { error: insertError } = await supabase.from("competitor_daily_prices").insert(batch)
+        if (insertError) {
+          console.error(`[v0] Error inserting competitor prices batch ${i}:`, insertError)
+        } else {
+          console.log(`[v0] Successfully inserted batch ${i} to ${i + batch.length}`)
+        }
       }
     }
 
