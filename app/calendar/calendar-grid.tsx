@@ -492,10 +492,54 @@ export function CalendarGrid({
               </div>
             )}
 
+            {/* Your Hotel's Prices on Different Channels */}
+            {selectedDay.scanResults && selectedDay.scanResults.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  <DollarSignIcon className="h-4 w-4 text-cyan-400" />
+                  Your Hotel - Channel Prices ({selectedDay.scanResults.length})
+                </h4>
+                <div className="grid gap-2">
+                  {selectedDay.scanResults.map((result: any, i: number) => (
+                    <div
+                      key={i}
+                      className="flex justify-between items-center p-2 bg-cyan-500/10 rounded text-sm border-l-[3px] border-cyan-500"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{
+                            backgroundColor: ["#3b82f6", "#f97316", "#22c55e", "#8b5cf6", "#eab308", "#ec4899"][i % 6],
+                          }}
+                        />
+                        <span className="font-medium">{result.source}</span>
+                        <span className="text-muted-foreground text-xs">({result.room_type})</span>
+                      </div>
+                      <div className="text-cyan-400 font-bold">₪{Number.parseFloat(result.price).toLocaleString()}</div>
+                    </div>
+                  ))}
+                  {/* Channel Average */}
+                  <div className="flex justify-between items-center p-2 bg-cyan-500/20 rounded text-sm mt-1">
+                    <span className="text-cyan-400 font-medium">Channel Average</span>
+                    <span className="text-cyan-400 font-bold">
+                      ₪
+                      {Math.round(
+                        selectedDay.scanResults.reduce(
+                          (sum: number, r: any) => sum + Number.parseFloat(r.price || 0),
+                          0,
+                        ) / selectedDay.scanResults.length,
+                      ).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Competitor Hotels Prices */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <BuildingIcon className="h-4 w-4 text-orange-400" />
-                Competitor Prices
+                Competitor Hotels ({competitorsWithColors.length})
               </h4>
 
               {selectedDay.competitorPrices && selectedDay.competitorPrices.length > 0 ? (
@@ -528,18 +572,18 @@ export function CalendarGrid({
                             </Badge>
                           )}
                         </div>
-                        <div className="text-cyan-400 font-bold">₪{Number(price.price).toLocaleString()}</div>
+                        <div className="text-orange-400 font-bold">₪{Number(price.price).toLocaleString()}</div>
                       </div>
                     )
                   })}
 
                   {/* Market Average */}
-                  <div className="flex justify-between items-center p-2 bg-cyan-500/10 rounded text-sm border-l-[3px] border-cyan-500 mt-2">
+                  <div className="flex justify-between items-center p-2 bg-orange-500/10 rounded text-sm border-l-[3px] border-orange-500 mt-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" />
-                      <span className="font-medium text-cyan-400">Market Average</span>
+                      <div className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-500 to-red-500" />
+                      <span className="font-medium text-orange-400">Competitor Average</span>
                     </div>
-                    <div className="text-cyan-400 font-bold">
+                    <div className="text-orange-400 font-bold">
                       ₪
                       {Math.round(
                         selectedDay.competitorPrices.reduce((sum: number, p: any) => sum + Number(p.price || 0), 0) /
@@ -548,45 +592,42 @@ export function CalendarGrid({
                     </div>
                   </div>
                 </div>
-              ) : selectedDay.scanResults && selectedDay.scanResults.length > 0 ? (
-                /* Fallback to scan results if no competitor_daily_prices */
-                <div className="grid gap-2">
-                  {selectedDay.scanResults.map((result: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center p-2 bg-muted/20 rounded text-sm">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: COMPETITOR_COLORS[i % COMPETITOR_COLORS.length] }}
-                        />
-                        <span>{result.source}</span>
-                        <span className="text-muted-foreground">({result.room_type})</span>
-                      </div>
-                      <div className="text-cyan-400">₪{Number.parseFloat(result.price).toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
               ) : (
-                /* Show all competitors even without prices */
+                /* Show all competitors even without prices - need to scan them */
                 <div className="grid gap-2">
-                  {competitorsWithColors.map((comp) => (
-                    <div
-                      key={comp.id}
-                      className="flex justify-between items-center p-2 rounded text-sm"
-                      style={{
-                        backgroundColor: `${comp.display_color}15`,
-                        borderLeft: `3px solid ${comp.display_color}`,
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: comp.display_color }} />
-                        <span className="font-medium">{comp.competitor_hotel_name}</span>
-                        {comp.star_rating && (
-                          <span className="text-xs text-yellow-500">{"★".repeat(comp.star_rating)}</span>
-                        )}
+                  {competitorsWithColors.length > 0 ? (
+                    <>
+                      {competitorsWithColors.map((comp) => (
+                        <div
+                          key={comp.id}
+                          className="flex justify-between items-center p-2 rounded text-sm"
+                          style={{
+                            backgroundColor: `${comp.display_color}15`,
+                            borderLeft: `3px solid ${comp.display_color}`,
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: comp.display_color }} />
+                            <span className="font-medium">{comp.competitor_hotel_name}</span>
+                            {comp.star_rating && (
+                              <span className="text-xs text-yellow-500">{"★".repeat(comp.star_rating)}</span>
+                            )}
+                          </div>
+                          <span className="text-muted-foreground text-xs">Run competitor scan</span>
+                        </div>
+                      ))}
+                      <div className="text-center py-2 text-xs text-muted-foreground border-t border-border/50 mt-2">
+                        <AlertTriangleIcon className="h-4 w-4 mx-auto mb-1 text-yellow-500" />
+                        No competitor price data yet - Run a competitor scan to get prices
                       </div>
-                      <span className="text-muted-foreground text-xs">No data - Run scan</span>
+                    </>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <BuildingIcon className="h-6 w-6 mx-auto mb-2" />
+                      <p className="text-sm">No competitors configured</p>
+                      <p className="text-xs">Add competitors in the Competitors page</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>

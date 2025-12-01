@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -14,23 +15,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  CalendarIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  TargetIcon,
-  PencilIcon,
-  SaveIcon,
-  Loader2Icon,
-} from "@/components/icons"
-import { useRouter } from "next/navigation"
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, PencilIcon, CheckIcon } from "@/components/icons"
 
 interface YearlyBudgetGridProps {
   hotels: any[]
   budgets: any[]
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const MONTHS = [
+  { num: 1, name: "Jan" },
+  { num: 2, name: "Feb" },
+  { num: 3, name: "Mar" },
+  { num: 4, name: "Apr" },
+  { num: 5, name: "May" },
+  { num: 6, name: "Jun" },
+  { num: 7, name: "Jul" },
+  { num: 8, name: "Aug" },
+  { num: 9, name: "Sep" },
+  { num: 10, name: "Oct" },
+  { num: 11, name: "Nov" },
+  { num: 12, name: "Dec" },
+]
 
 const FULL_MONTHS = [
   "January",
@@ -47,7 +52,7 @@ const FULL_MONTHS = [
   "December",
 ]
 
-export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
+export function YearlyBudgetGrid({ hotels, budgets: initialBudgets }: YearlyBudgetGridProps) {
   const router = useRouter()
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedHotelId, setSelectedHotelId] = useState(hotels[0]?.id || "")
@@ -61,14 +66,14 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
     targetAdr: "",
   })
   const [saving, setSaving] = useState(false)
+  const [budgets, setBudgets] = useState(initialBudgets)
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   const currentMonth = new Date().getMonth() + 1
   const currentYear = new Date().getFullYear()
 
-  // Filter budgets for selected hotel and year
   const hotelBudgets = budgets.filter((b) => b.hotel_id === selectedHotelId && b.year === selectedYear)
 
-  // Calculate yearly total
   const yearlyTotal = hotelBudgets.reduce((sum, b) => sum + Number(b.target_revenue || 0), 0)
   const monthsWithBudget = hotelBudgets.length
 
@@ -82,12 +87,14 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
       targetAdr: budget?.target_adr?.toString() || "",
     })
     setEditModalOpen(true)
+    setSaveSuccess(false)
   }
 
   const handleSave = async () => {
     if (!editingMonth || !selectedHotelId) return
 
     setSaving(true)
+    setSaveSuccess(false)
     try {
       const response = await fetch("/api/budget", {
         method: "POST",
@@ -104,10 +111,41 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
 
       if (!response.ok) throw new Error("Failed to save")
 
-      setEditModalOpen(false)
-      router.refresh()
+      const result = await response.json()
+
+      setBudgets((prev) => {
+        const existingIndex = prev.findIndex(
+          (b) => b.hotel_id === selectedHotelId && b.year === selectedYear && b.month === editingMonth,
+        )
+
+        const newBudget = {
+          id: result.budget?.id || `temp-${Date.now()}`,
+          hotel_id: selectedHotelId,
+          year: selectedYear,
+          month: editingMonth,
+          target_revenue: Number(editValues.targetRevenue) || 0,
+          target_occupancy: editValues.targetOccupancy ? Number(editValues.targetOccupancy) : null,
+          target_adr: editValues.targetAdr ? Number(editValues.targetAdr) : null,
+        }
+
+        if (existingIndex >= 0) {
+          const updated = [...prev]
+          updated[existingIndex] = { ...updated[existingIndex], ...newBudget }
+          return updated
+        } else {
+          return [...prev, newBudget]
+        }
+      })
+
+      setSaveSuccess(true)
+
+      setTimeout(() => {
+        setEditModalOpen(false)
+        router.refresh()
+      }, 500)
     } catch (error) {
       console.error("Error saving budget:", error)
+      alert("שגיאה בשמירת התקציב. נסה שוב.")
     } finally {
       setSaving(false)
     }
@@ -153,7 +191,6 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Summary */}
           <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-background/30 rounded-lg">
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Yearly Target</p>
@@ -171,10 +208,9 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
             </div>
           </div>
 
-          {/* Monthly Grid - Added onClick and cursor pointer */}
           <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
-            {MONTHS.map((month, index) => {
-              const monthNum = index + 1
+            {MONTHS.map((month) => {
+              const monthNum = month.num
               const budget = hotelBudgets.find((b) => b.month === monthNum)
               const isPast = selectedYear < currentYear || (selectedYear === currentYear && monthNum < currentMonth)
               const isCurrent = selectedYear === currentYear && monthNum === currentMonth
@@ -182,7 +218,7 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
 
               return (
                 <div
-                  key={month}
+                  key={month.name}
                   onClick={() => handleMonthClick(monthNum)}
                   className={`
                     relative p-4 rounded-lg border transition-all cursor-pointer group
@@ -197,9 +233,9 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
 
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-sm font-medium ${isCurrent ? "text-cyan-400" : "text-muted-foreground"}`}>
-                      {month}
+                      {month.name}
                     </span>
-                    {hasBudget && <TargetIcon className="h-3 w-3 text-cyan-400" />}
+                    {hasBudget && <CheckIcon className="h-3 w-3 text-cyan-400" />}
                   </div>
 
                   {hasBudget ? (
@@ -217,7 +253,6 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
                     </div>
                   )}
 
-                  {/* Current month indicator */}
                   {isCurrent && (
                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-500 rounded-full animate-pulse" />
                   )}
@@ -226,7 +261,6 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
             })}
           </div>
 
-          {/* Quick fill option */}
           {monthsWithBudget < 12 && (
             <div className="mt-6 p-4 border border-dashed border-border/50 rounded-lg text-center">
               <p className="text-sm text-muted-foreground mb-2">
@@ -240,13 +274,12 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <TargetIcon className="h-5 w-5 text-cyan-400" />
-              {editingBudget ? "Edit" : "Set"} Budget - {editingMonth ? FULL_MONTHS[editingMonth - 1] : ""}{" "}
+            <DialogTitle>
+              {editingBudget ? "Edit" : "Add"} Budget - {MONTHS.find((m) => m.num === editingMonth)?.name}{" "}
               {selectedYear}
             </DialogTitle>
             <DialogDescription>
-              {editingBudget ? "Update the budget targets for this month" : "Set the budget targets for this month"}
+              {editingBudget ? "Update the budget values for this month" : "Set the budget values for this month"}
             </DialogDescription>
           </DialogHeader>
 
@@ -256,36 +289,31 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
               <Input
                 id="targetRevenue"
                 type="number"
-                placeholder="e.g. 100000"
                 value={editValues.targetRevenue}
-                onChange={(e) => setEditValues({ ...editValues, targetRevenue: e.target.value })}
-                className="bg-background/50"
+                onChange={(e) => setEditValues((prev) => ({ ...prev, targetRevenue: e.target.value }))}
+                placeholder="e.g. 100000"
               />
             </div>
-
             <div className="grid gap-2">
               <Label htmlFor="targetOccupancy">Target Occupancy (%)</Label>
               <Input
                 id="targetOccupancy"
                 type="number"
-                placeholder="e.g. 75"
                 min="0"
                 max="100"
                 value={editValues.targetOccupancy}
-                onChange={(e) => setEditValues({ ...editValues, targetOccupancy: e.target.value })}
-                className="bg-background/50"
+                onChange={(e) => setEditValues((prev) => ({ ...prev, targetOccupancy: e.target.value }))}
+                placeholder="e.g. 75"
               />
             </div>
-
             <div className="grid gap-2">
               <Label htmlFor="targetAdr">Target ADR (₪)</Label>
               <Input
                 id="targetAdr"
                 type="number"
-                placeholder="e.g. 450"
                 value={editValues.targetAdr}
-                onChange={(e) => setEditValues({ ...editValues, targetAdr: e.target.value })}
-                className="bg-background/50"
+                onChange={(e) => setEditValues((prev) => ({ ...prev, targetAdr: e.target.value }))}
+                placeholder="e.g. 450"
               />
             </div>
           </div>
@@ -294,17 +322,16 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
             <Button variant="outline" onClick={() => setEditModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={saving || !editValues.targetRevenue}>
+            <Button onClick={handleSave} disabled={saving || saveSuccess}>
               {saving ? (
+                "Saving..."
+              ) : saveSuccess ? (
                 <>
-                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  <CheckIcon className="h-4 w-4 mr-2" />
+                  Saved!
                 </>
               ) : (
-                <>
-                  <SaveIcon className="mr-2 h-4 w-4" />
-                  Save Budget
-                </>
+                "Save"
               )}
             </Button>
           </DialogFooter>
