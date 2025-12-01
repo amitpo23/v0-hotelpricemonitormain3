@@ -91,27 +91,39 @@ export function YearlyBudgetGrid({ hotels, budgets: initialBudgets }: YearlyBudg
   }
 
   const handleSave = async () => {
-    if (!editingMonth || !selectedHotelId) return
+    if (!editingMonth || !selectedHotelId) {
+      console.log("[v0] Missing editingMonth or selectedHotelId:", { editingMonth, selectedHotelId })
+      alert("חסר מידע נדרש. נסה שוב.")
+      return
+    }
 
     setSaving(true)
     setSaveSuccess(false)
+
+    const payload = {
+      hotelId: selectedHotelId,
+      year: selectedYear,
+      month: editingMonth,
+      targetRevenue: Number(editValues.targetRevenue) || 0,
+      targetOccupancy: editValues.targetOccupancy ? Number(editValues.targetOccupancy) : null,
+      targetAdr: editValues.targetAdr ? Number(editValues.targetAdr) : null,
+    }
+
+    console.log("[v0] Sending budget payload:", JSON.stringify(payload))
+
     try {
       const response = await fetch("/api/budget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hotelId: selectedHotelId,
-          year: selectedYear,
-          month: editingMonth,
-          targetRevenue: Number(editValues.targetRevenue) || 0,
-          targetOccupancy: editValues.targetOccupancy ? Number(editValues.targetOccupancy) : null,
-          targetAdr: editValues.targetAdr ? Number(editValues.targetAdr) : null,
-        }),
+        body: JSON.stringify(payload),
       })
 
-      if (!response.ok) throw new Error("Failed to save")
-
       const result = await response.json()
+      console.log("[v0] Budget API response:", response.status, JSON.stringify(result))
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to save")
+      }
 
       setBudgets((prev) => {
         const existingIndex = prev.findIndex(
