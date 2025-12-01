@@ -1,3 +1,6 @@
+import { Spinner } from "@/components/ui/spinner"
+import { IconUpload, IconFileSpreadsheet } from "@/components/icons/otherIcons" // Assuming these icons are declared in another file
+
 // Simple SVG icons to replace lucide-react
 export function IconDashboard({ className }: { className?: string }) {
   return (
@@ -11,7 +14,7 @@ export function IconCalendar({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
+      <path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
     </svg>
   )
 }
@@ -160,7 +163,7 @@ export function IconDollar({ className }: { className?: string }) {
 export function IconArrowLeft({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M19 12H5M12 19l-7-7 7-7" />
+      <path d="M19 12H5M12 5l-7 7 7 7" />
     </svg>
   )
 }
@@ -275,7 +278,7 @@ export function IconSettings({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 001.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010-2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09a1.65 1.65 0 00-1.51 1z" />
     </svg>
   )
 }
@@ -361,7 +364,7 @@ export function IconSave({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-      <path d="M17 21v-8H7v8M7 3v5h8" />
+      <path d="M17 21v-8H7v8M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01" />
     </svg>
   )
 }
@@ -604,6 +607,40 @@ export function IconChevronDown({ className }: { className?: string }) {
   )
 }
 
+export function IconPercent({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <line x1="19" y1="5" x2="5" y2="19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
+    </svg>
+  )
+}
+
+export function FilterIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  )
+}
+
+export function IconPencil({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  )
+}
+
 // Aliases for compatibility with lucide-react naming convention
 export {
   IconPlane as PlaneIcon,
@@ -670,11 +707,16 @@ export {
   IconMessageSquare as MessageSquareIcon,
   IconSend as SendIcon,
   IconUser as UserIcon,
-  IconUpload as UploadIcon,
+  Spinner,
+  IconUpload as Upload,
   IconFileSpreadsheet as FileSpreadsheetIcon,
+  IconPercent as PercentIcon,
+  FilterIcon as Filter,
   IconShield as ShieldIcon,
   IconLogOut as LogOutIcon,
   IconChevronDown as ChevronDownIcon,
+  IconUpload as UploadIcon,
+  IconPencil as PencilIcon,
 }
 
 // Icons namespace export for compatibility
@@ -722,6 +764,7 @@ export const Icons = {
   settings: IconSettings,
   activity: IconActivity,
   xCircle: IconXCircle,
+  checkCircle2: IconCheckCircle2,
   building2: IconBuilding2,
   loader2: IconLoader2,
   scan: IconScan,
@@ -746,50 +789,11 @@ export const Icons = {
   spinner: IconSpinner,
   upload: IconUpload,
   fileSpreadsheet: IconFileSpreadsheet,
+  percent: IconPercent,
+  filter: FilterIcon,
   shield: IconShield,
   logOut: IconLogOut,
   chevronDown: IconChevronDown,
+  uploadIcon: IconUpload,
+  pencil: IconPencil,
 }
-
-export function IconUpload({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
-      />
-    </svg>
-  )
-}
-
-export function IconFileSpreadsheet({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"
-      />
-      <polyline points="14,2 14,8 20,8" />
-      <line x1="8" y1="13" x2="16" y2="13" />
-      <line x1="8" y1="17" x2="16" y2="17" />
-      <line x1="10" y1="9" x2="10" y2="21" />
-    </svg>
-  )
-}
-
-export function IconPercent({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <line x1="19" y1="5" x2="5" y2="19" />
-      <circle cx="6.5" cy="6.5" r="2.5" />
-      <circle cx="17.5" cy="17.5" r="2.5" />
-    </svg>
-  )
-}
-
-export { IconSpinner as Spinner }
-export { IconUpload as Upload }
-export { IconFileSpreadsheet as FileSpreadsheet }
-export { IconPercent as PercentIcon }

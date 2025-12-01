@@ -25,6 +25,12 @@ export default async function CalendarPage() {
 
   const { data: competitors } = await supabase.from("hotel_competitors").select("*").eq("is_active", true)
 
+  const { data: competitorRoomTypes } = await supabase
+    .from("competitor_room_types")
+    .select("*, hotel_competitors(competitor_hotel_name)")
+    .eq("is_active", true)
+    .order("name")
+
   const today = new Date()
   const futureDate = new Date(today)
   futureDate.setDate(futureDate.getDate() + 180)
@@ -48,6 +54,13 @@ export default async function CalendarPage() {
     .from("scan_results")
     .select("*")
     .order("scraped_at", { ascending: false })
+
+  const { data: competitorDailyPrices } = await supabase
+    .from("competitor_daily_prices")
+    .select("*, hotel_competitors(competitor_hotel_name, display_color), competitor_room_types(name)")
+    .gte("date", today.toISOString().split("T")[0])
+    .lte("date", futureDate.toISOString().split("T")[0])
+    .order("date")
 
   const increaseCount = dailyPrices?.filter((p) => p.autopilot_action === "increase").length || 0
   const decreaseCount = dailyPrices?.filter((p) => p.autopilot_action === "decrease").length || 0
@@ -169,6 +182,8 @@ export default async function CalendarPage() {
           dailyPrices={dailyPrices || []}
           roomTypes={roomTypes || []}
           competitors={competitors || []}
+          competitorRoomTypes={competitorRoomTypes || []}
+          competitorDailyPrices={competitorDailyPrices || []}
           bookings={bookings || []}
           scanResults={scanResults || []}
         />

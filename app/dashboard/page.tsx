@@ -24,6 +24,7 @@ import {
   ArrowLeftIcon,
 } from "@/components/icons"
 import { DashboardCharts } from "./dashboard-charts"
+import { DashboardFilters } from "./dashboard-filters"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -345,6 +346,11 @@ export default async function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Filters Section */}
+      <div className="mb-8">
+        <DashboardFilters allBookings={allBookings || []} />
+      </div>
 
       <Card className="mb-8 bg-slate-900/50 border-slate-800">
         <CardHeader className="pb-2">

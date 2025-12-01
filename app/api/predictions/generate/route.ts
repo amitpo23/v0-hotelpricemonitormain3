@@ -11,26 +11,98 @@ interface PredictionFactors {
   historicalAccuracy: number
   eventImpact: number
   marketTrend: number
+  googleTrends: number
 }
 
 interface ConfidenceFactors {
-  dataQuality: number // 0-1: How much real data we have
-  scanRecency: number // 0-1: How recent are our scans
-  historicalData: number // 0-1: Do we have historical prices
-  bookingData: number // 0-1: Do we have booking info
-  competitorData: number // 0-1: Do we have competitor prices
-  marketConsistency: number // 0-1: How consistent is the market
+  dataQuality: number
+  scanRecency: number
+  historicalData: number
+  bookingData: number
+  competitorData: number
+  marketConsistency: number
+  externalDataQuality: number
+}
+
+async function fetchExternalData(baseUrl: string) {
+  const currentYear = new Date().getFullYear()
+
+  try {
+    // Fetch holidays from Hebcal
+    const holidaysPromise = fetch(`${baseUrl}/api/external-data/holidays?year=${currentYear}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+
+    // Fetch Google Trends data
+    const trendsPromise = fetch(`${baseUrl}/api/external-data/trends?keyword=hotels+israel`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+
+    // Fetch market intelligence
+    const marketIntelPromise = fetch(`${baseUrl}/api/external-data/market-intel`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+
+    const [holidays, trends, marketIntel] = await Promise.all([holidaysPromise, trendsPromise, marketIntelPromise])
+
+    return { holidays, trends, marketIntel }
+  } catch (error) {
+    console.error("Error fetching external data:", error)
+    return { holidays: null, trends: null, marketIntel: null }
+  }
+}
+
+function buildHolidayMap(holidays: any): Record<string, { name: string; impact: number; type: string }[]> {
+  const map: Record<string, { name: string; impact: number; type: string }[]> = {}
+
+  if (!holidays?.holidays) return map
+
+  holidays.holidays.forEach((h: any) => {
+    if (!h.date) return
+    const dateStr = h.date.split("T")[0]
+    const mmdd = dateStr.slice(5) // Get MM-DD
+
+    if (!map[mmdd]) {
+      map[mmdd] = []
+    }
+
+    map[mmdd].push({
+      name: h.title,
+      impact: h.tourismImpact?.score || 1.0,
+      type: h.tourismImpact?.type || "regular",
+    })
+  })
+
+  // Add fixed events (Pride, New Year, etc.)
+  const fixedEvents: Record<string, { name: string; impact: number; type: string }[]> = {
+    "01-01": [{ name: "New Year", impact: 1.1, type: "international" }],
+    "02-14": [{ name: "Valentine's Day", impact: 1.05, type: "international" }],
+    "06-01": [{ name: "Pride Week Start", impact: 1.3, type: "event" }],
+    "06-08": [{ name: "Pride Parade", impact: 1.4, type: "event" }],
+    "12-25": [{ name: "Christmas", impact: 1.25, type: "international" }],
+    "12-31": [{ name: "New Year's Eve", impact: 1.35, type: "international" }],
+  }
+
+  Object.entries(fixedEvents).forEach(([date, events]) => {
+    if (!map[date]) {
+      map[date] = events
+    } else {
+      map[date] = [...map[date], ...events]
+    }
+  })
+
+  return map
 }
 
 function calculateConfidence(factors: ConfidenceFactors): number {
-  // Weighted average of confidence factors
   const weights = {
-    dataQuality: 0.25,
-    scanRecency: 0.2,
-    historicalData: 0.15,
+    dataQuality: 0.2,
+    scanRecency: 0.18,
+    historicalData: 0.12,
     bookingData: 0.15,
     competitorData: 0.15,
     marketConsistency: 0.1,
+    externalDataQuality: 0.1, // Added external data weight
   }
 
   let confidence =
@@ -39,36 +111,20 @@ function calculateConfidence(factors: ConfidenceFactors): number {
     factors.historicalData * weights.historicalData +
     factors.bookingData * weights.bookingData +
     factors.competitorData * weights.competitorData +
-    factors.marketConsistency * weights.marketConsistency
+    factors.marketConsistency * weights.marketConsistency +
+    factors.externalDataQuality * weights.externalDataQuality
 
-  // Base confidence floor of 45%, max 96%
   confidence = Math.max(0.45, Math.min(0.96, confidence))
-
   return confidence
 }
 
-function getDemandLevel(score: number, occupancyRate: number): string {
-  if (score > 1.4 || occupancyRate > 75) return "very_high"
-  if (score > 1.2 || occupancyRate > 55) return "high"
-  if (score > 0.95 || occupancyRate > 35) return "medium"
-  return "low"
-}
+function getDemandLevel(score: number, occupancyRate: number, trendsScore: number): string {
+  const adjustedScore = score * (trendsScore / 100)
 
-// Tel Aviv special events and holidays
-const SPECIAL_EVENTS: Record<string, { name: string; impact: number }[]> = {
-  // Format: MM-DD
-  "01-01": [{ name: "New Year", impact: 1.1 }],
-  "02-14": [{ name: "Valentine's Day", impact: 1.05 }],
-  "03-17": [{ name: "Purim", impact: 1.15 }],
-  "04-15": [{ name: "Passover", impact: 1.25 }],
-  "05-14": [{ name: "Independence Day", impact: 1.2 }],
-  "06-01": [{ name: "Pride Week Start", impact: 1.3 }],
-  "06-08": [{ name: "Pride Parade", impact: 1.4 }],
-  "09-15": [{ name: "Rosh Hashanah", impact: 1.2 }],
-  "09-25": [{ name: "Yom Kippur", impact: 0.85 }],
-  "10-01": [{ name: "Sukkot", impact: 1.15 }],
-  "12-25": [{ name: "Christmas", impact: 1.25 }],
-  "12-31": [{ name: "New Year's Eve", impact: 1.35 }],
+  if (adjustedScore > 1.4 || occupancyRate > 75) return "very_high"
+  if (adjustedScore > 1.2 || occupancyRate > 55) return "high"
+  if (adjustedScore > 0.95 || occupancyRate > 35) return "medium"
+  return "low"
 }
 
 export async function POST(request: Request) {
@@ -85,8 +141,13 @@ export async function POST(request: Request) {
 
   const hotelIds = hotels.map((h: any) => h.id)
 
-  // Parallel data fetching for better performance
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000"
+
   const [
+    externalData,
     { data: bookings },
     { data: budgets },
     { data: revenueTracking },
@@ -94,7 +155,9 @@ export async function POST(request: Request) {
     { data: dailyPrices },
     { data: scans },
     { data: competitors },
+    { data: competitorPrices },
   ] = await Promise.all([
+    fetchExternalData(baseUrl),
     supabase
       .from("bookings")
       .select("*")
@@ -112,11 +175,24 @@ export async function POST(request: Request) {
       .select("*")
       .in("hotel_id", hotelIds)
       .gte("date", new Date(currentYear, currentMonth - 1, 1).toISOString().split("T")[0]),
-    supabase.from("scan_results").select("*").order("scraped_at", { ascending: false }).limit(200),
+    supabase.from("scan_results").select("*").order("scraped_at", { ascending: false }).limit(500),
     supabase.from("daily_prices").select("*").in("hotel_id", hotelIds).gte("date", today.toISOString().split("T")[0]),
     supabase.from("scans").select("*").order("created_at", { ascending: false }).limit(50),
-    supabase.from("competitors").select("*").in("hotel_id", hotelIds),
+    supabase
+      .from("hotel_competitors")
+      .select("*, competitor_room_types(*)")
+      .in("hotel_id", hotelIds)
+      .eq("is_active", true),
+    supabase.from("competitor_daily_prices").select("*").gte("date", today.toISOString().split("T")[0]),
   ])
+
+  const holidayMap = buildHolidayMap(externalData.holidays)
+
+  const trendsScore = externalData.trends?.data?.interestScore || 75
+  const trendsSource = externalData.trends?.data?.source || "default"
+
+  const marketIntel = externalData.marketIntel
+  const bookingVelocity = marketIntel?.bookingVelocity?.trend || "stable"
 
   // Calculate data quality metrics
   const lastScanDate = scans?.[0]?.created_at ? new Date(scans[0].created_at) : null
@@ -125,12 +201,16 @@ export async function POST(request: Request) {
   // Market averages by hotel with variance calculation
   const marketDataByHotel: Record<string, { avg: number; min: number; max: number; count: number; prices: number[] }> =
     {}
+
   recentResults?.forEach((r: any) => {
     const price = Number(r.price)
-    if (!marketDataByHotel[r.hotel_id]) {
-      marketDataByHotel[r.hotel_id] = { avg: price, min: price, max: price, count: 1, prices: [price] }
+    if (!price || price <= 0) return
+
+    const hotelId = r.hotel_id
+    if (!marketDataByHotel[hotelId]) {
+      marketDataByHotel[hotelId] = { avg: price, min: price, max: price, count: 1, prices: [price] }
     } else {
-      const data = marketDataByHotel[r.hotel_id]
+      const data = marketDataByHotel[hotelId]
       data.prices.push(price)
       data.count++
       data.avg = data.prices.reduce((a, b) => a + b, 0) / data.prices.length
@@ -139,14 +219,29 @@ export async function POST(request: Request) {
     }
   })
 
-  // Calculate market consistency (low variance = high consistency)
+  competitorPrices?.forEach((cp: any) => {
+    const price = Number(cp.price)
+    if (!price || price <= 0) return
+
+    const hotelId = cp.hotel_id
+    if (!marketDataByHotel[hotelId]) {
+      marketDataByHotel[hotelId] = { avg: price, min: price, max: price, count: 1, prices: [price] }
+    } else {
+      const data = marketDataByHotel[hotelId]
+      data.prices.push(price)
+      data.count++
+      data.avg = data.prices.reduce((a, b) => a + b, 0) / data.prices.length
+      data.min = Math.min(data.min, price)
+      data.max = Math.max(data.max, price)
+    }
+  })
+
   const getMarketConsistency = (hotelId: string): number => {
     const data = marketDataByHotel[hotelId]
     if (!data || data.count < 3) return 0.5
     const variance = data.prices.reduce((sum, p) => sum + Math.pow(p - data.avg, 2), 0) / data.count
     const stdDev = Math.sqrt(variance)
     const coefficientOfVariation = stdDev / data.avg
-    // Lower CV = more consistent = higher score
     return Math.max(0.3, Math.min(1.0, 1 - coefficientOfVariation))
   }
 
@@ -202,7 +297,7 @@ export async function POST(request: Request) {
 
   const predictions: any[] = []
 
-  // Seasonality factors for Tel Aviv
+  // Seasonality factors for Tel Aviv/Israel
   const seasonalityFactors: Record<number, { factor: number; label: string }> = {
     0: { factor: 0.85, label: "winter_low" },
     1: { factor: 0.8, label: "winter_lowest" },
@@ -238,6 +333,8 @@ export async function POST(request: Request) {
     const budgetPressure =
       targetRevenue > 0 ? Math.max(0.92, Math.min(1.18, 1 + (budgetGap / targetRevenue) * 0.25)) : 1.0
 
+    const velocityFactor = bookingVelocity === "increasing" ? 1.05 : bookingVelocity === "decreasing" ? 0.95 : 1.0
+
     // Generate predictions for next 30 days
     for (let i = 0; i < 30; i++) {
       const predDate = new Date(today)
@@ -254,7 +351,7 @@ export async function POST(request: Request) {
       const seasonality = seasonData.factor
       const weekendFactor = isWeekend ? 1.12 : 1.0
 
-      // Lead time factor (booking closer to date = higher price)
+      // Lead time factor
       const leadTimeFactor = i < 3 ? 1.15 : i < 7 ? 1.08 : i < 14 ? 1.03 : 1.0
 
       // Occupancy factor
@@ -275,11 +372,12 @@ export async function POST(request: Request) {
         : marketData?.avg
       const competitorFactor = competitorAvg ? Math.max(0.88, Math.min(1.12, competitorAvg / basePrice)) : 1.0
 
-      // Special events
-      const events = SPECIAL_EVENTS[monthDay] || []
+      const events = holidayMap[monthDay] || []
       const eventFactor = events.length > 0 ? events.reduce((max, e) => Math.max(max, e.impact), 1.0) : 1.0
 
-      // Calculate predicted price
+      const trendsFactor = trendsScore / 100
+
+      // Calculate predicted price with all factors
       const rawPrice =
         basePrice *
         seasonality *
@@ -288,15 +386,17 @@ export async function POST(request: Request) {
         budgetPressure *
         competitorFactor *
         leadTimeFactor *
-        eventFactor
+        eventFactor *
+        velocityFactor *
+        (0.9 + trendsFactor * 0.2) // Trends adds 0-20% adjustment
 
       // Small random market variation (±2%)
       const marketNoise = 0.98 + Math.random() * 0.04
       const predictedPrice = Math.round(rawPrice * marketNoise)
 
-      // Calculate demand level
+      // Calculate demand level with trends
       const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
-      const demand = getDemandLevel(demandScore, occupancyRate)
+      const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
 
       const confidenceFactors: ConfidenceFactors = {
         dataQuality: marketData ? Math.min(1.0, marketData.count / 20) : 0.3,
@@ -306,6 +406,7 @@ export async function POST(request: Request) {
         bookingData: bookedRooms > 0 ? Math.min(1.0, 0.5 + (occupancyRate / 100) * 0.5) : 0.35,
         competitorData: hotelCompetitors.length > 0 ? Math.min(1.0, 0.5 + hotelCompetitors.length * 0.1) : 0.3,
         marketConsistency: getMarketConsistency(hotel.id),
+        externalDataQuality: externalData.holidays ? 0.9 : 0.5,
       }
 
       const confidence = calculateConfidence(confidenceFactors)
@@ -316,7 +417,7 @@ export async function POST(request: Request) {
         predicted_price: predictedPrice,
         predicted_demand: demand,
         confidence_score: confidence,
-        base_price: basePrice, // Added current base price for comparison
+        base_price: basePrice,
         factors: {
           seasonality: seasonData.label,
           seasonality_factor: seasonality.toFixed(2),
@@ -324,6 +425,7 @@ export async function POST(request: Request) {
           is_weekend: isWeekend,
           competitor_avg: competitorAvg ? Math.round(competitorAvg) : null,
           events: events.map((e) => e.name).concat(isWeekend ? ["Weekend"] : []),
+          event_types: events.map((e) => e.type),
           occupancy_rate: Math.round(occupancyRate),
           booked_rooms: bookedRooms,
           total_rooms: totalRooms,
@@ -331,6 +433,10 @@ export async function POST(request: Request) {
           budget_pressure: budgetPressure.toFixed(2),
           lead_time_days: i,
           lead_time_factor: leadTimeFactor.toFixed(2),
+          google_trends_score: trendsScore,
+          google_trends_source: trendsSource,
+          booking_velocity: bookingVelocity,
+          velocity_factor: velocityFactor.toFixed(2),
           confidence_breakdown: {
             data_quality: (confidenceFactors.dataQuality * 100).toFixed(0) + "%",
             scan_recency: (confidenceFactors.scanRecency * 100).toFixed(0) + "%",
@@ -338,6 +444,7 @@ export async function POST(request: Request) {
             booking_data: (confidenceFactors.bookingData * 100).toFixed(0) + "%",
             competitor_data: (confidenceFactors.competitorData * 100).toFixed(0) + "%",
             market_consistency: (confidenceFactors.marketConsistency * 100).toFixed(0) + "%",
+            external_data: (confidenceFactors.externalDataQuality * 100).toFixed(0) + "%",
           },
         },
       })
@@ -362,7 +469,22 @@ export async function POST(request: Request) {
     success: true,
     count: predictions.length,
     message: `Generated ${predictions.length} predictions for ${hotels.length} hotels`,
-    algorithm_version: "2.0",
+    algorithm_version: "3.0", // Updated version
+    data_sources: {
+      internal: {
+        scan_results: recentResults?.length || 0,
+        bookings: bookings?.length || 0,
+        competitors: competitors?.length || 0,
+        competitor_prices: competitorPrices?.length || 0,
+      },
+      external: {
+        holidays: externalData.holidays?.holidays?.length || 0,
+        google_trends: trendsSource,
+        trends_score: trendsScore,
+        market_intel: marketIntel ? "available" : "unavailable",
+        booking_velocity: bookingVelocity,
+      },
+    },
     data_quality: {
       hours_since_last_scan: Math.round(hoursSinceLastScan),
       total_scan_results: recentResults?.length || 0,
