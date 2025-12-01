@@ -92,7 +92,7 @@ export default async function BudgetPage() {
           <CardHeader className="pb-2">
             <CardDescription>Monthly Target</CardDescription>
             <CardTitle className="text-2xl flex items-center gap-2">
-              <DollarSignIcon className="h-5 w-5 text-cyan-400" />${totalTarget.toLocaleString()}
+              <DollarSignIcon className="h-5 w-5 text-cyan-400" />₪{totalTarget.toLocaleString()}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -100,7 +100,7 @@ export default async function BudgetPage() {
           <CardHeader className="pb-2">
             <CardDescription>Actual Revenue</CardDescription>
             <CardTitle className="text-2xl flex items-center gap-2">
-              <TrendingUpIcon className="h-5 w-5 text-green-500" />${totalActual.toLocaleString()}
+              <TrendingUpIcon className="h-5 w-5 text-green-500" />₪{totalActual.toLocaleString()}
             </CardTitle>
           </CardHeader>
         </Card>

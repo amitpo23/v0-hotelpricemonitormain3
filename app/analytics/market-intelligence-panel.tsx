@@ -110,7 +110,7 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
                       <div className="grid grid-cols-4 gap-4">
                         <div>
                           <div className="text-xs text-muted-foreground">Avg Price</div>
-                          <div className="text-lg font-bold">${avgPrice.toFixed(0)}</div>
+                          <div className="text-lg font-bold">₪{avgPrice.toFixed(0)}</div>
                         </div>
                         <div>
                           <div className="text-xs text-muted-foreground">Occupancy</div>
@@ -223,7 +223,7 @@ export function MarketIntelligencePanel({ regionalData, demandFactors, trends }:
                       </span>
                     )}
                     {trend.trend_value && !trend.percentage_change && (
-                      <span>${Number(trend.trend_value).toFixed(0)}</span>
+                      <span>₪{Number(trend.trend_value).toFixed(0)}</span>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">

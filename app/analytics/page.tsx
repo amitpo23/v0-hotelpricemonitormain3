@@ -161,7 +161,7 @@ export default async function AnalyticsPage() {
               <DollarSignIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Avg Price</span>
             </div>
-            <div className="text-2xl font-bold">${avgMarketPrice.toFixed(0)}</div>
+            <div className="text-2xl font-bold">₪{avgMarketPrice.toFixed(0)}</div>
           </CardContent>
         </Card>
 
@@ -191,7 +191,7 @@ export default async function AnalyticsPage() {
               <BarChart3Icon className="h-3.5 w-3.5" />
               <span className="text-xs">RevPAR</span>
             </div>
-            <div className="text-2xl font-bold">${avgRevPAR.toFixed(0)}</div>
+            <div className="text-2xl font-bold">₪{avgRevPAR.toFixed(0)}</div>
           </CardContent>
         </Card>
 
@@ -201,7 +201,7 @@ export default async function AnalyticsPage() {
               <GlobeIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Market Avg</span>
             </div>
-            <div className="text-2xl font-bold">${avgCompetitorPrice.toFixed(0)}</div>
+            <div className="text-2xl font-bold">₪{avgCompetitorPrice.toFixed(0)}</div>
           </CardContent>
         </Card>
 
@@ -211,7 +211,7 @@ export default async function AnalyticsPage() {
               <TrendingUpIcon className="h-3.5 w-3.5" />
               <span className="text-xs">Revenue</span>
             </div>
-            <div className="text-2xl font-bold">${(totalRevenue / 1000).toFixed(0)}K</div>
+            <div className="text-2xl font-bold">₪{(totalRevenue / 1000).toFixed(0)}K</div>
             <div className={`flex items-center text-xs ${revenueGrowth >= 0 ? "text-green-600" : "text-red-600"}`}>
               {revenueGrowth >= 0 ? (
                 <ArrowUpRightIcon className="h-3 w-3" />
@@ -277,11 +277,11 @@ export default async function AnalyticsPage() {
                   <div className="flex justify-center gap-4 mt-4 text-sm">
                     <div>
                       <div className="text-muted-foreground">Your Avg</div>
-                      <div className="font-bold">${hotelAvgPrice.toFixed(0)}</div>
+                      <div className="font-bold">₪{hotelAvgPrice.toFixed(0)}</div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Market Avg</div>
-                      <div className="font-bold">${avgCompetitorPrice.toFixed(0)}</div>
+                      <div className="font-bold">₪{avgCompetitorPrice.toFixed(0)}</div>
                     </div>
                   </div>
                 </div>
@@ -406,15 +406,15 @@ export default async function AnalyticsPage() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-xl font-bold">${Number(data.price).toFixed(0)}</div>
+                            <div className="text-xl font-bold">₪{Number(data.price).toFixed(0)}</div>
                             <div
                               className={`text-xs ${
                                 Number(data.price) > hotelAvgPrice ? "text-green-600" : "text-red-600"
                               }`}
                             >
                               {Number(data.price) > hotelAvgPrice
-                                ? `+$${(Number(data.price) - hotelAvgPrice).toFixed(0)} higher`
-                                : `-$${(hotelAvgPrice - Number(data.price)).toFixed(0)} lower`}
+                                ? `₪${(Number(data.price) - hotelAvgPrice).toFixed(0)} higher`
+                                : `₪${(hotelAvgPrice - Number(data.price)).toFixed(0)} lower`}
                             </div>
                           </div>
                         </div>
@@ -442,7 +442,7 @@ export default async function AnalyticsPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Avg Price</span>
-                    <span className="font-bold">${avgCompetitorPrice.toFixed(0)}</span>
+                    <span className="font-bold">₪{avgCompetitorPrice.toFixed(0)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Avg Rating</span>
@@ -451,11 +451,11 @@ export default async function AnalyticsPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Price Range</span>
                     <span className="font-bold">
-                      $
+                      ₪
                       {competitorData && competitorData.length > 0
                         ? Math.min(...competitorData.map((c: any) => Number(c.price))).toFixed(0)
                         : 0}{" "}
-                      - $
+                      - ₪
                       {competitorData && competitorData.length > 0
                         ? Math.max(...competitorData.map((c: any) => Number(c.price))).toFixed(0)
                         : 0}
@@ -482,19 +482,19 @@ export default async function AnalyticsPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-sm text-muted-foreground mb-1">Total Revenue (90d)</div>
-                <div className="text-3xl font-bold">${totalRevenue.toLocaleString()}</div>
+                <div className="text-3xl font-bold">₪{totalRevenue.toLocaleString()}</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6">
                 <div className="text-sm text-muted-foreground mb-1">Daily Average</div>
-                <div className="text-3xl font-bold">${avgRevenue.toFixed(0)}</div>
+                <div className="text-3xl font-bold">₪{avgRevenue.toFixed(0)}</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6">
                 <div className="text-sm text-muted-foreground mb-1">RevPAR</div>
-                <div className="text-3xl font-bold">${avgRevPAR.toFixed(0)}</div>
+                <div className="text-3xl font-bold">₪{avgRevPAR.toFixed(0)}</div>
               </CardContent>
             </Card>
             <Card>
@@ -528,7 +528,7 @@ export default async function AnalyticsPage() {
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Revenue</div>
-                        <div className="font-bold">${Number(perf.total_revenue || 0).toLocaleString()}</div>
+                        <div className="font-bold">₪{Number(perf.total_revenue || 0).toLocaleString()}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Bookings</div>
@@ -536,11 +536,11 @@ export default async function AnalyticsPage() {
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">ADR</div>
-                        <div className="font-bold">${Number(perf.avg_daily_rate || 0).toFixed(0)}</div>
+                        <div className="font-bold">₪{Number(perf.avg_daily_rate || 0).toFixed(0)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">RevPAR</div>
-                        <div className="font-bold">${Number(perf.revpar || 0).toFixed(0)}</div>
+                        <div className="font-bold">₪{Number(perf.revpar || 0).toFixed(0)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Occupancy</div>
@@ -586,14 +586,14 @@ export default async function AnalyticsPage() {
                         ).toFixed(0) >= 0
                           ? "+"
                           : ""
-                      }$${Math.abs(
+                      }₪${Math.abs(
                         optimizationHistory.reduce(
                           (sum: number, o: any) =>
                             sum + (Number(o.optimized_price || 0) - Number(o.original_price || 0)),
                           0,
                         ) / optimizationHistory.length,
                       ).toFixed(0)}`
-                    : "$0"}
+                    : "₪0"}
                 </div>
               </CardContent>
             </Card>
@@ -624,9 +624,9 @@ export default async function AnalyticsPage() {
                       <div className="text-center px-4">
                         <div className="text-sm text-muted-foreground">Price Change</div>
                         <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">${Number(opt.original_price || 0).toFixed(0)}</span>
+                          <span className="text-muted-foreground">₪{Number(opt.original_price || 0).toFixed(0)}</span>
                           <ArrowUpRightIcon className="h-4 w-4" />
-                          <span className="font-bold">${Number(opt.optimized_price || 0).toFixed(0)}</span>
+                          <span className="font-bold">₪{Number(opt.optimized_price || 0).toFixed(0)}</span>
                         </div>
                       </div>
                       <div className="text-right">

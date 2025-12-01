@@ -11,6 +11,7 @@ import {
   ZapIcon,
   RefreshCwIcon,
   TrendingUpIcon,
+  BuildingIcon,
 } from "@/components/icons"
 import Link from "next/link"
 import { RunScanButton } from "./run-scan-button"
@@ -42,6 +43,8 @@ export default async function ScansPage() {
     .order("scraped_at", { ascending: false })
     .limit(20)
 
+  const { data: competitors } = await supabase.from("hotel_competitors").select("*").eq("is_active", true)
+
   const activeConfigs = scanConfigs?.filter((c) => c.is_active).length || 0
   const completedScans = recentScans?.filter((s) => s.status === "completed").length || 0
   const avgPrice = recentResults?.length
@@ -53,7 +56,7 @@ export default async function ScansPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-            Price Scanner
+            Price Radar
           </h1>
           <p className="text-muted-foreground">Real-time competitor price monitoring from Booking.com & Expedia</p>
         </div>
@@ -68,7 +71,7 @@ export default async function ScansPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <Card className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-cyan-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -98,7 +101,7 @@ export default async function ScansPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Market Avg Price</p>
-                <p className="text-3xl font-bold text-purple-400">${avgPrice.toFixed(0)}</p>
+                <p className="text-3xl font-bold text-purple-400">₪{avgPrice.toFixed(0)}</p>
               </div>
               <TrendingUpIcon className="h-8 w-8 text-purple-500" />
             </div>
@@ -119,7 +122,61 @@ export default async function ScansPage() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="bg-gradient-to-br from-pink-500/10 to-rose-500/10 border-pink-500/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Competitors Tracked</p>
+                <p className="text-3xl font-bold text-pink-400">{competitors?.length || 0}</p>
+              </div>
+              <BuildingIcon className="h-8 w-8 text-pink-500" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {competitors && competitors.length > 0 && (
+        <Card className="mb-8 border-border/50 bg-card/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BuildingIcon className="h-5 w-5 text-pink-400" />
+              Tracked Competitors
+            </CardTitle>
+            <CardDescription>Hotels being monitored for price comparison</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {competitors.map((comp, index) => {
+                const colors = ["#f97316", "#8b5cf6", "#22c55e", "#ec4899", "#eab308", "#3b82f6", "#ef4444", "#14b8a6"]
+                const color = comp.display_color || colors[index % colors.length]
+                return (
+                  <div
+                    key={comp.id}
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: `${color}15`, borderLeft: `3px solid ${color}` }}
+                  >
+                    <div className="font-medium text-sm">{comp.competitor_hotel_name}</div>
+                    {comp.star_rating && <div className="text-xs text-yellow-500">{"★".repeat(comp.star_rating)}</div>}
+                    <div className="flex gap-1 mt-1">
+                      {comp.booking_url && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          B
+                        </Badge>
+                      )}
+                      {comp.expedia_url && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          E
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -219,7 +276,7 @@ export default async function ScansPage() {
                           </td>
                           <td className="py-2 px-3">
                             <span className="text-cyan-400 font-mono font-bold">
-                              ${Number(result.price).toFixed(0)}
+                              ₪{Number(result.price).toFixed(0)}
                             </span>
                           </td>
                           <td className="py-2 px-3 text-sm text-muted-foreground">{result.room_type}</td>

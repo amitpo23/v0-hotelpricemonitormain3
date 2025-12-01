@@ -157,7 +157,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - Changed all $ to ₪ */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
         <Card>
           <CardContent className="pt-4 pb-3">
@@ -165,7 +165,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
               <DollarSignIcon className="h-3 w-3" />
               <span className="text-xs">Base Price</span>
             </div>
-            <div className="text-xl font-bold">${hotel.base_price || 0}</div>
+            <div className="text-xl font-bold">₪{hotel.base_price || 0}</div>
           </CardContent>
         </Card>
 
@@ -175,7 +175,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
               <BarChart3Icon className="h-3 w-3" />
               <span className="text-xs">Market Avg</span>
             </div>
-            <div className="text-xl font-bold">${avgCompetitorPrice.toFixed(0)}</div>
+            <div className="text-xl font-bold">₪{avgCompetitorPrice.toFixed(0)}</div>
           </CardContent>
         </Card>
 
@@ -223,7 +223,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
               <BarChart3Icon className="h-3 w-3" />
               <span className="text-xs">RevPAR</span>
             </div>
-            <div className="text-xl font-bold">${revpar.toFixed(0)}</div>
+            <div className="text-xl font-bold">₪{revpar.toFixed(0)}</div>
           </CardContent>
         </Card>
 
@@ -290,7 +290,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                   </CardHeader>
                   <CardContent>
                     <div className="text-4xl font-bold text-green-700 dark:text-green-400">
-                      ${recommendations[0].recommended_price}
+                      ₪{recommendations[0].recommended_price}
                     </div>
                     {recommendations[0].confidence_score && (
                       <Badge variant="outline" className="mt-2">
@@ -303,14 +303,14 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                     <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <div className="text-muted-foreground">Current</div>
-                        <div className="font-bold">${hotel.base_price || 0}</div>
+                        <div className="font-bold">₪{hotel.base_price || 0}</div>
                       </div>
                       <div>
                         <div className="text-muted-foreground">Difference</div>
                         <div
                           className={`font-bold ${Number(recommendations[0].recommended_price) > Number(hotel.base_price || 0) ? "text-green-600" : "text-red-600"}`}
                         >
-                          {Number(recommendations[0].recommended_price) > Number(hotel.base_price || 0) ? "+" : ""}$
+                          {Number(recommendations[0].recommended_price) > Number(hotel.base_price || 0) ? "+" : ""}₪
                           {(Number(recommendations[0].recommended_price) - Number(hotel.base_price || 0)).toFixed(0)}
                         </div>
                       </div>
@@ -386,7 +386,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold">${result.price}</div>
+                        <div className="text-lg font-bold">₪{result.price}</div>
                         <Badge variant={result.availability ? "default" : "secondary"} className="text-xs">
                           {result.availability ? "Available" : "Unavailable"}
                         </Badge>
@@ -440,7 +440,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                         </Badge>
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-bold">${pred.predicted_price}</div>
+                        <div className="text-2xl font-bold">₪{pred.predicted_price}</div>
                         {pred.confidence_score && (
                           <div className="text-xs text-muted-foreground">
                             {(pred.confidence_score * 100).toFixed(0)}% confidence
@@ -483,26 +483,28 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                 {autopilotRules && autopilotRules.length > 0 ? (
                   <div className="space-y-3">
                     {autopilotRules.map((rule: any) => (
-                      <div key={rule.id} className="p-4 rounded-lg border bg-card">
+                      <div
+                        key={rule.id}
+                        className={`p-4 rounded-lg border ${rule.is_active ? "bg-card" : "bg-muted/50 opacity-60"}`}
+                      >
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium">{rule.name}</div>
                           <Badge variant={rule.is_active ? "default" : "secondary"}>
-                            {rule.is_active ? "Active" : "Paused"}
+                            {rule.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Trigger: </span>
-                            <span className="font-medium">{rule.trigger_type.replace("_", " ")}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Action: </span>
-                            <span className="font-medium">{rule.action_type.replace("_", " ")}</span>
-                          </div>
+                        <div className="text-sm text-muted-foreground">
+                          Trigger: {rule.trigger_type} | Action: {rule.action_type}
                         </div>
-                        {(rule.min_price || rule.max_price) && (
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            Price range: ${rule.min_price || "0"} - ${rule.max_price || "∞"}
+                        {rule.price_adjustment && (
+                          <div className="text-sm mt-1">
+                            Adjustment:{" "}
+                            <span className="font-medium">
+                              {rule.price_adjustment > 0 ? "+" : ""}
+                              {rule.adjustment_type === "percentage"
+                                ? `${rule.price_adjustment}%`
+                                : `₪${rule.price_adjustment}`}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -519,34 +521,37 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
 
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <ZapIcon className="h-5 w-5 text-yellow-500" />
-                  Recent Actions
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <ZapIcon className="h-5 w-5" />
+                  Recent Autopilot Activity
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {autopilotLogs && autopilotLogs.length > 0 ? (
                   <div className="space-y-3">
-                    {autopilotLogs.slice(0, 8).map((log: any) => (
+                    {autopilotLogs.slice(0, 10).map((log: any) => (
                       <div key={log.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                         <div>
-                          <div className="font-medium text-sm">{log.action_taken}</div>
+                          <div className="text-sm font-medium">{log.action_taken}</div>
                           <div className="text-xs text-muted-foreground">
                             {new Date(log.executed_at).toLocaleString()}
                           </div>
                         </div>
-                        {log.old_price && log.new_price && (
-                          <div className="text-right">
-                            <span className="text-muted-foreground">${log.old_price}</span>
-                            <span className="mx-1">→</span>
-                            <span className="font-bold text-green-600">${log.new_price}</span>
-                          </div>
-                        )}
+                        <div className="text-right">
+                          {log.old_price && log.new_price && (
+                            <div className="text-sm">
+                              ₪{log.old_price} → <span className="font-bold">₪{log.new_price}</span>
+                            </div>
+                          )}
+                          <Badge variant={log.success ? "default" : "destructive"} className="text-xs">
+                            {log.success ? "Success" : "Failed"}
+                          </Badge>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-8">No autopilot actions yet</p>
+                  <p className="text-muted-foreground text-center py-8">No autopilot activity yet</p>
                 )}
               </CardContent>
             </Card>
@@ -559,7 +564,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
             <Card>
               <CardContent className="pt-6">
                 <div className="text-sm text-muted-foreground mb-1">Total Revenue (30d)</div>
-                <div className="text-3xl font-bold">${totalRevenue.toLocaleString()}</div>
+                <div className="text-3xl font-bold">₪{totalRevenue.toLocaleString()}</div>
               </CardContent>
             </Card>
             <Card>
@@ -571,37 +576,38 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
             <Card>
               <CardContent className="pt-6">
                 <div className="text-sm text-muted-foreground mb-1">RevPAR</div>
-                <div className="text-3xl font-bold">${revpar.toFixed(0)}</div>
+                <div className="text-3xl font-bold">₪{revpar.toFixed(0)}</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6">
-                <div className="text-sm text-muted-foreground mb-1">Total Scans</div>
-                <div className="text-3xl font-bold">{scanResults?.length || 0}</div>
+                <div className="text-sm text-muted-foreground mb-1">Total Rooms</div>
+                <div className="text-3xl font-bold">{hotel.total_rooms || 0}</div>
               </CardContent>
             </Card>
           </div>
 
+          {/* Historical Performance */}
           <Card>
             <CardHeader>
               <CardTitle>Historical Performance</CardTitle>
-              <CardDescription>Monthly performance metrics</CardDescription>
+              <CardDescription>Revenue and occupancy over time</CardDescription>
             </CardHeader>
             <CardContent>
               {historicalPerformance && historicalPerformance.length > 0 ? (
                 <div className="space-y-3">
                   {historicalPerformance.map((perf: any) => (
-                    <div key={perf.id} className="grid grid-cols-6 gap-4 p-3 rounded-lg bg-muted/50 items-center">
+                    <div key={perf.id} className="grid grid-cols-5 gap-4 p-4 rounded-lg bg-muted/50 items-center">
                       <div>
                         <div className="text-xs text-muted-foreground">Period</div>
-                        <div className="font-medium text-sm">
+                        <div className="font-medium">
                           {new Date(perf.period_start).toLocaleDateString()} -{" "}
                           {new Date(perf.period_end).toLocaleDateString()}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Revenue</div>
-                        <div className="font-bold">${Number(perf.total_revenue || 0).toLocaleString()}</div>
+                        <div className="font-bold">₪{Number(perf.total_revenue || 0).toLocaleString()}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Bookings</div>
@@ -609,11 +615,7 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">ADR</div>
-                        <div className="font-bold">${Number(perf.avg_daily_rate || 0).toFixed(0)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">RevPAR</div>
-                        <div className="font-bold">${Number(perf.revpar || 0).toFixed(0)}</div>
+                        <div className="font-bold">₪{Number(perf.avg_daily_rate || 0).toFixed(0)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Occupancy</div>
@@ -632,24 +634,29 @@ export default async function HotelDetailPage({ params }: { params: Promise<{ id
           <Card>
             <CardHeader>
               <CardTitle>Price Optimization History</CardTitle>
+              <CardDescription>Recent price changes and their impact</CardDescription>
             </CardHeader>
             <CardContent>
               {optimizationHistory && optimizationHistory.length > 0 ? (
                 <div className="space-y-3">
-                  {optimizationHistory.slice(0, 10).map((opt: any) => (
-                    <div key={opt.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  {optimizationHistory.map((opt: any) => (
+                    <div key={opt.id} className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                       <div>
                         <div className="font-medium">{new Date(opt.date).toLocaleDateString()}</div>
                         <div className="text-sm text-muted-foreground">
                           {opt.optimization_reason || "Automated optimization"}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <span className="text-muted-foreground">${Number(opt.original_price || 0).toFixed(0)}</span>
-                          <span className="mx-2">→</span>
-                          <span className="font-bold">${Number(opt.optimized_price || 0).toFixed(0)}</span>
+                      <div className="text-center">
+                        <div className="text-sm text-muted-foreground">Price Change</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">₪{Number(opt.original_price || 0).toFixed(0)}</span>
+                          <ArrowUpRightIcon className="h-4 w-4" />
+                          <span className="font-bold">₪{Number(opt.optimized_price || 0).toFixed(0)}</span>
                         </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground">Performance</div>
                         <Badge variant={Number(opt.performance_score || 0) >= 0.7 ? "default" : "secondary"}>
                           {(Number(opt.performance_score || 0) * 100).toFixed(0)}%
                         </Badge>

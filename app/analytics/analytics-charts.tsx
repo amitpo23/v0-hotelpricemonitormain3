@@ -138,7 +138,7 @@ export function AnalyticsCharts({ scanResults, competitorData, revenue, predicti
                 yAxisId="left"
                 dataKey="revenue"
                 fill="hsl(var(--primary))"
-                name="Revenue ($)"
+                name="Revenue (₪)"
                 radius={[4, 4, 0, 0]}
               />
               <Line
@@ -172,7 +172,7 @@ export function AnalyticsCharts({ scanResults, competitorData, revenue, predicti
                   border: "1px solid hsl(var(--border))",
                 }}
                 formatter={(value: any, name: string) => {
-                  if (name === "Predicted Price") return [`$${value}`, name]
+                  if (name === "Predicted Price") return [`₪${value}`, name]
                   if (name === "Confidence") return [`${value}%`, name]
                   return [value, name]
                 }}

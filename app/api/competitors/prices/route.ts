@@ -30,41 +30,66 @@ export async function GET(request: Request) {
       })
     }
 
-    // Get competitor prices for the specific date
     let prices: any[] = []
 
     if (date) {
-      const competitorIds = competitors.map((c) => c.id)
-
-      let query = supabase
-        .from("competitor_daily_prices")
+      // First try to get from scan_results using metadata.check_in
+      const { data: scanResults } = await supabase
+        .from("scan_results")
         .select("*")
         .eq("hotel_id", hotelId)
-        .eq("date", date)
-        .in("competitor_id", competitorIds)
+        .order("scraped_at", { ascending: false })
 
-      // Filter by room type if specified
-      if (roomTypeId) {
-        query = query.eq("room_type_id", roomTypeId)
-      }
+      // Filter by date from metadata
+      const filteredResults =
+        scanResults?.filter((sr) => {
+          if (sr.metadata?.check_in === date) return true
+          return false
+        }) || []
 
-      const { data: competitorPrices } = await query
+      // If no scan results, try competitor_daily_prices as fallback
+      if (filteredResults.length === 0) {
+        const competitorIds = competitors.map((c) => c.id)
 
-      // Get one price per competitor (most recent)
-      const priceMap = new Map()
-      for (const price of competitorPrices || []) {
-        const existing = priceMap.get(price.competitor_id)
-        if (!existing || new Date(price.scraped_at) > new Date(existing.scraped_at)) {
-          priceMap.set(price.competitor_id, price)
+        let query = supabase
+          .from("competitor_daily_prices")
+          .select("*")
+          .eq("hotel_id", hotelId)
+          .eq("date", date)
+          .in("competitor_id", competitorIds)
+
+        if (roomTypeId) {
+          query = query.eq("room_type_id", roomTypeId)
         }
+
+        const { data: competitorPrices } = await query
+
+        const priceMap = new Map()
+        for (const price of competitorPrices || []) {
+          const existing = priceMap.get(price.competitor_id)
+          if (!existing || new Date(price.scraped_at) > new Date(existing.scraped_at)) {
+            priceMap.set(price.competitor_id, price)
+          }
+        }
+        prices = Array.from(priceMap.values())
+      } else {
+        // Use scan results
+        prices = filteredResults.map((sr) => ({
+          id: sr.id,
+          source: sr.source,
+          price: Number.parseFloat(sr.price),
+          currency: sr.currency,
+          room_type: sr.room_type,
+          scraped_at: sr.scraped_at,
+          availability: sr.availability,
+        }))
       }
-      prices = Array.from(priceMap.values())
     }
 
     return NextResponse.json({
       competitors,
       prices,
-      source: "real_competitors",
+      source: prices.length > 0 ? "scan_results" : "no_data",
       message: `Tracking ${competitors.length} competitor hotels`,
     })
   } catch (error) {

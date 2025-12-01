@@ -72,16 +72,16 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                 <div>
                   <div className="text-muted-foreground">Target</div>
-                  <div className="font-semibold">${Number(budget.target_revenue).toLocaleString()}</div>
+                  <div className="font-semibold">₪{Number(budget.target_revenue).toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Actual</div>
-                  <div className="font-semibold text-green-500">${budget.totalRevenue.toLocaleString()}</div>
+                  <div className="font-semibold text-green-500">₪{budget.totalRevenue.toLocaleString()}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Gap</div>
                   <div className={`font-semibold ${budget.gap > 0 ? "text-orange-500" : "text-green-500"}`}>
-                    ${Math.abs(budget.gap).toLocaleString()}
+                    ₪{Math.abs(budget.gap).toLocaleString()}
                     {budget.gap <= 0 && " surplus"}
                   </div>
                 </div>
@@ -92,7 +92,7 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
                 <div>
                   <div className="text-muted-foreground">Daily Target</div>
                   <div className="font-semibold text-cyan-400">
-                    ${budget.daysRemaining > 0 ? Math.round(budget.gap / budget.daysRemaining).toLocaleString() : 0}/day
+                    ₪{budget.daysRemaining > 0 ? Math.round(budget.gap / budget.daysRemaining).toLocaleString() : 0}/day
                   </div>
                 </div>
               </div>
@@ -107,7 +107,7 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
                   <p className="text-sm text-muted-foreground">
                     To reach your target, you need{" "}
                     <strong className="text-foreground">
-                      ${Math.round(budget.gap / budget.daysRemaining).toLocaleString()}
+                      ₪{Math.round(budget.gap / budget.daysRemaining).toLocaleString()}
                     </strong>{" "}
                     per day for the remaining <strong className="text-foreground">{budget.daysRemaining} days</strong>.
                     Consider increasing prices on high-demand days or running promotions on low-occupancy periods.
@@ -133,7 +133,7 @@ export function BudgetProgress({ budgetProgress }: BudgetProgressProps) {
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
                     You've exceeded your monthly target by{" "}
-                    <strong className="text-green-400">${Math.abs(budget.gap).toLocaleString()}</strong>. Great job!
+                    <strong className="text-green-400">₪{Math.abs(budget.gap).toLocaleString()}</strong>. Great job!
                   </p>
                 </div>
               )}

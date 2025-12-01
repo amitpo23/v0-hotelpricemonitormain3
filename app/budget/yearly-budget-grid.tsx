@@ -85,7 +85,7 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
         <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-background/30 rounded-lg">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Yearly Target</p>
-            <p className="text-2xl font-bold text-cyan-400">${yearlyTotal.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-cyan-400">₪{yearlyTotal.toLocaleString()}</p>
           </div>
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Months Set</p>
@@ -94,7 +94,7 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Avg Monthly</p>
             <p className="text-2xl font-bold">
-              ${monthsWithBudget > 0 ? Math.round(yearlyTotal / monthsWithBudget).toLocaleString() : 0}
+              ₪{monthsWithBudget > 0 ? Math.round(yearlyTotal / monthsWithBudget).toLocaleString() : 0}
             </p>
           </div>
         </div>
@@ -127,10 +127,10 @@ export function YearlyBudgetGrid({ hotels, budgets }: YearlyBudgetGridProps) {
 
                 {hasBudget ? (
                   <div className="space-y-1">
-                    <p className="text-lg font-bold">${Number(budget.target_revenue).toLocaleString()}</p>
+                    <p className="text-lg font-bold">₪{Number(budget.target_revenue).toLocaleString()}</p>
                     <div className="flex flex-col text-xs text-muted-foreground">
                       {budget.target_occupancy && <span>{budget.target_occupancy}% occ</span>}
-                      {budget.target_adr && <span>${budget.target_adr} ADR</span>}
+                      {budget.target_adr && <span>₪{budget.target_adr} ADR</span>}
                     </div>
                   </div>
                 ) : (

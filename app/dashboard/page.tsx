@@ -499,7 +499,7 @@ export default async function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-slate-400">Your Average Price</div>
-                    <div className="text-3xl font-bold text-white">${avgOurPrice.toFixed(0)}</div>
+                    <div className="text-3xl font-bold text-white">₪{avgOurPrice.toFixed(0)}</div>
                   </div>
                   <div className="text-center">
                     <div
@@ -512,13 +512,13 @@ export default async function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-slate-400">Competitor Average</div>
-                    <div className="text-3xl font-bold text-slate-300">${avgCompetitorPrice.toFixed(0)}</div>
+                    <div className="text-3xl font-bold text-slate-300">₪{avgCompetitorPrice.toFixed(0)}</div>
                   </div>
                 </div>
               </div>
             ) : (
               <div className="text-center py-8">
-                <div className="text-3xl font-bold text-cyan-400 mb-2">${avgNightlyRate.toFixed(0)}</div>
+                <div className="text-3xl font-bold text-cyan-400 mb-2">₪{avgNightlyRate.toFixed(0)}</div>
                 <div className="text-slate-400">Your ADR (Average Daily Rate)</div>
                 <div className="text-sm text-slate-500 mt-2">Run a competitor scan to compare prices</div>
                 <Link href="/calendar">
@@ -563,7 +563,7 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-green-400">${data.revenue.toLocaleString()}</div>
+                        <div className="font-bold text-green-400">₪{data.revenue.toLocaleString()}</div>
                         <div className="text-xs text-slate-500">{data.total} הזמנות</div>
                       </div>
                     </div>
@@ -595,7 +595,7 @@ export default async function DashboardPage() {
                         <div className="text-xs text-slate-400">מאושרות בלבד</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-blue-400">${data.revenue.toLocaleString()}</div>
+                        <div className="font-bold text-blue-400">₪{data.revenue.toLocaleString()}</div>
                         <div className="text-xs text-slate-500">{data.bookings} הזמנות</div>
                       </div>
                     </div>
@@ -629,7 +629,7 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-purple-400">${data.revenue.toLocaleString()}</div>
+                        <div className="font-bold text-purple-400">₪{data.revenue.toLocaleString()}</div>
                         <div className="text-xs text-slate-500">{data.total} הזמנות</div>
                       </div>
                     </div>
