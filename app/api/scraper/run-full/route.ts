@@ -360,26 +360,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const { error: deleteError } = await supabase.from("competitor_daily_prices").delete().eq("hotel_id", hotelId)
-
-    if (deleteError) {
-      console.error("[v0] Error deleting old competitor prices:", deleteError)
-    }
-
+    // Upsert competitor prices instead of deleting them
     let insertedCount = 0
     if (competitorPriceResults.length > 0) {
       for (let i = 0; i < competitorPriceResults.length; i += 500) {
         const batch = competitorPriceResults.slice(i, i + 500)
         const { data: insertedData, error: insertError } = await supabase
           .from("competitor_daily_prices")
-          .insert(batch)
+          .upsert(batch, {
+            // Match the existing unique constraint: competitor_daily_prices_competitor_id_date_source_key
+            onConflict: "competitor_id,date,source",
+            ignoreDuplicates: false,
+          })
           .select("id")
 
         if (insertError) {
-          console.error(`[v0] Error inserting competitor prices batch ${i}:`, JSON.stringify(insertError))
+          console.error(`[v0] Error upserting competitor prices batch ${i}:`, JSON.stringify(insertError))
           // Try inserting one by one to find the problematic record
           for (const record of batch) {
-            const { error: singleError } = await supabase.from("competitor_daily_prices").insert(record)
+            const { error: singleError } = await supabase.from("competitor_daily_prices").upsert(record, {
+              onConflict: "competitor_id,date,source",
+              ignoreDuplicates: false,
+            })
             if (singleError) {
               console.error(`[v0] Failed record:`, JSON.stringify(record), JSON.stringify(singleError))
             } else {
