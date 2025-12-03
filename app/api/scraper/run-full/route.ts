@@ -135,15 +135,33 @@ function generateRoomTypeColor(index: number): string {
 
 export async function POST(request: Request) {
   const startTime = new Date()
+  console.log("[v0] Scraper POST started at:", startTime.toISOString())
 
   try {
     const supabase = await createClient()
-    const { hotelId, roomTypeId, autoDetectRoomTypes = true } = await request.json()
+
+    let requestBody
+    try {
+      requestBody = await request.json()
+    } catch (e) {
+      console.error("[v0] Failed to parse request body:", e)
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+    }
+
+    const { hotelId, roomTypeId, autoDetectRoomTypes = true } = requestBody
+    console.log("[v0] Request params - hotelId:", hotelId, "roomTypeId:", roomTypeId)
+
+    if (!hotelId) {
+      console.error("[v0] No hotelId provided")
+      return NextResponse.json({ error: "hotelId is required" }, { status: 400 })
+    }
 
     const { data: hotel, error: hotelError } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
+    console.log("[v0] Hotel query result:", hotel ? hotel.name : "not found", "error:", hotelError)
 
     if (hotelError || !hotel) {
-      return NextResponse.json({ error: "Hotel not found" }, { status: 404 })
+      console.error("[v0] Hotel not found:", hotelError)
+      return NextResponse.json({ error: "Hotel not found: " + (hotelError?.message || "unknown") }, { status: 404 })
     }
 
     const { data: scanRecord, error: scanError } = await supabase
@@ -159,13 +177,24 @@ export async function POST(request: Request) {
       .select()
       .single()
 
-    let { data: hotelRoomTypes } = await supabase
+    console.log("[v0] Scan record created:", scanRecord?.id, "error:", scanError)
+
+    const { data: hotelRoomTypesData } = await supabase
       .from("hotel_room_types")
       .select("*")
       .eq("hotel_id", hotelId)
       .eq("is_active", true)
 
-    if (autoDetectRoomTypes && (!hotelRoomTypes || hotelRoomTypes.length === 0)) {
+    let hotelRoomTypes = hotelRoomTypesData
+    console.log("[v0] Room types found:", hotelRoomTypes?.length || 0)
+
+    if (scanError || !scanRecord) {
+      console.error("[v0] Failed to create scan record:", scanError)
+      return NextResponse.json({ error: "Failed to create scan record" }, { status: 500 })
+    }
+
+    if (!hotelRoomTypes || hotelRoomTypes.length === 0) {
+      console.log("[v0] No room types found, creating defaults")
       const detectedRoomTypes = await detectRoomTypesFromUrl(hotel.competitor_urls?.[0] || "", hotel.name)
       const roomTypesToInsert = detectedRoomTypes.map((rt, index) => ({
         hotel_id: hotelId,
@@ -175,10 +204,18 @@ export async function POST(request: Request) {
         is_active: true,
       }))
 
-      const { data: insertedRoomTypes } = await supabase.from("hotel_room_types").insert(roomTypesToInsert).select()
+      const { data: insertedHotelRoomTypes, error: roomTypeError } = await supabase
+        .from("hotel_room_types")
+        .insert(roomTypesToInsert)
+        .select()
 
-      if (insertedRoomTypes) {
-        hotelRoomTypes = insertedRoomTypes
+      if (roomTypeError) {
+        console.error("[v0] Failed to create room types:", roomTypeError)
+      }
+
+      if (insertedHotelRoomTypes && insertedHotelRoomTypes.length > 0) {
+        hotelRoomTypes = insertedHotelRoomTypes
+        console.log("[v0] Created", insertedHotelRoomTypes.length, "room types")
       }
     }
 
@@ -210,7 +247,6 @@ export async function POST(request: Request) {
       .select("competitor_id, date, price, source, room_type")
       .eq("hotel_id", hotelId)
 
-    // Create a map for quick lookup of old prices
     const oldPricesMap = new Map<string, number>()
     if (existingPrices) {
       for (const ep of existingPrices) {
@@ -229,8 +265,25 @@ export async function POST(request: Request) {
     const roomTypesToScan = roomTypeId
       ? hotelRoomTypes?.filter((rt) => rt.id === roomTypeId) || []
       : hotelRoomTypes && hotelRoomTypes.length > 0
-        ? hotelRoomTypes
-        : [{ id: null, name: "Standard Room", base_price: basePrice }]
+        ? hotelRoomTypes.filter((rt) => rt.id != null)
+        : []
+
+    if (roomTypesToScan.length === 0) {
+      console.error("[v0] No valid room types to scan")
+      if (scanRecord) {
+        await supabase
+          .from("scans")
+          .update({
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            error_message: "No room types configured",
+          })
+          .eq("id", scanRecord.id)
+      }
+      return NextResponse.json({ error: "No room types configured. Please add room types first." }, { status: 400 })
+    }
+
+    console.log("[v0] Scanning", roomTypesToScan.length, "room types for", SCAN_DAYS, "days")
 
     for (let i = 0; i < SCAN_DAYS; i++) {
       const scanDate = new Date(today)
@@ -248,7 +301,6 @@ export async function POST(request: Request) {
           const prices = generateCompetitorPrice(roomBasePrice, scanDate, comp)
           competitorPrices.push(prices.avgPrice)
 
-          // Booking.com price
           const bookingKey = `${comp.id}-${dateStr}-Booking.com-${roomType.name}`
           const oldBookingPrice = oldPricesMap.get(bookingKey)
 
@@ -277,7 +329,6 @@ export async function POST(request: Request) {
             })
           }
 
-          // Expedia price
           const expediaKey = `${comp.id}-${dateStr}-Expedia-${roomType.name}`
           const oldExpediaPrice = oldPricesMap.get(expediaKey)
 
@@ -360,34 +411,19 @@ export async function POST(request: Request) {
       }
     }
 
-    // Upsert competitor prices instead of deleting them
+    console.log("[v0] Generated", competitorPriceResults.length, "competitor prices,", results.length, "daily prices")
+
     let insertedCount = 0
     if (competitorPriceResults.length > 0) {
       for (let i = 0; i < competitorPriceResults.length; i += 500) {
         const batch = competitorPriceResults.slice(i, i + 500)
-        const { data: insertedData, error: insertError } = await supabase
-          .from("competitor_daily_prices")
-          .upsert(batch, {
-            // Match the existing unique constraint: competitor_daily_prices_competitor_id_date_source_key
-            onConflict: "competitor_id,date,source",
-            ignoreDuplicates: false,
-          })
-          .select("id")
+        const { error: insertError } = await supabase.from("competitor_daily_prices").upsert(batch, {
+          onConflict: "competitor_id,date,source",
+          ignoreDuplicates: false,
+        })
 
         if (insertError) {
           console.error(`[v0] Error upserting competitor prices batch ${i}:`, JSON.stringify(insertError))
-          // Try inserting one by one to find the problematic record
-          for (const record of batch) {
-            const { error: singleError } = await supabase.from("competitor_daily_prices").upsert(record, {
-              onConflict: "competitor_id,date,source",
-              ignoreDuplicates: false,
-            })
-            if (singleError) {
-              console.error(`[v0] Failed record:`, JSON.stringify(record), JSON.stringify(singleError))
-            } else {
-              insertedCount++
-            }
-          }
         } else {
           insertedCount += batch.length
         }
@@ -401,9 +437,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // Upsert daily prices
-    for (let i = 0; i < results.length; i += 500) {
-      const batch = results.slice(i, i + 500)
+    const validResults = results.filter((r) => r.room_type_id != null)
+    console.log("[v0] Inserting", validResults.length, "valid daily_prices records")
+
+    for (let i = 0; i < validResults.length; i += 500) {
+      const batch = validResults.slice(i, i + 500)
       const { error: dpError } = await supabase.from("daily_prices").upsert(batch, {
         onConflict: "hotel_id,date,room_type_id",
         ignoreDuplicates: false,
@@ -413,7 +451,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Insert scan results
     if (scanResults.length > 0) {
       await supabase.from("scan_results").insert(scanResults)
     }
@@ -452,6 +489,8 @@ export async function POST(request: Request) {
       }
     })
 
+    console.log("[v0] Scraper completed successfully")
+
     return NextResponse.json({
       success: true,
       scanId: scanRecord?.id,
@@ -477,7 +516,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("Scraper error:", error)
+    console.error("[v0] Scraper error:", error)
     return NextResponse.json({ error: "Scraper failed", details: String(error) }, { status: 500 })
   }
 }

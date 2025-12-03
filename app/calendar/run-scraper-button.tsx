@@ -20,13 +20,17 @@ interface RunScraperButtonProps {
 export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperButtonProps) {
   const [isRunning, setIsRunning] = useState(false)
   const [result, setResult] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   const runScraper = async () => {
     setIsRunning(true)
     setResult(null)
+    setError(null)
 
     try {
+      console.log("[v0] Starting scraper for hotel:", hotelId)
+
       const response = await fetch("/api/scraper/run-full", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -37,16 +41,25 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
         }),
       })
 
+      console.log("[v0] Scraper response status:", response.status)
+
       const data = await response.json()
+      console.log("[v0] Scraper response data:", data)
 
       if (response.ok) {
         setResult(data)
         router.refresh()
       } else {
-        setResult({ error: data.error })
+        const errorMsg = data.error || data.message || JSON.stringify(data)
+        console.error("[v0] Scraper error:", errorMsg)
+        setError(errorMsg)
+        setResult({ error: errorMsg })
       }
-    } catch (error) {
-      setResult({ error: "Failed to run scraper" })
+    } catch (err: any) {
+      console.error("[v0] Scraper fetch error:", err)
+      const errorMsg = err.message || "Failed to run scraper"
+      setError(errorMsg)
+      setResult({ error: errorMsg })
     } finally {
       setIsRunning(false)
     }
@@ -83,7 +96,11 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
           </div>
         )}
 
-        {result?.error && <span className="text-sm text-red-400">{result.error}</span>}
+        {error && (
+          <span className="text-sm text-red-400 max-w-md truncate" title={error}>
+            {error}
+          </span>
+        )}
       </div>
 
       {result && !result.error && (
