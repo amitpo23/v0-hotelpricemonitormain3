@@ -405,7 +405,7 @@ export async function POST(request: Request) {
     for (let i = 0; i < results.length; i += 500) {
       const batch = results.slice(i, i + 500)
       const { error: dpError } = await supabase.from("daily_prices").upsert(batch, {
-        onConflict: "hotel_id,date",
+        onConflict: "hotel_id,date,room_type_id",
         ignoreDuplicates: false,
       })
       if (dpError) {
