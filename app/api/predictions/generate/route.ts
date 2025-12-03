@@ -129,11 +129,13 @@ function getDemandLevel(score: number, occupancyRate: number, trendsScore: numbe
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-  const { hotels } = await request.json()
+  const { hotels, daysAhead = 30 } = await request.json()
 
   if (!hotels || hotels.length === 0) {
     return NextResponse.json({ error: "No hotels provided" }, { status: 400 })
   }
+
+  const predictionDays = Math.min(180, Math.max(30, daysAhead))
 
   const today = new Date()
   const currentMonth = today.getMonth() + 1
@@ -164,12 +166,7 @@ export async function POST(request: Request) {
       .in("hotel_id", hotelIds)
       .gte("check_in_date", today.toISOString().split("T")[0])
       .eq("status", "confirmed"),
-    supabase
-      .from("revenue_budgets")
-      .select("*")
-      .in("hotel_id", hotelIds)
-      .eq("year", currentYear)
-      .eq("month", currentMonth),
+    supabase.from("revenue_budgets").select("*").in("hotel_id", hotelIds).gte("year", currentYear),
     supabase
       .from("revenue_tracking")
       .select("*")
@@ -183,22 +180,38 @@ export async function POST(request: Request) {
       .select("*, competitor_room_types(*)")
       .in("hotel_id", hotelIds)
       .eq("is_active", true),
-    supabase.from("competitor_daily_prices").select("*").gte("date", today.toISOString().split("T")[0]),
+    supabase
+      .from("competitor_daily_prices")
+      .select("*")
+      .gte("date", today.toISOString().split("T")[0])
+      .lte("date", new Date(today.getTime() + predictionDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]),
   ])
 
   const holidayMap = buildHolidayMap(externalData.holidays)
-
   const trendsScore = externalData.trends?.data?.interestScore || 75
   const trendsSource = externalData.trends?.data?.source || "default"
-
   const marketIntel = externalData.marketIntel
   const bookingVelocity = marketIntel?.bookingVelocity?.trend || "stable"
 
-  // Calculate data quality metrics
   const lastScanDate = scans?.[0]?.created_at ? new Date(scans[0].created_at) : null
   const hoursSinceLastScan = lastScanDate ? (today.getTime() - lastScanDate.getTime()) / (1000 * 60 * 60) : 999
 
-  // Market averages by hotel with variance calculation
+  const competitorPricesByDate: Record<string, { booking: number[]; expedia: number[] }> = {}
+  competitorPrices?.forEach((cp: any) => {
+    const dateStr = cp.date
+    if (!competitorPricesByDate[dateStr]) {
+      competitorPricesByDate[dateStr] = { booking: [], expedia: [] }
+    }
+    const price = Number(cp.price)
+    if (price > 0) {
+      if (cp.source?.toLowerCase().includes("booking")) {
+        competitorPricesByDate[dateStr].booking.push(price)
+      } else if (cp.source?.toLowerCase().includes("expedia")) {
+        competitorPricesByDate[dateStr].expedia.push(price)
+      }
+    }
+  })
+
   const marketDataByHotel: Record<string, { avg: number; min: number; max: number; count: number; prices: number[] }> =
     {}
 
@@ -245,7 +258,6 @@ export async function POST(request: Request) {
     return Math.max(0.3, Math.min(1.0, 1 - coefficientOfVariation))
   }
 
-  // Bookings data structures
   const bookingsByHotelDate: Record<string, Record<string, number>> = {}
   const bookingsRevenueByHotel: Record<string, number> = {}
 
@@ -269,9 +281,13 @@ export async function POST(request: Request) {
     bookingsRevenueByHotel[b.hotel_id] += Number(b.total_price || 0)
   })
 
-  const budgetByHotel: Record<string, any> = {}
+  const budgetByHotelMonth: Record<string, Record<string, any>> = {}
   budgets?.forEach((b: any) => {
-    budgetByHotel[b.hotel_id] = b
+    const key = `${b.hotel_id}-${b.year}-${b.month}`
+    if (!budgetByHotelMonth[b.hotel_id]) {
+      budgetByHotelMonth[b.hotel_id] = {}
+    }
+    budgetByHotelMonth[b.hotel_id][`${b.year}-${b.month}`] = b
   })
 
   const actualRevenueByHotel: Record<string, number> = {}
@@ -297,7 +313,6 @@ export async function POST(request: Request) {
 
   const predictions: any[] = []
 
-  // Seasonality factors for Tel Aviv/Israel
   const seasonalityFactors: Record<number, { factor: number; label: string }> = {
     0: { factor: 0.85, label: "winter_low" },
     1: { factor: 0.8, label: "winter_lowest" },
@@ -319,42 +334,40 @@ export async function POST(request: Request) {
     const hotelCompetitors = competitorsByHotel[hotel.id] || []
     const marketData = marketDataByHotel[hotel.id]
 
-    // Budget calculations
-    const budget = budgetByHotel[hotel.id]
-    const targetRevenue = budget?.target_revenue || 0
-    const actualRevenue = actualRevenueByHotel[hotel.id] || 0
-    const bookedRevenue = bookingsRevenueByHotel[hotel.id] || 0
-    const totalExpectedRevenue = actualRevenue + bookedRevenue
-    const budgetGap = targetRevenue - totalExpectedRevenue
-    const daysRemaining = new Date(currentYear, currentMonth, 0).getDate() - today.getDate()
-    const dailyRevenueNeeded = daysRemaining > 0 ? budgetGap / daysRemaining : 0
-
-    // Budget pressure: if behind budget, increase prices slightly
-    const budgetPressure =
-      targetRevenue > 0 ? Math.max(0.92, Math.min(1.18, 1 + (budgetGap / targetRevenue) * 0.25)) : 1.0
-
-    const velocityFactor = bookingVelocity === "increasing" ? 1.05 : bookingVelocity === "decreasing" ? 0.95 : 1.0
-
-    // Generate predictions for next 30 days
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < predictionDays; i++) {
       const predDate = new Date(today)
       predDate.setDate(predDate.getDate() + i)
       const dateStr = predDate.toISOString().split("T")[0]
       const monthDay = `${String(predDate.getMonth() + 1).padStart(2, "0")}-${String(predDate.getDate()).padStart(2, "0")}`
+      const predMonth = predDate.getMonth() + 1
+      const predYear = predDate.getFullYear()
+
+      const budgetKey = `${predYear}-${predMonth}`
+      const budget = budgetByHotelMonth[hotel.id]?.[budgetKey]
+      const targetRevenue = budget?.target_revenue || 0
+      const actualRevenue = actualRevenueByHotel[hotel.id] || 0
+      const bookedRevenue = bookingsRevenueByHotel[hotel.id] || 0
+      const totalExpectedRevenue = actualRevenue + bookedRevenue
+      const budgetGap = targetRevenue - totalExpectedRevenue
+      const daysInMonth = new Date(predYear, predMonth, 0).getDate()
+      const dayOfMonth = predDate.getDate()
+      const daysRemaining = daysInMonth - dayOfMonth + 1
+      const dailyRevenueNeeded = daysRemaining > 0 ? budgetGap / daysRemaining : 0
+      const budgetPressure =
+        targetRevenue > 0 ? Math.max(0.92, Math.min(1.18, 1 + (budgetGap / targetRevenue) * 0.25)) : 1.0
+
+      const velocityFactor = bookingVelocity === "increasing" ? 1.05 : bookingVelocity === "decreasing" ? 0.95 : 1.0
 
       const dayOfWeek = predDate.getDay()
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6
       const month = predDate.getMonth()
 
-      // Get factors
       const seasonData = seasonalityFactors[month]
       const seasonality = seasonData.factor
       const weekendFactor = isWeekend ? 1.12 : 1.0
 
-      // Lead time factor
-      const leadTimeFactor = i < 3 ? 1.15 : i < 7 ? 1.08 : i < 14 ? 1.03 : 1.0
+      const leadTimeFactor = i < 3 ? 1.15 : i < 7 ? 1.08 : i < 14 ? 1.03 : i < 30 ? 1.0 : i < 60 ? 0.98 : 0.95
 
-      // Occupancy factor
       const bookedRooms = bookingsByHotelDate[hotel.id]?.[dateStr] || 0
       const occupancyRate = (bookedRooms / totalRooms) * 100
       let occupancyFactor = 1.0
@@ -365,11 +378,19 @@ export async function POST(request: Request) {
       else if (occupancyRate < 20) occupancyFactor = 0.92
       else if (occupancyRate < 10) occupancyFactor = 0.85
 
-      // Competitor alignment
+      const compPricesForDate = competitorPricesByDate[dateStr]
+      const bookingAvg = compPricesForDate?.booking.length
+        ? compPricesForDate.booking.reduce((a, b) => a + b, 0) / compPricesForDate.booking.length
+        : null
+      const expediaAvg = compPricesForDate?.expedia.length
+        ? compPricesForDate.expedia.reduce((a, b) => a + b, 0) / compPricesForDate.expedia.length
+        : null
+
       const calendarData = dailyPricesByHotelDate[hotel.id]?.[dateStr]
-      const competitorAvg = calendarData?.avg_competitor_price
-        ? Number(calendarData.avg_competitor_price)
-        : marketData?.avg
+      const competitorAvg =
+        bookingAvg || expediaAvg || calendarData?.avg_competitor_price
+          ? Number(calendarData?.avg_competitor_price)
+          : marketData?.avg
       const competitorFactor = competitorAvg ? Math.max(0.88, Math.min(1.12, competitorAvg / basePrice)) : 1.0
 
       const events = holidayMap[monthDay] || []
@@ -377,7 +398,6 @@ export async function POST(request: Request) {
 
       const trendsFactor = trendsScore / 100
 
-      // Calculate predicted price with all factors
       const rawPrice =
         basePrice *
         seasonality *
@@ -388,13 +408,11 @@ export async function POST(request: Request) {
         leadTimeFactor *
         eventFactor *
         velocityFactor *
-        (0.9 + trendsFactor * 0.2) // Trends adds 0-20% adjustment
+        (0.9 + trendsFactor * 0.2)
 
-      // Small random market variation (±2%)
       const marketNoise = 0.98 + Math.random() * 0.04
       const predictedPrice = Math.round(rawPrice * marketNoise)
 
-      // Calculate demand level with trends
       const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
       const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
 
@@ -404,7 +422,12 @@ export async function POST(request: Request) {
           hoursSinceLastScan < 6 ? 1.0 : hoursSinceLastScan < 24 ? 0.85 : hoursSinceLastScan < 72 ? 0.65 : 0.4,
         historicalData: calendarData ? 0.9 : 0.4,
         bookingData: bookedRooms > 0 ? Math.min(1.0, 0.5 + (occupancyRate / 100) * 0.5) : 0.35,
-        competitorData: hotelCompetitors.length > 0 ? Math.min(1.0, 0.5 + hotelCompetitors.length * 0.1) : 0.3,
+        competitorData:
+          bookingAvg || expediaAvg
+            ? 0.95
+            : hotelCompetitors.length > 0
+              ? Math.min(1.0, 0.5 + hotelCompetitors.length * 0.1)
+              : 0.3,
         marketConsistency: getMarketConsistency(hotel.id),
         externalDataQuality: externalData.holidays ? 0.9 : 0.5,
       }
@@ -424,6 +447,8 @@ export async function POST(request: Request) {
           day_of_week: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dayOfWeek],
           is_weekend: isWeekend,
           competitor_avg: competitorAvg ? Math.round(competitorAvg) : null,
+          booking_avg: bookingAvg ? Math.round(bookingAvg) : null,
+          expedia_avg: expediaAvg ? Math.round(expediaAvg) : null,
           events: events.map((e) => e.name).concat(isWeekend ? ["Weekend"] : []),
           event_types: events.map((e) => e.type),
           occupancy_rate: Math.round(occupancyRate),
@@ -451,14 +476,12 @@ export async function POST(request: Request) {
     }
   }
 
-  // Delete old predictions
   await supabase
     .from("price_predictions")
     .delete()
     .in("hotel_id", hotelIds)
     .gte("prediction_date", today.toISOString().split("T")[0])
 
-  // Insert new predictions
   const { error } = await supabase.from("price_predictions").insert(predictions)
 
   if (error) {
@@ -468,8 +491,9 @@ export async function POST(request: Request) {
   return NextResponse.json({
     success: true,
     count: predictions.length,
-    message: `Generated ${predictions.length} predictions for ${hotels.length} hotels`,
-    algorithm_version: "3.0", // Updated version
+    days_ahead: predictionDays,
+    message: `Generated ${predictions.length} predictions for ${hotels.length} hotels (${predictionDays} days)`,
+    algorithm_version: "3.1",
     data_sources: {
       internal: {
         scan_results: recentResults?.length || 0,

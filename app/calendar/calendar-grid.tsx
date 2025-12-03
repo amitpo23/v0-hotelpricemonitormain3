@@ -366,11 +366,15 @@ export function CalendarGrid({
               const totalRooms = selectedHotelData?.total_rooms || 50
               const occupancyPercent = Math.round((occupancy / totalRooms) * 100)
 
-              const competitorAvg =
-                dayCompetitorPrices.length > 0
-                  ? Math.round(
-                      dayCompetitorPrices.reduce((sum, p) => sum + (p.price || 0), 0) / dayCompetitorPrices.length,
-                    )
+              const bookingPrices = dayCompetitorPrices.filter((p) => p.source === "Booking.com")
+              const expediaPrices = dayCompetitorPrices.filter((p) => p.source === "Expedia")
+              const bookingAvg =
+                bookingPrices.length > 0
+                  ? Math.round(bookingPrices.reduce((sum, p) => sum + (p.price || 0), 0) / bookingPrices.length)
+                  : null
+              const expediaAvg =
+                expediaPrices.length > 0
+                  ? Math.round(expediaPrices.reduce((sum, p) => sum + (p.price || 0), 0) / expediaPrices.length)
                   : null
 
               return (
@@ -427,16 +431,18 @@ export function CalendarGrid({
                           <span className="text-muted-foreground">Us:</span>
                           <span className="font-medium text-cyan-400">₪{priceData.our_price}</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Comp:</span>
-                          <span className="text-orange-400 font-medium">
-                            {competitorAvg
-                              ? `₪${competitorAvg}`
-                              : priceData.avg_competitor_price
-                                ? `₪${priceData.avg_competitor_price}`
-                                : "-"}
-                          </span>
-                        </div>
+                        {bookingAvg && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-blue-400 text-[8px]">B:</span>
+                            <span className="text-blue-400 font-medium">₪{bookingAvg}</span>
+                          </div>
+                        )}
+                        {expediaAvg && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-yellow-400 text-[8px]">E:</span>
+                            <span className="text-yellow-400 font-medium">₪{expediaAvg}</span>
+                          </div>
+                        )}
                         {priceData.recommended_price && priceData.autopilot_action !== "maintain" && (
                           <div className="flex items-center justify-between pt-0.5 border-t border-border/50">
                             {getRecommendationIcon(priceData)}
@@ -447,11 +453,19 @@ export function CalendarGrid({
                     )}
 
                     {!priceData && dayCompetitorPrices.length > 0 && (
-                      <div className="flex-1 flex flex-col justify-end text-[10px]">
-                        <div className="flex items-center justify-between">
-                          <span className="text-orange-400">{dayCompetitorPrices.length}</span>
-                          <span className="text-orange-400 font-medium">₪{competitorAvg}</span>
-                        </div>
+                      <div className="flex-1 flex flex-col justify-end text-[10px] space-y-0.5">
+                        {bookingAvg && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-blue-400 text-[8px]">B:</span>
+                            <span className="text-blue-400 font-medium">₪{bookingAvg}</span>
+                          </div>
+                        )}
+                        {expediaAvg && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-yellow-400 text-[8px]">E:</span>
+                            <span className="text-yellow-400 font-medium">₪{expediaAvg}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -558,53 +572,105 @@ export function CalendarGrid({
 
               {selectedDay.competitorPrices && selectedDay.competitorPrices.length > 0 ? (
                 <div className="grid gap-2">
-                  {selectedDay.competitorPrices.map((price: any, i: number) => {
-                    const competitor = competitorsWithColors.find((c) => c.id === price.competitor_id)
-                    return (
-                      <div
-                        key={i}
-                        className="flex justify-between items-center p-2 rounded text-sm"
-                        style={{
-                          backgroundColor: `${competitor?.display_color || COMPETITOR_COLORS[i % COMPETITOR_COLORS.length]}15`,
-                          borderLeft: `3px solid ${competitor?.display_color || COMPETITOR_COLORS[i % COMPETITOR_COLORS.length]}`,
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{
-                              backgroundColor:
-                                competitor?.display_color || COMPETITOR_COLORS[i % COMPETITOR_COLORS.length],
-                            }}
-                          />
-                          <span className="font-medium">
-                            {price.hotel_competitors?.competitor_hotel_name || "Unknown"}
-                          </span>
-                          {price.competitor_room_types?.name && (
-                            <Badge variant="outline" className="text-xs">
-                              {price.competitor_room_types.name}
-                            </Badge>
-                          )}
+                  {(() => {
+                    // Group prices by competitor name
+                    const groupedByCompetitor: Record<string, any[]> = {}
+                    selectedDay.competitorPrices.forEach((price: any) => {
+                      const name = price.hotel_competitors?.competitor_hotel_name || "Unknown"
+                      if (!groupedByCompetitor[name]) {
+                        groupedByCompetitor[name] = []
+                      }
+                      groupedByCompetitor[name].push(price)
+                    })
+
+                    return Object.entries(groupedByCompetitor).map(([competitorName, prices], groupIndex) => {
+                      const firstPrice = prices[0]
+                      const competitor = competitorsWithColors.find((c) => c.id === firstPrice.competitor_id)
+                      const color =
+                        competitor?.display_color || COMPETITOR_COLORS[groupIndex % COMPETITOR_COLORS.length]
+
+                      return (
+                        <div
+                          key={competitorName}
+                          className="p-2 rounded text-sm"
+                          style={{
+                            backgroundColor: `${color}15`,
+                            borderLeft: `3px solid ${color}`,
+                          }}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                            <span className="font-medium">{competitorName}</span>
+                            {competitor?.star_rating && (
+                              <span className="text-xs text-yellow-500">{"★".repeat(competitor.star_rating)}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-3 ml-5">
+                            {prices.map((price: any, i: number) => (
+                              <div key={i} className="flex items-center gap-1">
+                                <span className="text-xs text-muted-foreground">
+                                  {price.source === "Booking.com"
+                                    ? "B"
+                                    : price.source === "Expedia"
+                                      ? "E"
+                                      : price.source?.charAt(0)}
+                                  :
+                                </span>
+                                <span className="text-orange-400 font-bold">
+                                  ₪{Number(price.price).toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="text-orange-400 font-bold">₪{Number(price.price).toLocaleString()}</div>
+                      )
+                    })
+                  })()}
+
+                  {/* Market Average - Split to separate averages per platform */}
+                  {(() => {
+                    const bookingPrices = selectedDay.competitorPrices.filter((p: any) => p.source === "Booking.com")
+                    const expediaPrices = selectedDay.competitorPrices.filter((p: any) => p.source === "Expedia")
+                    const bookingAvg =
+                      bookingPrices.length > 0
+                        ? Math.round(
+                            bookingPrices.reduce((sum: number, p: any) => sum + Number(p.price || 0), 0) /
+                              bookingPrices.length,
+                          )
+                        : null
+                    const expediaAvg =
+                      expediaPrices.length > 0
+                        ? Math.round(
+                            expediaPrices.reduce((sum: number, p: any) => sum + Number(p.price || 0), 0) /
+                              expediaPrices.length,
+                          )
+                        : null
+
+                    return (
+                      <div className="space-y-1 mt-2">
+                        {bookingAvg && (
+                          <div className="flex justify-between items-center p-2 bg-blue-500/10 rounded text-sm border-l-[3px] border-blue-500">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full bg-blue-500" />
+                              <span className="font-medium text-blue-400">Booking.com Average</span>
+                              <span className="text-xs text-muted-foreground">({bookingPrices.length} hotels)</span>
+                            </div>
+                            <div className="text-blue-400 font-bold">₪{bookingAvg.toLocaleString()}</div>
+                          </div>
+                        )}
+                        {expediaAvg && (
+                          <div className="flex justify-between items-center p-2 bg-yellow-500/10 rounded text-sm border-l-[3px] border-yellow-500">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                              <span className="font-medium text-yellow-400">Expedia Average</span>
+                              <span className="text-xs text-muted-foreground">({expediaPrices.length} hotels)</span>
+                            </div>
+                            <div className="text-yellow-400 font-bold">₪{expediaAvg.toLocaleString()}</div>
+                          </div>
+                        )}
                       </div>
                     )
-                  })}
-
-                  {/* Market Average */}
-                  <div className="flex justify-between items-center p-2 bg-orange-500/10 rounded text-sm border-l-[3px] border-orange-500 mt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-500 to-red-500" />
-                      <span className="font-medium text-orange-400">Competitor Average</span>
-                    </div>
-                    <div className="text-orange-400 font-bold">
-                      ₪
-                      {Math.round(
-                        selectedDay.competitorPrices.reduce((sum: number, p: any) => sum + Number(p.price || 0), 0) /
-                          selectedDay.competitorPrices.length,
-                      ).toLocaleString()}
-                    </div>
-                  </div>
+                  })()}
                 </div>
               ) : (
                 /* Updated message to point to main scan button */

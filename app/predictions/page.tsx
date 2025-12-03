@@ -30,6 +30,7 @@ export default async function PredictionsPage() {
     { data: budgets },
     { data: forecasts },
     { data: bookings },
+    { data: competitorPrices },
   ] = await Promise.all([
     supabase
       .from("price_predictions")
@@ -45,6 +46,10 @@ export default async function PredictionsPage() {
       .select("*")
       .eq("status", "confirmed")
       .gte("check_in_date", new Date().toISOString().split("T")[0]),
+    supabase
+      .from("competitor_daily_prices")
+      .select("date, price, source")
+      .gte("date", new Date().toISOString().split("T")[0]),
   ])
 
   const getDemandColor = (demand: string | null) => {
@@ -140,13 +145,13 @@ export default async function PredictionsPage() {
         <TabsContent value="daily" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>30-Day Price Forecast / חיזוי 30 יום</CardTitle>
+              <CardTitle>Price Forecast / חיזוי מחירים</CardTitle>
               <CardDescription>
-                Predicted optimal prices based on demand, occupancy, budget and market data
+                Predicted optimal prices based on demand, occupancy, budget, competitor data and market intelligence
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <PredictionChart predictions={predictions || []} />
+              <PredictionChart predictions={predictions || []} competitorPrices={competitorPrices || []} />
             </CardContent>
           </Card>
 
