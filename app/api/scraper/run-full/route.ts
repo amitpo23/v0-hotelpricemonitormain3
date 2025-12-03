@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { runPythonScraper, simulateCompetitorPrices } from "@/lib/scraper-wrapper"
 
 const SCAN_DAYS = 180
+const USE_REAL_SCRAPER = process.env.USE_REAL_SCRAPER === "true" // Toggle between real and simulated
 
 const DATA_SOURCES = [
   { name: "Booking.com", color: "#003580" },
@@ -57,18 +59,8 @@ function generateCompetitorPrice(
   date: Date,
   competitor: { id: string; competitor_hotel_name: string; star_rating?: number },
 ): { avgPrice: number; bookingPrice: number; expediaPrice: number } {
-  const { multiplier } = getDemandLevel(date)
-  const starVariance = competitor.star_rating ? 0.85 + (competitor.star_rating - 3) * 0.1 : 0.95
-  const randomFactor = 0.92 + Math.random() * 0.16
-
-  const baseCalculatedPrice = basePrice * starVariance * multiplier * randomFactor
-
-  // Booking.com tends to be slightly cheaper, Expedia slightly higher
-  const bookingPrice = Math.round(baseCalculatedPrice * 0.98)
-  const expediaPrice = Math.round(baseCalculatedPrice * 1.02)
-  const avgPrice = Math.round((bookingPrice + expediaPrice) / 2)
-
-  return { avgPrice, bookingPrice, expediaPrice }
+  // Use the wrapper function which has the same logic
+  return simulateCompetitorPrices(basePrice, date, competitor.star_rating || 3)
 }
 
 function calculateRecommendedPrice(
@@ -232,6 +224,43 @@ export async function POST(request: Request) {
         ? hotelRoomTypes
         : [{ id: null, name: "Standard Room", base_price: basePrice }]
 
+    // Try to scrape real competitor prices if enabled
+    let realScrapedPrices: Map<string, number> = new Map()
+
+    if (USE_REAL_SCRAPER && competitors && competitors.length > 0) {
+      console.log("[v0] Using REAL scraper for competitor data")
+
+      for (const comp of competitors) {
+        // Check if competitor has a Booking.com URL
+        const bookingUrl = comp.booking_url || hotel.competitor_urls?.[0]
+
+        if (bookingUrl && bookingUrl.includes("booking.com")) {
+          try {
+            console.log(`[v0] Scraping ${comp.competitor_hotel_name} from ${bookingUrl}`)
+            const scraperResult = await runPythonScraper(bookingUrl, SCAN_DAYS, ["room_only", "with_breakfast"])
+
+            if (scraperResult.success && scraperResult.results) {
+              for (const result of scraperResult.results) {
+                if (result.price && result.available) {
+                  const key = `${comp.id}-${result.date}-Booking.com-${result.room_type}`
+                  realScrapedPrices.set(key, result.price)
+                }
+              }
+              console.log(`[v0] Successfully scraped ${scraperResult.results.length} prices for ${comp.competitor_hotel_name}`)
+            } else {
+              console.error(`[v0] Scraper failed for ${comp.competitor_hotel_name}: ${scraperResult.error}`)
+            }
+          } catch (error) {
+            console.error(`[v0] Error running scraper for ${comp.competitor_hotel_name}:`, error)
+          }
+        }
+      }
+
+      console.log(`[v0] Real scraper collected ${realScrapedPrices.size} prices`)
+    } else {
+      console.log("[v0] Using SIMULATED competitor prices")
+    }
+
     for (let i = 0; i < SCAN_DAYS; i++) {
       const scanDate = new Date(today)
       scanDate.setDate(scanDate.getDate() + i)
@@ -245,12 +274,20 @@ export async function POST(request: Request) {
         const competitorPrices: number[] = []
 
         for (const comp of competitors) {
-          const prices = generateCompetitorPrice(roomBasePrice, scanDate, comp)
+          // Check if we have real scraped prices for this competitor
+          const bookingKey = `${comp.id}-${dateStr}-Booking.com-room_only`
+          const realBookingPrice = realScrapedPrices.get(bookingKey)
+
+          // Use real prices if available, otherwise simulate
+          const prices = realBookingPrice
+            ? { bookingPrice: realBookingPrice, expediaPrice: Math.round(realBookingPrice * 1.04), avgPrice: Math.round(realBookingPrice * 1.02) }
+            : generateCompetitorPrice(roomBasePrice, scanDate, comp)
+
           competitorPrices.push(prices.avgPrice)
 
           // Booking.com price
-          const bookingKey = `${comp.id}-${dateStr}-Booking.com-${roomType.name}`
-          const oldBookingPrice = oldPricesMap.get(bookingKey)
+          const bookingKeyWithRoom = `${comp.id}-${dateStr}-Booking.com-${roomType.name}`
+          const oldBookingPrice = oldPricesMap.get(bookingKeyWithRoom)
 
           competitorPriceResults.push({
             hotel_id: hotelId,
@@ -259,8 +296,9 @@ export async function POST(request: Request) {
             price: prices.bookingPrice,
             source: "Booking.com",
             room_type: roomType.name,
-            availability: Math.random() > 0.1,
+            availability: true,
             scraped_at: new Date().toISOString(),
+            is_real_scraped: !!realBookingPrice, // Mark if this is real data
           })
 
           if (oldBookingPrice && oldBookingPrice !== prices.bookingPrice) {
@@ -277,7 +315,7 @@ export async function POST(request: Request) {
             })
           }
 
-          // Expedia price
+          // Expedia price (always simulated for now)
           const expediaKey = `${comp.id}-${dateStr}-Expedia-${roomType.name}`
           const oldExpediaPrice = oldPricesMap.get(expediaKey)
 
@@ -288,8 +326,9 @@ export async function POST(request: Request) {
             price: prices.expediaPrice,
             source: "Expedia",
             room_type: roomType.name,
-            availability: Math.random() > 0.1,
+            availability: true,
             scraped_at: new Date().toISOString(),
+            is_real_scraped: false, // Expedia is always simulated
           })
 
           if (oldExpediaPrice && oldExpediaPrice !== prices.expediaPrice) {
