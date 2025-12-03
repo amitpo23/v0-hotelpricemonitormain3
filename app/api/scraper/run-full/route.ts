@@ -404,10 +404,13 @@ export async function POST(request: Request) {
     // Upsert daily prices
     for (let i = 0; i < results.length; i += 500) {
       const batch = results.slice(i, i + 500)
-      await supabase.from("daily_prices").upsert(batch, {
-        onConflict: "hotel_id,date,room_type_id",
+      const { error: dpError } = await supabase.from("daily_prices").upsert(batch, {
+        onConflict: "hotel_id,date",
         ignoreDuplicates: false,
       })
+      if (dpError) {
+        console.error(`[v0] Error upserting daily_prices batch ${i}:`, JSON.stringify(dpError))
+      }
     }
 
     // Insert scan results
