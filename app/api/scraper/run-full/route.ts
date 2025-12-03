@@ -205,9 +205,24 @@ export async function POST(request: Request) {
       )
     }
 
+    const { data: existingPrices } = await supabase
+      .from("competitor_daily_prices")
+      .select("competitor_id, date, price, source, room_type")
+      .eq("hotel_id", hotelId)
+
+    // Create a map for quick lookup of old prices
+    const oldPricesMap = new Map<string, number>()
+    if (existingPrices) {
+      for (const ep of existingPrices) {
+        const key = `${ep.competitor_id}-${ep.date}-${ep.source}-${ep.room_type}`
+        oldPricesMap.set(key, ep.price)
+      }
+    }
+
     const basePrice = hotel.base_price || 150
     const results = []
-    const competitorPriceResults = []
+    const competitorPriceResults: any[] = []
+    const priceHistoryRecords: any[] = []
     const scanResults = []
     const today = new Date()
 
@@ -233,10 +248,13 @@ export async function POST(request: Request) {
           const prices = generateCompetitorPrice(roomBasePrice, scanDate, comp)
           competitorPrices.push(prices.avgPrice)
 
+          // Booking.com price
+          const bookingKey = `${comp.id}-${dateStr}-Booking.com-${roomType.name}`
+          const oldBookingPrice = oldPricesMap.get(bookingKey)
+
           competitorPriceResults.push({
             hotel_id: hotelId,
             competitor_id: comp.id,
-            room_type_id: roomType.id,
             date: dateStr,
             price: prices.bookingPrice,
             source: "Booking.com",
@@ -245,10 +263,27 @@ export async function POST(request: Request) {
             scraped_at: new Date().toISOString(),
           })
 
+          if (oldBookingPrice && oldBookingPrice !== prices.bookingPrice) {
+            priceHistoryRecords.push({
+              hotel_id: hotelId,
+              competitor_id: comp.id,
+              date: dateStr,
+              old_price: oldBookingPrice,
+              new_price: prices.bookingPrice,
+              price_change: prices.bookingPrice - oldBookingPrice,
+              change_percent: Math.round(((prices.bookingPrice - oldBookingPrice) / oldBookingPrice) * 100 * 100) / 100,
+              source: "Booking.com",
+              room_type: roomType.name,
+            })
+          }
+
+          // Expedia price
+          const expediaKey = `${comp.id}-${dateStr}-Expedia-${roomType.name}`
+          const oldExpediaPrice = oldPricesMap.get(expediaKey)
+
           competitorPriceResults.push({
             hotel_id: hotelId,
             competitor_id: comp.id,
-            room_type_id: roomType.id,
             date: dateStr,
             price: prices.expediaPrice,
             source: "Expedia",
@@ -256,6 +291,20 @@ export async function POST(request: Request) {
             availability: Math.random() > 0.1,
             scraped_at: new Date().toISOString(),
           })
+
+          if (oldExpediaPrice && oldExpediaPrice !== prices.expediaPrice) {
+            priceHistoryRecords.push({
+              hotel_id: hotelId,
+              competitor_id: comp.id,
+              date: dateStr,
+              old_price: oldExpediaPrice,
+              new_price: prices.expediaPrice,
+              price_change: prices.expediaPrice - oldExpediaPrice,
+              change_percent: Math.round(((prices.expediaPrice - oldExpediaPrice) / oldExpediaPrice) * 100 * 100) / 100,
+              source: "Expedia",
+              room_type: roomType.name,
+            })
+          }
 
           if (scanRecord && i < 7) {
             scanResults.push({
@@ -311,19 +360,42 @@ export async function POST(request: Request) {
       }
     }
 
-    await supabase.from("competitor_daily_prices").delete().eq("hotel_id", hotelId)
+    const { error: deleteError } = await supabase.from("competitor_daily_prices").delete().eq("hotel_id", hotelId)
 
-    // Batch insert competitor prices (no duplicates now)
+    if (deleteError) {
+      console.error("[v0] Error deleting old competitor prices:", deleteError)
+    }
+
+    let insertedCount = 0
     if (competitorPriceResults.length > 0) {
-      console.log(`[v0] Inserting ${competitorPriceResults.length} competitor price records`)
       for (let i = 0; i < competitorPriceResults.length; i += 500) {
         const batch = competitorPriceResults.slice(i, i + 500)
-        const { error: insertError } = await supabase.from("competitor_daily_prices").insert(batch)
+        const { data: insertedData, error: insertError } = await supabase
+          .from("competitor_daily_prices")
+          .insert(batch)
+          .select("id")
+
         if (insertError) {
-          console.error(`[v0] Error inserting competitor prices batch ${i}:`, insertError)
+          console.error(`[v0] Error inserting competitor prices batch ${i}:`, JSON.stringify(insertError))
+          // Try inserting one by one to find the problematic record
+          for (const record of batch) {
+            const { error: singleError } = await supabase.from("competitor_daily_prices").insert(record)
+            if (singleError) {
+              console.error(`[v0] Failed record:`, JSON.stringify(record), JSON.stringify(singleError))
+            } else {
+              insertedCount++
+            }
+          }
         } else {
-          console.log(`[v0] Successfully inserted batch ${i} to ${i + batch.length}`)
+          insertedCount += batch.length
         }
+      }
+    }
+
+    if (priceHistoryRecords.length > 0) {
+      for (let i = 0; i < priceHistoryRecords.length; i += 500) {
+        const batch = priceHistoryRecords.slice(i, i + 500)
+        await supabase.from("competitor_price_history").insert(batch)
       }
     }
 
@@ -391,6 +463,8 @@ export async function POST(request: Request) {
         color: c.display_color,
       })),
       competitorCount: competitors.length,
+      competitorPricesInserted: insertedCount,
+      priceChangesRecorded: priceHistoryRecords.length,
       summary: {
         increaseRecommendations: results.filter((r) => r.autopilot_action === "increase").length,
         decreaseRecommendations: results.filter((r) => r.autopilot_action === "decrease").length,
@@ -399,6 +473,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Scraper error:", error)
-    return NextResponse.json({ error: "Scraper failed" }, { status: 500 })
+    return NextResponse.json({ error: "Scraper failed", details: String(error) }, { status: 500 })
   }
 }
