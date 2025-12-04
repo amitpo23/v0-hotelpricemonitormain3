@@ -136,8 +136,11 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
           <div className="flex items-center gap-2 text-sm text-green-400">
             <CheckCircleIcon className="h-4 w-4" />
             <span>
-              Scanned! {result.summary?.increaseRecommendations} increases, {result.summary?.decreaseRecommendations}{" "}
-              decreases
+              Scanned! {result.stats?.increaseRecommendations ?? 0} increases,{" "}
+              {result.stats?.decreaseRecommendations ?? 0} decreases
+              {result.stats?.realScrapes !== undefined && (
+                <span className="text-muted-foreground ml-2">({result.stats.realScrapes} real scrapes)</span>
+              )}
             </span>
           </div>
         )}
