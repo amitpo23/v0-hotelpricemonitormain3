@@ -2,7 +2,9 @@
 import { NextResponse } from "next/server"
 import { scrapeCompetitorPrices } from "@/lib/scraper/real-scraper"
 
-const SCAN_DAYS = 180
+// Configurable scan days - reduced from 180 to avoid timeouts
+// For full 180 days, consider using a background job or chunked requests
+const SCAN_DAYS = 14
 
 const DATA_SOURCES = [{ name: "Booking.com", color: "#003580" }]
 
@@ -100,7 +102,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    const { hotelId, roomTypeId, useRealScraping = true } = requestBody
+    const { hotelId, roomTypeId, useRealScraping = true, daysToScan } = requestBody
+
+    // Allow overriding scan days via request body
+    const scanDays = daysToScan && daysToScan > 0 && daysToScan <= 180 ? daysToScan : SCAN_DAYS
 
     if (!hotelId) {
       return NextResponse.json({ error: "hotelId is required" }, { status: 400 })
@@ -217,7 +222,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No room types configured" }, { status: 400 })
     }
 
-    console.log(`[v0] Scanning ${competitors.length} competitors for ${SCAN_DAYS} days on Booking.com`)
+    console.log(`[v0] Scanning ${competitors.length} competitors for ${scanDays} days on Booking.com`)
     console.log(`[v0] Real scraping enabled: ${useRealScraping}`)
     console.log(`[v0] Bright Data config:`, {
       hasProxyHost: !!process.env.BRIGHT_DATA_PROXY_HOST,
@@ -228,8 +233,20 @@ export async function POST(request: Request) {
 
     let successfulScrapes = 0
     let failedScrapes = 0
+    const startScanTime = Date.now()
+    const TIMEOUT_MS = 50000 // 50 seconds timeout (before Vercel's 60s limit)
 
-    for (let i = 0; i < SCAN_DAYS; i++) {
+    for (let i = 0; i < scanDays; i++) {
+      // Check for timeout
+      if (Date.now() - startScanTime > TIMEOUT_MS) {
+        console.log(`[v0] Timeout reached after ${i} days. Stopping scan.`)
+        break
+      }
+
+      // Progress logging every 2 days
+      if (i % 2 === 0 && i > 0) {
+        console.log(`[v0] Progress: ${i}/${scanDays} days scanned. Success: ${successfulScrapes}, Failed: ${failedScrapes}`)
+      }
       const scanDate = new Date(today)
       scanDate.setDate(scanDate.getDate() + i)
       const dateStr = scanDate.toISOString().split("T")[0]
@@ -304,9 +321,10 @@ export async function POST(request: Request) {
             }
           }
 
-          // Small delay between competitors
-          if (i % 5 === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 100))
+          // Delay between competitor scrapes to avoid rate limiting
+          // Longer delay for real scraping to be respectful to servers
+          if (useRealScraping) {
+            await new Promise((resolve) => setTimeout(resolve, 500))
           }
         }
 
@@ -403,7 +421,7 @@ export async function POST(request: Request) {
       success: true,
       scanId: scanRecord.id,
       message: `Scanned! ${increases} increases, ${decreases} decreases`,
-      daysScanned: SCAN_DAYS,
+      daysScanned: scanDays,
       roomTypesScanned: roomTypesToScan.length,
       sources: DATA_SOURCES,
       competitorCount: competitors.length,
