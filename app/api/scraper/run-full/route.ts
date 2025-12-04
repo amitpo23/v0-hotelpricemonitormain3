@@ -4,6 +4,7 @@ import { scrapeCompetitorPrices } from "@/lib/scraper/real-scraper"
 
 const SCAN_DAYS = 30
 const TIMEOUT_MS = 50000 // 50 seconds timeout to avoid Vercel function timeout
+const maxExecutionTime = TIMEOUT_MS
 
 const DATA_SOURCES = [{ name: "Booking.com", color: "#003580" }]
 
@@ -231,87 +232,103 @@ export async function POST(request: Request) {
     let failedScrapes = 0
     let timedOut = false
 
-    for (let i = 0; i < scanDays && !timedOut; i++) {
-      if (Date.now() - startTime.getTime() > TIMEOUT_MS) {
-        console.log(`[v0] Timeout reached after ${i} days. Saving partial results...`)
+    console.log(`[v0] Starting scan - competitors: ${competitors?.length || 0}, days: ${scanDays}`)
+
+    for (let dayIndex = 0; dayIndex < scanDays; dayIndex++) {
+      if (Date.now() - startTime.getTime() > maxExecutionTime) {
         timedOut = true
+        console.log(`[v0] Timeout reached after ${dayIndex} days`)
         break
       }
 
-      if (i > 0 && i % 5 === 0) {
+      if (dayIndex > 0 && dayIndex % 5 === 0) {
         console.log(
-          `[v0] Progress: ${i}/${scanDays} days scanned. Success: ${successfulScrapes}, Failed: ${failedScrapes}`,
+          `[v0] Progress: ${dayIndex}/${scanDays} days scanned. Success: ${successfulScrapes}, Failed: ${failedScrapes}`,
         )
       }
 
       const scanDate = new Date(today)
-      scanDate.setDate(scanDate.getDate() + dayOffset + i)
+      scanDate.setDate(scanDate.getDate() + dayOffset + dayIndex)
       const dateStr = scanDate.toISOString().split("T")[0]
       const dayOfWeek = scanDate.getDay()
 
       const { level: demandLevel, multiplier } = getDemandLevel(scanDate)
       const competitorPrices: number[] = []
 
-      for (const competitor of competitors) {
-        if (useRealScraping) {
-          try {
-            const scrapedResult = await scrapeCompetitorPrices(
-              {
-                id: competitor.id,
-                competitor_hotel_name: competitor.competitor_hotel_name || competitor.name,
-                booking_url: competitor.booking_url,
-                city: hotel.city || "Tel Aviv",
-              },
-              dateStr,
-              new Date(scanDate.getTime() + 86400000).toISOString().split("T")[0],
-            )
+      for (const competitor of competitors || []) {
+        if (Date.now() - startTime.getTime() > maxExecutionTime) {
+          timedOut = true
+          console.log(`[v0] Timeout reached after ${dayIndex} days`)
+          break
+        }
 
-            if (scrapedResult.bookingSuccess && scrapedResult.bookingPrice) {
-              successfulScrapes++
-              competitorPrices.push(scrapedResult.bookingPrice)
+        if (!competitor.booking_url && !competitor.competitor_hotel_name) {
+          console.log(`[v0] Skipping competitor - no booking_url or name: ${JSON.stringify(competitor)}`)
+          continue
+        }
 
-              competitorPriceResults.push({
-                hotel_id: hotelId,
+        try {
+          console.log(`[v0] Scraping ${competitor.competitor_hotel_name || competitor.name} for ${dateStr}`)
+
+          const scrapedResult = await scrapeCompetitorPrices(
+            {
+              id: competitor.id,
+              competitor_hotel_name: competitor.competitor_hotel_name || competitor.name,
+              booking_url: competitor.booking_url,
+              city: hotel.city || "Tel Aviv",
+            },
+            dateStr,
+            new Date(scanDate.getTime() + 86400000).toISOString().split("T")[0],
+          )
+
+          if (scrapedResult.bookingSuccess && scrapedResult.bookingPrice) {
+            successfulScrapes++
+            console.log(`[v0] SUCCESS: ${competitor.competitor_hotel_name} - price: ${scrapedResult.bookingPrice}`)
+            competitorPrices.push(scrapedResult.bookingPrice)
+
+            competitorPriceResults.push({
+              hotel_id: hotelId,
+              competitor_id: competitor.id,
+              date: dateStr,
+              price: scrapedResult.bookingPrice,
+              source: "Booking.com",
+              room_type: scrapedResult.roomType || "Standard Room",
+            })
+
+            const { data: existingPrice } = await supabase
+              .from("competitor_daily_prices")
+              .select("price")
+              .eq("competitor_id", competitor.id)
+              .eq("date", dateStr)
+              .eq("source", "Booking.com")
+              .single()
+
+            if (existingPrice && existingPrice.price !== scrapedResult.bookingPrice) {
+              const priceChange = scrapedResult.bookingPrice - existingPrice.price
+              const changePercent = (priceChange / existingPrice.price) * 100
+
+              priceHistoryRecords.push({
                 competitor_id: competitor.id,
                 date: dateStr,
-                price: scrapedResult.bookingPrice,
+                old_price: existingPrice.price,
+                new_price: scrapedResult.bookingPrice,
+                price_change: priceChange,
+                change_percent: changePercent,
                 source: "Booking.com",
-                room_type: scrapedResult.roomType || "Standard Room",
               })
-
-              const { data: existingPrice } = await supabase
-                .from("competitor_daily_prices")
-                .select("price")
-                .eq("competitor_id", competitor.id)
-                .eq("date", dateStr)
-                .eq("source", "Booking.com")
-                .single()
-
-              if (existingPrice && existingPrice.price !== scrapedResult.bookingPrice) {
-                const priceChange = scrapedResult.bookingPrice - existingPrice.price
-                const changePercent = (priceChange / existingPrice.price) * 100
-
-                priceHistoryRecords.push({
-                  competitor_id: competitor.id,
-                  date: dateStr,
-                  old_price: existingPrice.price,
-                  new_price: scrapedResult.bookingPrice,
-                  price_change: priceChange,
-                  change_percent: changePercent,
-                  source: "Booking.com",
-                })
-              }
-            } else {
-              failedScrapes++
-              console.log(`[v0] Failed to scrape ${competitor.competitor_hotel_name} for ${dateStr}`)
             }
-          } catch (error) {
+          } else {
             failedScrapes++
-            console.error(`[v0] Scrape error for ${competitor.competitor_hotel_name}:`, error)
+            console.log(
+              `[v0] FAILED: ${competitor.competitor_hotel_name} for ${dateStr} - result: ${JSON.stringify(scrapedResult)}`,
+            )
           }
-
-          await new Promise((resolve) => setTimeout(resolve, 500))
+        } catch (error) {
+          failedScrapes++
+          console.error(`[v0] Scrape error for ${competitor.competitor_hotel_name}:`, error)
         }
+
+        await new Promise((resolve) => setTimeout(resolve, 500))
       }
 
       for (const roomType of hotelRoomTypes || []) {
@@ -352,6 +369,10 @@ export async function POST(request: Request) {
     console.log(
       `[v0] Data to save: ${competitorPriceResults.length} competitor prices, ${priceHistoryRecords.length} history records, ${results.length} daily prices`,
     )
+
+    console.log(`[v0] Scan complete - successfulScrapes: ${successfulScrapes}, failedScrapes: ${failedScrapes}`)
+    console.log(`[v0] competitorPriceResults.length: ${competitorPriceResults.length}`)
+    console.log(`[v0] First few results: ${JSON.stringify(competitorPriceResults.slice(0, 3))}`)
 
     if (competitorPriceResults.length > 0) {
       const batchSize = 100
