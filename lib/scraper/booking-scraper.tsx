@@ -1,5 +1,11 @@
-// Real Booking.com scraper using Bright Data
+// Real Booking.com scraper using Bright Data + Puppeteer
 // Based on scraper_findings.md and scraper_v5.py
+
+import { scrapeBookingBySearch, scrapeBookingByUrl } from './puppeteer-scraper'
+import { 
+  scrapeBookingBySearchAdvanced, 
+  scrapeBookingByUrlAdvanced 
+} from './advanced-puppeteer-scraper'
 
 export interface BookingPriceResult {
   price: number
@@ -227,7 +233,7 @@ async function scrapeDirectFetch(
   }
 }
 
-// Method 3: Direct URL scraping
+// Method 3: Direct URL scraping - now with Advanced Puppeteer!
 export async function scrapeBookingViaHtml(
   hotelUrl: string,
   checkIn: string,
@@ -235,6 +241,55 @@ export async function scrapeBookingViaHtml(
 ): Promise<BookingPriceResult[]> {
   console.log(`[BookingScraper] Scraping direct URL: ${hotelUrl}`)
 
+  // Try Advanced Puppeteer first (with proxy)
+  try {
+    console.log('[BookingScraper] 🚀 Trying Advanced Puppeteer with proxy for direct URL...')
+    const advancedResults = await scrapeBookingByUrlAdvanced(hotelUrl, checkIn, checkOut, true)
+    if (advancedResults.length > 0) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Advanced Puppeteer+Proxy: found ${advancedResults.length} prices`)
+      return advancedResults
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Advanced Puppeteer with proxy failed for URL:', error)
+  }
+
+  // Try Advanced Puppeteer without proxy
+  try {
+    console.log('[BookingScraper] 🚀 Trying Advanced Puppeteer without proxy for direct URL...')
+    const advancedResults = await scrapeBookingByUrlAdvanced(hotelUrl, checkIn, checkOut, false)
+    if (advancedResults.length > 0) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Advanced Puppeteer (no proxy): found ${advancedResults.length} prices`)
+      return advancedResults
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Advanced Puppeteer without proxy failed for URL:', error)
+  }
+
+  // Try standard Puppeteer (with proxy)
+  try {
+    console.log('[BookingScraper] 🔄 Trying Standard Puppeteer with proxy for direct URL...')
+    const puppeteerResults = await scrapeBookingByUrl(hotelUrl, checkIn, checkOut, true)
+    if (puppeteerResults.length > 0) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Standard Puppeteer+Proxy: found ${puppeteerResults.length} prices`)
+      return puppeteerResults
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Standard Puppeteer with proxy failed for URL:', error)
+  }
+
+  // Try standard Puppeteer without proxy
+  try {
+    console.log('[BookingScraper] 🔄 Trying Standard Puppeteer without proxy for direct URL...')
+    const puppeteerResults = await scrapeBookingByUrl(hotelUrl, checkIn, checkOut, false)
+    if (puppeteerResults.length > 0) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Standard Puppeteer (no proxy): found ${puppeteerResults.length} prices`)
+      return puppeteerResults
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Standard Puppeteer without proxy failed for URL:', error)
+  }
+
+  // Fallback to direct fetch
   try {
     // Add dates to the URL
     const url = new URL(hotelUrl)
@@ -294,18 +349,68 @@ export async function scrapeBookingPrice(
   console.log(`[BookingScraper] Starting scrape for ${hotelName} in ${city}`)
   console.log(`[BookingScraper] Dates: ${checkIn} to ${checkOut}`)
 
-  // Try Bright Data API first
+  // Method 1: Try Advanced Puppeteer with Bright Data proxy (MOST RELIABLE)
+  try {
+    console.log('[BookingScraper] 🚀 Method 1: Advanced Puppeteer with Bright Data proxy...')
+    const advancedResult = await scrapeBookingBySearchAdvanced(hotelName, city, checkIn, checkOut, true)
+    if (advancedResult) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Advanced Puppeteer+Proxy: ${advancedResult.currency} ${advancedResult.price}`)
+      return advancedResult
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Advanced Puppeteer with proxy failed:', error)
+  }
+
+  // Method 2: Try Advanced Puppeteer without proxy
+  try {
+    console.log('[BookingScraper] 🚀 Method 2: Advanced Puppeteer without proxy...')
+    const advancedNoProxyResult = await scrapeBookingBySearchAdvanced(hotelName, city, checkIn, checkOut, false)
+    if (advancedNoProxyResult) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Advanced Puppeteer (no proxy): ${advancedNoProxyResult.currency} ${advancedNoProxyResult.price}`)
+      return advancedNoProxyResult
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Advanced Puppeteer without proxy failed:', error)
+  }
+
+  // Method 3: Try standard Puppeteer with Bright Data proxy
+  try {
+    console.log('[BookingScraper] 🔄 Method 3: Standard Puppeteer with Bright Data proxy...')
+    const puppeteerResult = await scrapeBookingBySearch(hotelName, city, checkIn, checkOut, true)
+    if (puppeteerResult) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Standard Puppeteer+Proxy: ${puppeteerResult.currency} ${puppeteerResult.price}`)
+      return puppeteerResult
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Standard Puppeteer with proxy failed:', error)
+  }
+
+  // Method 4: Try standard Puppeteer without proxy
+  try {
+    console.log('[BookingScraper] 🔄 Method 4: Standard Puppeteer without proxy...')
+    const puppeteerNoProxyResult = await scrapeBookingBySearch(hotelName, city, checkIn, checkOut, false)
+    if (puppeteerNoProxyResult) {
+      console.log(`[BookingScraper] ✅ SUCCESS with Standard Puppeteer (no proxy): ${puppeteerNoProxyResult.currency} ${puppeteerNoProxyResult.price}`)
+      return puppeteerNoProxyResult
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Standard Puppeteer without proxy failed:', error)
+  }
+
+  // Method 5: Try Bright Data API (legacy method)
+  console.log('[BookingScraper] 🔄 Method 5: Bright Data API...')
   const brightDataResult = await scrapeViaBrightDataAPI(hotelName, city, checkIn, checkOut)
   if (brightDataResult) {
     return brightDataResult
   }
 
-  // Fallback to direct fetch
+  // Method 6: Fallback to direct fetch
+  console.log('[BookingScraper] 🔄 Method 6: Direct fetch...')
   const directResult = await scrapeDirectFetch(hotelName, city, checkIn, checkOut)
   if (directResult) {
     return directResult
   }
 
-  console.log(`[BookingScraper] All methods failed for ${hotelName}`)
+  console.log(`[BookingScraper] ❌ All 6 methods failed for ${hotelName}`)
   return null
 }
