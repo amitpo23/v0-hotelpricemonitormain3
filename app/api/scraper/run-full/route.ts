@@ -102,10 +102,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    const { hotelId, roomTypeId, useRealScraping = true, daysToScan } = requestBody
+    const { hotelId, roomTypeId, useRealScraping = true, daysToScan, startDayOffset = 0 } = requestBody
 
     // Allow overriding scan days via request body
+    // Support chunked scanning with startDayOffset for large date ranges
     const scanDays = daysToScan && daysToScan > 0 && daysToScan <= 180 ? daysToScan : SCAN_DAYS
+    const dayOffset = startDayOffset >= 0 ? startDayOffset : 0
 
     if (!hotelId) {
       return NextResponse.json({ error: "hotelId is required" }, { status: 400 })
@@ -223,6 +225,7 @@ export async function POST(request: Request) {
     }
 
     console.log(`[v0] Scanning ${competitors.length} competitors for ${scanDays} days on Booking.com`)
+    console.log(`[v0] Date range: Day ${dayOffset} to Day ${dayOffset + scanDays - 1}`)
     console.log(`[v0] Real scraping enabled: ${useRealScraping}`)
     console.log(`[v0] Bright Data config:`, {
       hasProxyHost: !!process.env.BRIGHT_DATA_PROXY_HOST,
@@ -248,7 +251,8 @@ export async function POST(request: Request) {
         console.log(`[v0] Progress: ${i}/${scanDays} days scanned. Success: ${successfulScrapes}, Failed: ${failedScrapes}`)
       }
       const scanDate = new Date(today)
-      scanDate.setDate(scanDate.getDate() + i)
+      // Add both the chunk offset (startDayOffset) and the loop iteration (i)
+      scanDate.setDate(scanDate.getDate() + dayOffset + i)
       const dateStr = scanDate.toISOString().split("T")[0]
       const checkOutDate = new Date(scanDate)
       checkOutDate.setDate(checkOutDate.getDate() + 1)
@@ -422,6 +426,11 @@ export async function POST(request: Request) {
       scanId: scanRecord.id,
       message: `Scanned! ${increases} increases, ${decreases} decreases`,
       daysScanned: scanDays,
+      dateRange: {
+        startDay: dayOffset,
+        endDay: dayOffset + scanDays - 1,
+        totalDays: scanDays,
+      },
       roomTypesScanned: roomTypesToScan.length,
       sources: DATA_SOURCES,
       competitorCount: competitors.length,
