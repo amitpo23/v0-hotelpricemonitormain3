@@ -167,17 +167,22 @@ export async function POST(request: Request) {
     const { data: scanRecord, error: scanError } = await supabase
       .from("scans")
       .insert({
-        scan_config_id: null,
+        config_id: null,
         status: "running",
         started_at: startTime.toISOString(),
-        scan_type: "full_calendar",
-        hotel_id: hotelId,
-        sources: DATA_SOURCES.map((s) => s.name),
       })
       .select()
       .single()
 
     console.log("[v0] Scan record created:", scanRecord?.id, "error:", scanError)
+
+    if (scanError || !scanRecord) {
+      console.error("[v0] Failed to create scan record:", scanError)
+      return NextResponse.json(
+        { error: "Failed to create scan record: " + (scanError?.message || "unknown") },
+        { status: 500 },
+      )
+    }
 
     const { data: hotelRoomTypesData } = await supabase
       .from("hotel_room_types")
@@ -187,11 +192,6 @@ export async function POST(request: Request) {
 
     let hotelRoomTypes = hotelRoomTypesData
     console.log("[v0] Room types found:", hotelRoomTypes?.length || 0)
-
-    if (scanError || !scanRecord) {
-      console.error("[v0] Failed to create scan record:", scanError)
-      return NextResponse.json({ error: "Failed to create scan record" }, { status: 500 })
-    }
 
     if (!hotelRoomTypes || hotelRoomTypes.length === 0) {
       console.log("[v0] No room types found, creating defaults")
