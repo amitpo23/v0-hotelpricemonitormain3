@@ -109,6 +109,18 @@ function extractRoomsLeft(html: string): number | undefined {
   return match ? Number.parseInt(match[1]) : undefined
 }
 
+function getBrightDataProxyUrl(): string | null {
+  const host = process.env.BRIGHT_DATA_PROXY_HOST
+  const port = process.env.BRIGHT_DATA_PROXY_PORT
+  const username = process.env.BRIGHT_DATA_USERNAME
+  const password = process.env.BRIGHT_DATA_PASSWORD
+
+  if (host && port && username && password) {
+    return `http://${username}:${password}@${host}:${port}`
+  }
+  return null
+}
+
 // Method 1: Bright Data Web Unlocker (best for bypassing anti-bot)
 async function scrapeViaBrightDataUnlocker(
   hotelName: string,
@@ -461,7 +473,7 @@ async function scrapeViaBrightDataScrapingBrowser(
     if (!response.ok) {
       // Fallback: try direct proxy request
       console.log(`[BookingScraper] Scraping Browser API failed (${response.status}), trying proxy method...`)
-      return await scrapeViaBrightDataProxy(hotelName, city, checkIn, checkOut, username, password, host)
+      return await scrapeViaBrightDataProxy(hotelName, city, checkIn, checkOut)
     }
 
     const data = await response.json()
@@ -500,12 +512,9 @@ async function scrapeViaBrightDataProxy(
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult | null> {
-  const host = process.env.BRIGHT_DATA_PROXY_HOST
-  const port = process.env.BRIGHT_DATA_PROXY_PORT
-  const username = process.env.BRIGHT_DATA_USERNAME
-  const password = process.env.BRIGHT_DATA_PASSWORD
+  const proxyUrl = getBrightDataProxyUrl()
 
-  if (!host || !username || !password) {
+  if (!proxyUrl) {
     console.log("[BookingScraper] Bright Data Proxy not configured - missing env vars")
     return null
   }
@@ -518,49 +527,23 @@ async function scrapeViaBrightDataProxy(
     console.log(`[BookingScraper] Trying Bright Data Proxy for: ${hotelName}`)
 
     // Use proxy-agent approach with fetch
-    const proxyUrl = `http://${username}:${password}@${host}:${port || "9515"}`
-
-    // For Vercel/Next.js, we need to use the proxy differently
-    // We'll add proxy auth in headers and use Bright Data's API endpoint
-    const response = await fetch(`https://api.brightdata.com/request`, {
-      method: "POST",
+    const response = await fetch(searchUrl, {
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
+        "x-proxy-auth": proxyUrl,
       },
-      body: JSON.stringify({
-        zone: "scraping_browser1",
-        url: searchUrl,
-        format: "raw",
-        country: "il",
-      }),
     })
 
     if (!response.ok) {
-      // Fallback: try direct proxy connection
-      console.log(`[BookingScraper] Bright Data API failed (${response.status}), trying direct...`)
-
-      const directResponse = await fetch(searchUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
-          "x-proxy-auth": `${username}:${password}`,
-        },
-      })
-
-      if (!directResponse.ok) {
-        console.log(`[BookingScraper] Direct proxy failed: ${directResponse.status}`)
-        return null
-      }
-
-      const html = await directResponse.text()
-      return parseBookingHtml(html, "bright_data_proxy_direct")
+      console.log(`[BookingScraper] Direct proxy failed: ${response.status}`)
+      return null
     }
 
     const html = await response.text()
-    return parseBookingHtml(html, "bright_data_proxy")
+    return parseBookingHtml(html, "bright_data_proxy_direct")
   } catch (error) {
     console.error("[BookingScraper] Bright Data Proxy error:", error)
     return null
@@ -574,7 +557,7 @@ async function scrapeViaBrightDataHTTPProxy(
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult | null> {
-  const proxyUrl = process.env.BRIGHT_DATA_PROXY
+  const proxyUrl = getBrightDataProxyUrl()
 
   if (!proxyUrl) {
     console.log("[BookingScraper] BRIGHT_DATA_PROXY not configured")
@@ -582,16 +565,6 @@ async function scrapeViaBrightDataHTTPProxy(
   }
 
   try {
-    // Extract credentials from proxy URL
-    // Format: https://username:password@host:port
-    const urlMatch = proxyUrl.match(/https?:\/\/([^:]+):([^@]+)@([^:]+):(\d+)/)
-    if (!urlMatch) {
-      console.log("[BookingScraper] Invalid BRIGHT_DATA_PROXY format")
-      return null
-    }
-
-    const [, username, password, host, port] = urlMatch
-
     const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
       hotelName + " " + city,
     )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
@@ -599,7 +572,7 @@ async function scrapeViaBrightDataHTTPProxy(
     console.log(`[BookingScraper] Trying Bright Data HTTP Proxy for: ${hotelName}`)
 
     // Make request with proxy authentication header
-    const auth = Buffer.from(`${username}:${password}`).toString("base64")
+    const auth = Buffer.from(proxyUrl.replace("http://", "")).toString("base64")
 
     const response = await fetch(searchUrl, {
       headers: {
