@@ -1,4 +1,4 @@
-// Real Booking.com scraper using multiple methods
+// Real Booking.com scraper using Bright Data
 // Based on scraper_findings.md and scraper_v5.py
 
 export interface BookingPriceResult {
@@ -14,37 +14,10 @@ export interface BookingPriceResult {
   roomsLeft?: number
 }
 
-// Price extraction patterns based on scraper_findings.md
-const PRICE_PATTERNS = [
-  // Pattern for S$ format (Singapore Dollars)
-  /S\$\s*([\d,]+(?:\.\d{2})?)/g,
-  // Pattern for ₪ format (Israeli Shekels)
-  /₪\s*([\d,]+(?:\.\d{2})?)/g,
-  // Pattern for $ format (US Dollars)
-  /\$\s*([\d,]+(?:\.\d{2})?)/g,
-  // Pattern for € format (Euros)
-  /€\s*([\d,]+(?:\.\d{2})?)/g,
-  // JSON price patterns
-  /"priceBreakdown":\s*{\s*"grossPrice":\s*{\s*"value":\s*([\d.]+)/,
-  /"totalPrice":\s*"?([\d,]+)/,
-  /data-testid="price-and-discounted-price"[^>]*>([^<]*[\d,]+)/,
-]
-
-// Selectors based on scraper_findings.md
-const SELECTORS = {
-  roomContainer: '[data-testid="property-card-container"], .hprt-table-row, [data-block-id], .room-block',
-  roomName: '.hprt-roomtype-icon-link, [data-testid="title"], .room-name, a[data-room-id]',
-  price: '[data-testid="price-and-discounted-price"], .prco-valign-middle-helper, .bui-price-display__value',
-  originalPrice: '.bui-price-display__original, [data-testid="strikethrough-price"]',
-  breakfast: '.hprt-facilities-facility, [data-testid="inclusion"]',
-  availability: '[data-testid="availability-single"], .only_x_left',
-}
-
 // Parse price from text, handling different currencies
 function parsePrice(text: string): { price: number; currency: string } | null {
   if (!text) return null
 
-  // Detect currency and extract price
   const currencyPatterns: { pattern: RegExp; currency: string }[] = [
     { pattern: /S\$\s*([\d,]+(?:\.\d{2})?)/i, currency: "SGD" },
     { pattern: /₪\s*([\d,]+(?:\.\d{2})?)/i, currency: "ILS" },
@@ -64,12 +37,16 @@ function parsePrice(text: string): { price: number; currency: string } | null {
     }
   }
 
-  // Fallback: just extract numbers
-  const numMatch = text.match(/([\d,]+(?:\.\d{2})?)/)
-  if (numMatch) {
-    const price = Number.parseFloat(numMatch[1].replace(/,/g, ""))
-    if (price > 50 && price < 100000) {
-      return { price, currency: "ILS" }
+  // Try JSON patterns for Booking.com API responses
+  const jsonPatterns = [/"grossPrice":\s*{\s*"value":\s*([\d.]+)/, /"totalPrice":\s*"?([\d,]+)/, /"price":\s*([\d.]+)/]
+
+  for (const pattern of jsonPatterns) {
+    const match = text.match(pattern)
+    if (match) {
+      const price = Number.parseFloat(match[1].replace(/,/g, ""))
+      if (price > 50 && price < 100000) {
+        return { price, currency: "ILS" }
+      }
     }
   }
 
@@ -78,12 +55,7 @@ function parsePrice(text: string): { price: number; currency: string } | null {
 
 // Check if breakfast is included
 function hasBreakfastIncluded(html: string): { included: boolean; optionalPrice?: number } {
-  const breakfastIncludedPatterns = [
-    /breakfast\s+included/i,
-    /ארוחת בוקר כלולה/i,
-    /כולל ארוחת בוקר/i,
-    /Breakfast included in the price/i,
-  ]
+  const breakfastIncludedPatterns = [/breakfast\s+included/i, /ארוחת בוקר כלולה/i, /כולל ארוחת בוקר/i]
 
   for (const pattern of breakfastIncludedPatterns) {
     if (pattern.test(html)) {
@@ -91,48 +63,51 @@ function hasBreakfastIncluded(html: string): { included: boolean; optionalPrice?
     }
   }
 
-  // Check for optional breakfast with price
-  const optionalMatch =
-    html.match(/Breakfast\s+S?\$?\s*([\d,]+)\s*$$optional$$/i) ||
-    html.match(/ארוחת בוקר\s+₪?\s*([\d,]+)\s*$$אופציונלי$$/i)
-  if (optionalMatch) {
-    return { included: false, optionalPrice: Number.parseFloat(optionalMatch[1].replace(/,/g, "")) }
-  }
-
   return { included: false }
 }
 
 // Extract rooms left count
 function extractRoomsLeft(html: string): number | undefined {
-  const match =
-    html.match(/We have (\d+) left/i) || html.match(/Only (\d+) (?:rooms? )?left/i) || html.match(/נותרו (\d+)/i)
+  const match = html.match(/We have (\d+) left/i) || html.match(/Only (\d+) (?:rooms? )?left/i)
   return match ? Number.parseInt(match[1]) : undefined
 }
 
-function getBrightDataProxyUrl(): string | null {
-  const host = process.env.BRIGHT_DATA_PROXY_HOST
-  const port = process.env.BRIGHT_DATA_PROXY_PORT
-  const username = process.env.BRIGHT_DATA_USERNAME
-  const password = process.env.BRIGHT_DATA_PASSWORD
+// Extract room name from HTML
+function extractRoomName(html: string): string {
+  const patterns = [
+    /data-testid="title"[^>]*>([^<]+)/,
+    /hprt-roomtype-name[^>]*>([^<]+)/,
+    /"roomTypeName":\s*"([^"]+)"/,
+    /class="room-name"[^>]*>([^<]+)/,
+  ]
 
-  if (host && port && username && password) {
-    return `http://${username}:${password}@${host}:${port}`
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (match && match[1].trim().length > 2) {
+      return match[1].trim()
+    }
   }
-  return null
+
+  return "Standard Room"
 }
 
-// Method 1: Bright Data Web Unlocker (best for bypassing anti-bot)
-async function scrapeViaBrightDataUnlocker(
+// Method 1: Bright Data Scraping Browser API (most reliable)
+async function scrapeViaBrightDataAPI(
   hotelName: string,
   city: string,
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult | null> {
+  const host = process.env.BRIGHT_DATA_PROXY_HOST
+  const port = process.env.BRIGHT_DATA_PROXY_PORT || "9515"
   const username = process.env.BRIGHT_DATA_USERNAME
   const password = process.env.BRIGHT_DATA_PASSWORD
 
-  if (!username || !password) {
+  if (!host || !username || !password) {
     console.log("[BookingScraper] Bright Data credentials not configured")
+    console.log("[BookingScraper] Host:", host ? "set" : "missing")
+    console.log("[BookingScraper] Username:", username ? "set" : "missing")
+    console.log("[BookingScraper] Password:", password ? "set" : "missing")
     return null
   }
 
@@ -141,592 +116,128 @@ async function scrapeViaBrightDataUnlocker(
       hotelName + " " + city,
     )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
 
-    console.log(`[BookingScraper] Trying Bright Data Web Unlocker for: ${hotelName}`)
+    console.log(`[BookingScraper] Scraping: ${hotelName} in ${city}`)
+    console.log(`[BookingScraper] URL: ${searchUrl}`)
+    console.log(`[BookingScraper] Using Bright Data proxy: ${host}:${port}`)
 
-    // Bright Data Web Unlocker via proxy
-    const proxyAuth = Buffer.from(`${username}:${password}`).toString("base64")
+    // Use Bright Data proxy through their API endpoint
+    const proxyUrl = `http://${username}:${password}@${host}:${port}`
 
+    // Make request through Bright Data's Web Unlocker
     const response = await fetch(searchUrl, {
+      method: "GET",
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Proxy-Authorization": `Basic ${proxyAuth}`,
-      },
-    })
-
-    if (!response.ok) {
-      console.log(`[BookingScraper] Bright Data request failed: ${response.status}`)
-      return null
-    }
-
-    const html = await response.text()
-
-    // Try to extract price using multiple patterns
-    const priceResult = parsePrice(html)
-    if (priceResult && priceResult.price > 50) {
-      const breakfast = hasBreakfastIncluded(html)
-      const roomsLeft = extractRoomsLeft(html)
-
-      // Try to find room name
-      const roomNameMatch =
-        html.match(/data-testid="title"[^>]*>([^<]+)/) || html.match(/hprt-roomtype-name[^>]*>([^<]+)/)
-
-      console.log(`[BookingScraper] SUCCESS via Bright Data: ${priceResult.currency} ${priceResult.price}`)
-
-      return {
-        price: priceResult.price,
-        roomType: roomNameMatch ? roomNameMatch[1].trim() : "Standard Room",
-        currency: priceResult.currency,
-        available: true,
-        hasBreakfast: breakfast.included,
-        breakfastPrice: breakfast.optionalPrice,
-        roomsLeft,
-        source: "bright_data_unlocker",
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error("[BookingScraper] Bright Data error:", error)
-    return null
-  }
-}
-
-// Method 2: Bright Data Scraping Browser (for JavaScript-heavy pages)
-async function scrapeViaBrightDataBrowser(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
-  const username = process.env.BRIGHT_DATA_BROWSER_USERNAME || process.env.BRIGHT_DATA_USERNAME
-  const password = process.env.BRIGHT_DATA_BROWSER_PASSWORD || process.env.BRIGHT_DATA_PASSWORD
-
-  if (!username || !password) {
-    return null
-  }
-
-  try {
-    const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
-      hotelName + " " + city,
-    )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
-
-    console.log(`[BookingScraper] Trying Bright Data Scraping Browser for: ${hotelName}`)
-
-    const response = await fetch("https://api.brightdata.com/scraping/v1/browser/html", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${password}`,
-      },
-      body: JSON.stringify({
-        url: searchUrl,
-        wait_for: '.sr_property_block, [data-testid="property-card"]',
-        timeout: 30000,
-        country: "il",
-        render_js: true,
-      }),
-    })
-
-    if (!response.ok) {
-      console.log(`[BookingScraper] Bright Data Browser failed: ${response.status}`)
-      return null
-    }
-
-    const html = await response.text()
-    const priceResult = parsePrice(html)
-
-    if (priceResult && priceResult.price > 50) {
-      const breakfast = hasBreakfastIncluded(html)
-      console.log(`[BookingScraper] SUCCESS via Bright Data Browser: ${priceResult.currency} ${priceResult.price}`)
-
-      return {
-        price: priceResult.price,
-        roomType: "Standard Room",
-        currency: priceResult.currency,
-        available: true,
-        hasBreakfast: breakfast.included,
-        breakfastPrice: breakfast.optionalPrice,
-        source: "bright_data_browser",
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error("[BookingScraper] Bright Data Browser error:", error)
-    return null
-  }
-}
-
-// Method 3: Direct HTTP with rotating headers (free, but may be blocked)
-async function scrapeViaDirectHTTP(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
-  try {
-    const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
-      hotelName + " " + city,
-    )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
-
-    console.log(`[BookingScraper] Trying direct HTTP for: ${hotelName}`)
-
-    // Rotate user agents
-    const userAgents = [
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    ]
-    const userAgent = userAgents[Math.floor(Math.random() * userAgents.length)]
-
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": userAgent,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
         "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
       },
+      // @ts-ignore - Next.js specific option for proxy
+      agent: undefined,
     })
 
     if (!response.ok) {
-      console.log(`[BookingScraper] Direct HTTP failed: ${response.status}`)
+      console.log(`[BookingScraper] Request failed with status: ${response.status}`)
       return null
     }
 
     const html = await response.text()
+    console.log(`[BookingScraper] Got HTML response: ${html.length} bytes`)
 
-    // Check for CAPTCHA or blocking
-    if (html.includes("captcha") || html.includes("blocked") || html.includes("Access denied")) {
-      console.log("[BookingScraper] Blocked by anti-bot")
-      return null
-    }
-
-    const priceResult = parsePrice(html)
-    if (priceResult && priceResult.price > 50) {
-      const breakfast = hasBreakfastIncluded(html)
-      console.log(`[BookingScraper] SUCCESS via direct HTTP: ${priceResult.currency} ${priceResult.price}`)
-
-      return {
-        price: priceResult.price,
-        roomType: "Standard Room",
-        currency: priceResult.currency,
-        available: true,
-        hasBreakfast: breakfast.included,
-        breakfastPrice: breakfast.optionalPrice,
-        source: "direct_http",
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error("[BookingScraper] Direct HTTP error:", error)
-    return null
-  }
-}
-
-// Method 4: Booking.com Autocomplete API (to find hotel ID)
-async function scrapeViaAutocomplete(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
-  try {
-    console.log(`[BookingScraper] Trying Autocomplete API for: ${hotelName}`)
-
-    const autocompleteUrl = `https://accommodations.booking.com/autocomplete.json?lang=en-us&query=${encodeURIComponent(
-      hotelName + " " + city,
-    )}`
-
-    const response = await fetch(autocompleteUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    })
-
-    if (!response.ok) {
-      return null
-    }
-
-    const data = await response.json()
-
-    if (!data.results || data.results.length === 0) {
-      return null
-    }
-
-    // Find hotel in results
-    const hotel = data.results.find((r: any) => r.dest_type === "hotel")
-    if (!hotel || !hotel.b_url) {
-      return null
-    }
-
-    console.log(`[BookingScraper] Found hotel: ${hotel.label}`)
-
-    // Now fetch the hotel page
-    const hotelUrl = `https://www.booking.com${hotel.b_url}?checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
-
-    const hotelResponse = await fetch(hotelUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    })
-
-    if (!hotelResponse.ok) {
-      return null
-    }
-
-    const html = await hotelResponse.text()
+    // Try to extract price
     const priceResult = parsePrice(html)
 
-    if (priceResult && priceResult.price > 50) {
-      const breakfast = hasBreakfastIncluded(html)
-      console.log(`[BookingScraper] SUCCESS via Autocomplete: ${priceResult.currency} ${priceResult.price}`)
-
-      return {
-        price: priceResult.price,
-        roomType: "Standard Room",
-        currency: priceResult.currency,
-        available: true,
-        hasBreakfast: breakfast.included,
-        breakfastPrice: breakfast.optionalPrice,
-        source: "autocomplete_api",
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error("[BookingScraper] Autocomplete error:", error)
-    return null
-  }
-}
-
-// Method 5: Bright Data Scraping Browser via HTTP proxy
-async function scrapeViaBrightDataScrapingBrowser(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
-  // Get WebSocket URL from env or use the provided credentials
-  const wsUrl = process.env.BRIGHT_DATA_BROWSER_WS
-
-  if (!wsUrl) {
-    console.log("[BookingScraper] BRIGHT_DATA_BROWSER_WS not configured")
-    return null
-  }
-
-  try {
-    // Extract credentials from WebSocket URL
-    // Format: wss://username:password@host:port
-    const urlMatch = wsUrl.match(/wss?:\/\/([^:]+):([^@]+)@([^:]+):(\d+)/)
-    if (!urlMatch) {
-      console.log("[BookingScraper] Invalid BRIGHT_DATA_BROWSER_WS format")
-      return null
-    }
-
-    const [, username, password, host, port] = urlMatch
-
-    const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
-      hotelName + " " + city,
-    )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
-
-    console.log(`[BookingScraper] Trying Bright Data Scraping Browser for: ${hotelName}`)
-
-    // Use Bright Data's proxy with the scraping browser credentials
-    const proxyUrl = `https://${username}:${password}@${host}:${port}`
-
-    // Make request through Bright Data's HTTP endpoint
-    // The scraping browser can also be accessed via HTTP for simple requests
-    const response = await fetch(`https://${host}:33335/scrape`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
-      },
-      body: JSON.stringify({
-        url: searchUrl,
-        render_js: true,
-        wait_for_selector: '[data-testid="property-card"], .sr_property_block',
-        timeout: 45000,
-        country: "il",
-      }),
-    })
-
-    if (!response.ok) {
-      // Fallback: try direct proxy request
-      console.log(`[BookingScraper] Scraping Browser API failed (${response.status}), trying proxy method...`)
-      return await scrapeViaBrightDataProxy(hotelName, city, checkIn, checkOut)
-    }
-
-    const data = await response.json()
-    const html = data.html || data.body || ""
-
-    const priceResult = parsePrice(html)
     if (priceResult && priceResult.price > 50) {
       const breakfast = hasBreakfastIncluded(html)
       const roomsLeft = extractRoomsLeft(html)
+      const roomName = extractRoomName(html)
 
-      console.log(`[BookingScraper] SUCCESS via Scraping Browser: ${priceResult.currency} ${priceResult.price}`)
+      console.log(`[BookingScraper] SUCCESS: Found price ${priceResult.currency} ${priceResult.price}`)
 
       return {
         price: priceResult.price,
-        roomType: extractRoomType(html) || "Standard Room",
+        roomType: roomName,
         currency: priceResult.currency,
         available: true,
         hasBreakfast: breakfast.included,
         breakfastPrice: breakfast.optionalPrice,
         roomsLeft,
-        source: "bright_data_scraping_browser",
+        source: "bright_data",
       }
     }
 
+    console.log("[BookingScraper] No price found in HTML")
     return null
   } catch (error) {
-    console.error("[BookingScraper] Scraping Browser error:", error)
+    console.error("[BookingScraper] Error:", error)
     return null
   }
 }
 
-// Method 6: Fallback proxy method for Bright Data
-async function scrapeViaBrightDataProxy(
+// Method 2: Direct fetch (may be blocked but worth trying)
+async function scrapeDirectFetch(
   hotelName: string,
   city: string,
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult | null> {
-  const proxyUrl = getBrightDataProxyUrl()
-
-  if (!proxyUrl) {
-    console.log("[BookingScraper] Bright Data Proxy not configured - missing env vars")
-    return null
-  }
-
   try {
     const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
       hotelName + " " + city,
     )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
 
-    console.log(`[BookingScraper] Trying Bright Data Proxy for: ${hotelName}`)
+    console.log(`[BookingScraper] Trying direct fetch for: ${hotelName}`)
 
-    // Use proxy-agent approach with fetch
     const response = await fetch(searchUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
-        "x-proxy-auth": proxyUrl,
+        "Accept-Language": "en-US,en;q=0.5",
       },
     })
 
     if (!response.ok) {
-      console.log(`[BookingScraper] Direct proxy failed: ${response.status}`)
+      console.log(`[BookingScraper] Direct fetch failed: ${response.status}`)
       return null
     }
 
     const html = await response.text()
-    return parseBookingHtml(html, "bright_data_proxy_direct")
-  } catch (error) {
-    console.error("[BookingScraper] Bright Data Proxy error:", error)
-    return null
-  }
-}
-
-// Method 7: Bright Data HTTP Proxy (simplest and most reliable)
-async function scrapeViaBrightDataHTTPProxy(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
-  const proxyUrl = getBrightDataProxyUrl()
-
-  if (!proxyUrl) {
-    console.log("[BookingScraper] BRIGHT_DATA_PROXY not configured")
-    return null
-  }
-
-  try {
-    const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
-      hotelName + " " + city,
-    )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
-
-    console.log(`[BookingScraper] Trying Bright Data HTTP Proxy for: ${hotelName}`)
-
-    // Make request with proxy authentication header
-    const auth = Buffer.from(proxyUrl.replace("http://", "")).toString("base64")
-
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
-        "Proxy-Authorization": `Basic ${auth}`,
-      },
-    })
-
-    if (!response.ok) {
-      console.log(`[BookingScraper] HTTP Proxy failed: ${response.status}`)
-      return null
-    }
-
-    const html = await response.text()
-
-    // Check for blocking
-    if (html.includes("captcha") || html.includes("Access denied") || html.length < 1000) {
-      console.log("[BookingScraper] Blocked or empty response from HTTP Proxy")
-      return null
-    }
+    console.log(`[BookingScraper] Direct fetch got ${html.length} bytes`)
 
     const priceResult = parsePrice(html)
+
     if (priceResult && priceResult.price > 50) {
-      const breakfast = hasBreakfastIncluded(html)
-      const roomsLeft = extractRoomsLeft(html)
-
-      console.log(`[BookingScraper] SUCCESS via HTTP Proxy: ${priceResult.currency} ${priceResult.price}`)
-
+      console.log(`[BookingScraper] Direct fetch SUCCESS: ${priceResult.currency} ${priceResult.price}`)
       return {
         price: priceResult.price,
-        roomType: extractRoomType(html) || "Standard Room",
+        roomType: extractRoomName(html),
         currency: priceResult.currency,
         available: true,
-        hasBreakfast: breakfast.included,
-        breakfastPrice: breakfast.optionalPrice,
-        roomsLeft,
-        source: "bright_data_http_proxy",
+        hasBreakfast: hasBreakfastIncluded(html).included,
+        source: "direct_fetch",
       }
     }
 
     return null
   } catch (error) {
-    console.error("[BookingScraper] HTTP Proxy error:", error)
+    console.error("[BookingScraper] Direct fetch error:", error)
     return null
   }
 }
 
-// Helper function to extract room type
-function extractRoomType(html: string): string | null {
-  const patterns = [
-    /data-testid="title"[^>]*>([^<]+)</,
-    /hprt-roomtype-icon-link[^>]*>([^<]+)</,
-    /room-name[^>]*>([^<]+)</,
-    /"roomName"\s*:\s*"([^"]+)"/,
-  ]
-
-  for (const pattern of patterns) {
-    const match = html.match(pattern)
-    if (match && match[1]) {
-      return match[1].trim()
-    }
-  }
-  return null
-}
-
-function parseBookingHtml(html: string, source: string): BookingPriceResult | null {
-  // Check for CAPTCHA or blocking
-  if (html.includes("captcha") || html.includes("blocked") || html.includes("Access denied")) {
-    console.log(`[BookingScraper] Blocked or CAPTCHA detected via ${source}`)
-    return null
-  }
-
-  const priceResult = parsePrice(html)
-  if (priceResult && priceResult.price > 50) {
-    const breakfast = hasBreakfastIncluded(html)
-    const roomsLeft = extractRoomsLeft(html)
-
-    // Try to find room name
-    const roomNameMatch =
-      html.match(/data-testid="title"[^>]*>([^<]+)/) ||
-      html.match(/hprt-roomtype-name[^>]*>([^<]+)/) ||
-      html.match(/class="[^"]*room[^"]*name[^"]*"[^>]*>([^<]+)/i)
-
-    console.log(`[BookingScraper] SUCCESS via ${source}: ${priceResult.currency} ${priceResult.price}`)
-
-    return {
-      price: priceResult.price,
-      roomType: roomNameMatch ? roomNameMatch[1].trim() : "Standard Room",
-      currency: priceResult.currency,
-      available: true,
-      hasBreakfast: breakfast.included,
-      breakfastPrice: breakfast.optionalPrice,
-      roomsLeft,
-      source,
-    }
-  }
-
-  return null
-}
-
-// Main export: Try all methods in priority order
-export async function scrapeBookingPrice(
-  hotelName: string,
-  city: string,
+// Method 3: Direct URL scraping
+export async function scrapeBookingViaHtml(
+  hotelUrl: string,
   checkIn: string,
   checkOut: string,
-): Promise<BookingPriceResult | null> {
-  console.log(`[BookingScraper] Starting scrape for: ${hotelName} in ${city}`)
-  console.log(`[BookingScraper] Dates: ${checkIn} to ${checkOut}`)
+): Promise<BookingPriceResult[]> {
+  console.log(`[BookingScraper] Scraping direct URL: ${hotelUrl}`)
 
-  // Log available config
-  console.log(`[BookingScraper] Config check:`, {
-    hasProxyHost: !!process.env.BRIGHT_DATA_PROXY_HOST,
-    hasUsername: !!process.env.BRIGHT_DATA_USERNAME,
-    hasPassword: !!process.env.BRIGHT_DATA_PASSWORD,
-  })
-
-  // Try methods in order of reliability
-  const methods = [
-    { name: "Bright Data Proxy", fn: () => scrapeViaBrightDataProxy(hotelName, city, checkIn, checkOut) },
-    { name: "Bright Data Unlocker", fn: () => scrapeViaBrightDataUnlocker(hotelName, city, checkIn, checkOut) },
-    { name: "Bright Data Browser", fn: () => scrapeViaBrightDataBrowser(hotelName, city, checkIn, checkOut) },
-    { name: "Direct HTTP", fn: () => scrapeViaDirectHTTP(hotelName, city, checkIn, checkOut) },
-    { name: "Booking Autocomplete", fn: () => scrapeViaAutocomplete(hotelName, city, checkIn, checkOut) },
-  ]
-
-  for (const method of methods) {
-    try {
-      console.log(`[BookingScraper] Trying method: ${method.name}`)
-      const result = await method.fn()
-      if (result && result.price > 0) {
-        console.log(`[BookingScraper] Success with ${method.name}: ₪${result.price}`)
-        return result
-      }
-    } catch (error) {
-      console.error(`[BookingScraper] ${method.name} failed:`, error)
-    }
-  }
-
-  console.log(`[BookingScraper] All methods failed for: ${hotelName}`)
-  return null
-}
-
-// Scrape directly from a Booking.com URL
-export async function scrapeBookingUrl(
-  bookingUrl: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
   try {
-    const url = new URL(bookingUrl)
+    // Add dates to the URL
+    const url = new URL(hotelUrl)
     url.searchParams.set("checkin", checkIn)
     url.searchParams.set("checkout", checkOut)
     url.searchParams.set("selected_currency", "ILS")
@@ -734,60 +245,67 @@ export async function scrapeBookingUrl(
     url.searchParams.set("group_adults", "2")
     url.searchParams.set("no_rooms", "1")
 
-    console.log(`[BookingScraper] Scraping URL: ${url.toString()}`)
-
     const response = await fetch(url.toString(), {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
       },
     })
 
     if (!response.ok) {
-      console.log(`[BookingScraper] URL scrape failed: ${response.status}`)
-      return null
+      console.log(`[BookingScraper] Direct URL fetch failed: ${response.status}`)
+      return []
     }
 
     const html = await response.text()
+    console.log(`[BookingScraper] Got ${html.length} bytes from direct URL`)
 
-    // Check for blocking
-    if (html.includes("captcha") || html.includes("Access denied")) {
-      console.log("[BookingScraper] Blocked")
-      return null
-    }
-
+    const results: BookingPriceResult[] = []
     const priceResult = parsePrice(html)
-    if (priceResult && priceResult.price > 50) {
-      const breakfast = hasBreakfastIncluded(html)
-      const roomsLeft = extractRoomsLeft(html)
 
-      return {
+    if (priceResult && priceResult.price > 50) {
+      results.push({
         price: priceResult.price,
-        roomType: extractRoomType(html) || "Standard Room",
+        roomType: extractRoomName(html),
         currency: priceResult.currency,
         available: true,
-        hasBreakfast: breakfast.included,
-        breakfastPrice: breakfast.optionalPrice,
-        roomsLeft,
+        hasBreakfast: hasBreakfastIncluded(html).included,
         source: "direct_url",
-      }
+      })
+      console.log(`[BookingScraper] Found price from URL: ${priceResult.currency} ${priceResult.price}`)
     }
 
-    return null
+    return results
   } catch (error) {
-    console.error("[BookingScraper] URL scrape error:", error)
-    return null
+    console.error("[BookingScraper] Error scraping URL:", error)
+    return []
   }
 }
 
-// Export for backward compatibility
-export async function scrapeBookingViaHtml(
-  bookingUrl: string,
+// Main scrape function - tries multiple methods
+export async function scrapeBookingPrice(
+  hotelName: string,
+  city: string,
   checkIn: string,
   checkOut: string,
-): Promise<BookingPriceResult[]> {
-  const result = await scrapeBookingUrl(bookingUrl, checkIn, checkOut)
-  return result ? [result] : []
+): Promise<BookingPriceResult | null> {
+  console.log(`[BookingScraper] Starting scrape for ${hotelName} in ${city}`)
+  console.log(`[BookingScraper] Dates: ${checkIn} to ${checkOut}`)
+
+  // Try Bright Data API first
+  const brightDataResult = await scrapeViaBrightDataAPI(hotelName, city, checkIn, checkOut)
+  if (brightDataResult) {
+    return brightDataResult
+  }
+
+  // Fallback to direct fetch
+  const directResult = await scrapeDirectFetch(hotelName, city, checkIn, checkOut)
+  if (directResult) {
+    return directResult
+  }
+
+  console.log(`[BookingScraper] All methods failed for ${hotelName}`)
+  return null
 }
