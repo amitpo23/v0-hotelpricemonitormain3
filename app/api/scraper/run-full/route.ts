@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+ה import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { scrapeCompetitorPrices } from "@/lib/scraper/real-scraper"
 
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
         for (const comp of competitors) {
           let bookingPrice: number
 
-          if (useRealScraping && i < 30) {
+          if (useRealScraping) {
             try {
               const scrapedResult = await scrapeCompetitorPrices(
                 {
@@ -258,82 +258,43 @@ export async function POST(request: Request) {
                 bookingPrice = scrapedResult.bookingPrice
                 successfulScrapes++
               } else {
-                const starVariance = comp.star_rating ? 0.85 + (comp.star_rating - 3) * 0.1 : 0.95
-                const randomFactor = 0.92 + Math.random() * 0.16
-                bookingPrice = Math.round(roomBasePrice * starVariance * multiplier * randomFactor)
                 failedScrapes++
+                console.log(`[v0] No real price for ${comp.competitor_hotel_name} on ${dateStr}`)
               }
             } catch (error) {
-              console.error(`[v0] Scrape error for ${comp.competitor_hotel_name}:`, error)
-              const starVariance = comp.star_rating ? 0.85 + (comp.star_rating - 3) * 0.1 : 0.95
-              const randomFactor = 0.92 + Math.random() * 0.16
-              bookingPrice = Math.round(roomBasePrice * starVariance * multiplier * randomFactor)
               failedScrapes++
+              console.error(`[v0] Scrape error for ${comp.competitor_hotel_name}:`, error)
             }
-
-            if (i % 5 === 0) {
-              await new Promise((resolve) => setTimeout(resolve, 100))
-            }
-          } else {
-            const starVariance = comp.star_rating ? 0.85 + (comp.star_rating - 3) * 0.1 : 0.95
-            const randomFactor = 0.92 + Math.random() * 0.16
-            bookingPrice = Math.round(roomBasePrice * starVariance * multiplier * randomFactor)
           }
 
-          competitorPrices.push(bookingPrice)
-
-          const priceKey = `${comp.id}-${dateStr}-${roomType.name}`
-          const oldPrice = oldPricesMap.get(priceKey)
-
-          competitorPriceResults.push({
-            hotel_id: hotelId,
-            competitor_id: comp.id,
-            date: dateStr,
-            price: bookingPrice,
-            source: "Booking.com",
-            room_type: roomType.name,
-            availability: true,
-            scraped_at: new Date().toISOString(),
-          })
-
-          if (oldPrice && oldPrice !== bookingPrice) {
-            priceHistoryRecords.push({
-              hotel_id: hotelId,
-              competitor_id: comp.id,
-              date: dateStr,
-              old_price: oldPrice,
-              new_price: bookingPrice,
-              price_change: bookingPrice - oldPrice,
-              change_percent: Math.round(((bookingPrice - oldPrice) / oldPrice) * 100 * 100) / 100,
-              source: "Booking.com",
-              room_type: roomType.name,
-            })
+          // Small delay between competitors
+          if (i % 5 === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 100))
           }
         }
 
-        const recommendation = calculateRecommendedPrice(ourPrice, competitorPrices, demandLevel)
+        if (competitorPrices.length > 0) {
+          const recommendation = calculateRecommendedPrice(ourPrice, competitorPrices, demandLevel)
 
-        results.push({
-          hotel_id: hotelId,
-          room_type_id: roomType.id,
-          date: dateStr,
-          our_price: ourPrice,
-          recommended_price: recommendation.price,
-          min_competitor_price: competitorPrices.length > 0 ? Math.min(...competitorPrices) : null,
-          max_competitor_price: competitorPrices.length > 0 ? Math.max(...competitorPrices) : null,
-          avg_competitor_price:
-            competitorPrices.length > 0
-              ? Math.round(competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length)
-              : null,
-          demand_level: demandLevel,
-          price_recommendation: recommendation.recommendation,
-          autopilot_action: recommendation.action,
-          updated_at: new Date().toISOString(),
-        })
+          results.push({
+            hotel_id: hotelId,
+            room_type_id: roomType.id,
+            date: dateStr,
+            our_price: ourPrice,
+            recommended_price: recommendation.price,
+            min_competitor_price: Math.min(...competitorPrices),
+            max_competitor_price: Math.max(...competitorPrices),
+            avg_competitor_price: Math.round(competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length),
+            demand_level: demandLevel,
+            price_recommendation: recommendation.recommendation,
+            autopilot_action: recommendation.action,
+            updated_at: new Date().toISOString(),
+          })
+        }
       }
     }
 
-    console.log(`[v0] Scraping complete. Success: ${successfulScrapes}, Failed/Simulated: ${failedScrapes}`)
+    console.log(`[v0] Scraping complete. Real data: ${successfulScrapes}, Failed: ${failedScrapes}`)
 
     for (let i = 0; i < competitorPriceResults.length; i += 500) {
       const batch = competitorPriceResults.slice(i, i + 500)

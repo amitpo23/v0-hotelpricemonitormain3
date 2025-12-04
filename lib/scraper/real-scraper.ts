@@ -9,6 +9,7 @@ export interface CompetitorPriceResult {
   roomType: string
   scrapedAt: string
   bookingSuccess: boolean
+  errorMessage?: string
 }
 
 export async function scrapeCompetitorPrices(
@@ -20,7 +21,6 @@ export async function scrapeCompetitorPrices(
   },
   checkIn: string,
   checkOut: string,
-  fallbackBasePrice = 150,
 ): Promise<CompetitorPriceResult> {
   const result: CompetitorPriceResult = {
     competitorId: competitor.id,
@@ -28,7 +28,7 @@ export async function scrapeCompetitorPrices(
     date: checkIn,
     bookingPrice: null,
     avgPrice: null,
-    roomType: "Standard Room",
+    roomType: "",
     scrapedAt: new Date().toISOString(),
     bookingSuccess: false,
   }
@@ -38,41 +38,39 @@ export async function scrapeCompetitorPrices(
   // Try to scrape Booking.com
   try {
     if (competitor.booking_url) {
-      console.log(`[Scraper] Scraping Booking.com URL: ${competitor.booking_url}`)
+      console.log(`[v0] Scraping Booking.com URL: ${competitor.booking_url}`)
       const bookingPrices = await scrapeBookingViaHtml(competitor.booking_url, checkIn, checkOut)
       if (bookingPrices.length > 0) {
         result.bookingPrice = bookingPrices[0].price
         result.roomType = bookingPrices[0].roomType
         result.bookingSuccess = true
-        console.log(`[Scraper] SUCCESS: ${competitor.competitor_hotel_name} = ₪${result.bookingPrice}`)
+        console.log(`[v0] SUCCESS: ${competitor.competitor_hotel_name} = ₪${result.bookingPrice} (${result.roomType})`)
+      } else {
+        result.errorMessage = "No prices found on page"
+        console.log(`[v0] NO PRICES FOUND: ${competitor.competitor_hotel_name}`)
       }
     } else {
-      console.log(`[Scraper] Searching Booking.com for: ${competitor.competitor_hotel_name}`)
+      console.log(`[v0] Searching Booking.com for: ${competitor.competitor_hotel_name}`)
       const bookingResult = await scrapeBookingPrice(competitor.competitor_hotel_name, city, checkIn, checkOut)
       if (bookingResult) {
         result.bookingPrice = bookingResult.price
         result.roomType = bookingResult.roomType
         result.bookingSuccess = true
-        console.log(`[Scraper] SUCCESS: ${competitor.competitor_hotel_name} = ₪${result.bookingPrice}`)
+        console.log(`[v0] SUCCESS: ${competitor.competitor_hotel_name} = ₪${result.bookingPrice} (${result.roomType})`)
+      } else {
+        result.errorMessage = "Hotel not found or no prices available"
+        console.log(`[v0] FAILED: ${competitor.competitor_hotel_name} - hotel not found`)
       }
     }
   } catch (error) {
-    console.error(`[Scraper] Booking.com error for ${competitor.competitor_hotel_name}:`, error)
+    result.errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error(`[v0] ERROR scraping ${competitor.competitor_hotel_name}:`, error)
   }
 
-  // Set avgPrice from booking price or fallback
   if (result.bookingPrice) {
     result.avgPrice = result.bookingPrice
-  } else {
-    // Fallback to simulated price if scraping failed
-    console.log(`[Scraper] FALLBACK: ${competitor.competitor_hotel_name} - using simulated price`)
-    const dayOfWeek = new Date(checkIn).getDay()
-    const isWeekend = dayOfWeek === 5 || dayOfWeek === 6
-    const multiplier = isWeekend ? 1.15 : 1.0
-    const randomFactor = 0.9 + Math.random() * 0.2
-    result.bookingPrice = Math.round(fallbackBasePrice * multiplier * randomFactor)
-    result.avgPrice = result.bookingPrice
   }
+  // NO FALLBACK TO SIMULATED PRICES
 
   return result
 }
@@ -86,10 +84,11 @@ export async function scrapeCompetitorPricesForDateRange(
   },
   startDate: Date,
   days: number,
-  fallbackBasePrice = 150,
-  delayMs = 500, // Reduced delay - only one source now
+  delayMs = 500,
 ): Promise<CompetitorPriceResult[]> {
   const results: CompetitorPriceResult[] = []
+  let successCount = 0
+  let failCount = 0
 
   for (let i = 0; i < days; i++) {
     const checkIn = new Date(startDate)
@@ -100,8 +99,14 @@ export async function scrapeCompetitorPricesForDateRange(
     const checkInStr = checkIn.toISOString().split("T")[0]
     const checkOutStr = checkOut.toISOString().split("T")[0]
 
-    const result = await scrapeCompetitorPrices(competitor, checkInStr, checkOutStr, fallbackBasePrice)
-    results.push(result)
+    const result = await scrapeCompetitorPrices(competitor, checkInStr, checkOutStr)
+
+    if (result.bookingSuccess && result.bookingPrice) {
+      results.push(result)
+      successCount++
+    } else {
+      failCount++
+    }
 
     // Add delay to avoid rate limiting
     if (i < days - 1 && delayMs > 0) {
@@ -109,5 +114,8 @@ export async function scrapeCompetitorPricesForDateRange(
     }
   }
 
+  console.log(
+    `[v0] Scrape complete for ${competitor.competitor_hotel_name}: ${successCount} success, ${failCount} failed`,
+  )
   return results
 }
