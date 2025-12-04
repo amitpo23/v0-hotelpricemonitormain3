@@ -70,6 +70,7 @@
     "next": "^15.1.0",
     "pg": "latest",
     "postgres": "latest",
+    "puppeteer-core": "latest",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "latest",
