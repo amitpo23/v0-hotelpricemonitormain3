@@ -1,11 +1,31 @@
 // Real Booking.com scraper using multiple methods
 // Based on scraper_findings.md
 // Now includes Bright Data MCP integration!
+// And Vercel-compatible Puppeteer scraping!
 
 import { 
   scrapeBookingWithMCP, 
   scrapeBookingUrlWithMCP 
 } from './brightdata-mcp-scraper'
+
+// Import Vercel Puppeteer (only available in Node.js environment)
+// This is a lazy import to avoid bundling Puppeteer in client-side code
+async function getVercelPuppeteerScrapers() {
+  if (typeof window !== 'undefined') {
+    return { scrapeBookingWithVercelPuppeteer: null, scrapeBookingWithVercelPuppeteerSearch: null }
+  }
+  
+  try {
+    const module = await import('./vercel-puppeteer-scraper')
+    return {
+      scrapeBookingWithVercelPuppeteer: module.scrapeBookingWithVercelPuppeteer,
+      scrapeBookingWithVercelPuppeteerSearch: module.scrapeBookingWithVercelPuppeteerSearch
+    }
+  } catch (error) {
+    console.log('[BookingScraper] Vercel Puppeteer not available (this is OK)')
+    return { scrapeBookingWithVercelPuppeteer: null, scrapeBookingWithVercelPuppeteerSearch: null }
+  }
+}
 
 export interface BookingPriceResult {
   price: number
@@ -407,6 +427,23 @@ export async function scrapeBookingPrice(
     console.log(`[v0] [BookingScraper] ⏭️  Skipping MCP (no API token)`)
   }
 
+  // Try Method 1.5: Vercel Puppeteer (Serverless-compatible) 🎭
+  console.log(`[v0] [BookingScraper] 🎭 Method 1.5: Vercel Puppeteer (Serverless)`)
+  try {
+    const { scrapeBookingWithVercelPuppeteerSearch } = await getVercelPuppeteerScrapers()
+    if (scrapeBookingWithVercelPuppeteerSearch) {
+      const puppeteerResult = await scrapeBookingWithVercelPuppeteerSearch(hotelName, city, checkIn, checkOut)
+      if (puppeteerResult) {
+        console.log(`[v0] [BookingScraper] ✅ SUCCESS with Vercel Puppeteer: ${puppeteerResult.currency} ${puppeteerResult.price}`)
+        return puppeteerResult
+      }
+    } else {
+      console.log(`[v0] [BookingScraper] ⏭️  Vercel Puppeteer not available`)
+    }
+  } catch (error: any) {
+    console.log(`[v0] [BookingScraper] Vercel Puppeteer failed:`, error?.message)
+  }
+
   // Try Method 2: Bright Data Proxy (legacy)
   console.log(`[v0] [BookingScraper] 🔄 Method 2: Bright Data Proxy`)
   const brightDataResult = await scrapeViaBrightData(hotelName, city, checkIn, checkOut)
@@ -435,7 +472,7 @@ export async function scrapeBookingPrice(
     return htmlResult
   }
 
-  console.log(`[v0] [BookingScraper] ❌ All 5 methods failed for ${hotelName}`)
+  console.log(`[v0] [BookingScraper] ❌ All 6 methods failed for ${hotelName}`)
   return null
 }
 
@@ -459,6 +496,21 @@ export async function scrapeBookingViaHtml(
     } catch (error) {
       console.log(`[v0] [BookingScraper] MCP URL scraping failed:`, error)
     }
+  }
+
+  // Try Vercel Puppeteer second
+  console.log(`[v0] [BookingScraper] 🎭 Trying Vercel Puppeteer for URL scraping...`)
+  try {
+    const { scrapeBookingWithVercelPuppeteer } = await getVercelPuppeteerScrapers()
+    if (scrapeBookingWithVercelPuppeteer) {
+      const puppeteerResult = await scrapeBookingWithVercelPuppeteer(hotelUrl, checkIn, checkOut)
+      if (puppeteerResult) {
+        console.log(`[v0] [BookingScraper] ✅ SUCCESS with Vercel Puppeteer`)
+        return [puppeteerResult]
+      }
+    }
+  } catch (error: any) {
+    console.log(`[v0] [BookingScraper] Vercel Puppeteer URL scraping failed:`, error?.message)
   }
   
   // Fallback to extracting hotel name and using regular method
