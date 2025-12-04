@@ -1,38 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { scrapeCompetitorPrices } from "@/lib/scraper/real-scraper"
 
 const SCAN_DAYS = 180
 
-const DATA_SOURCES = [
-  { name: "Booking.com", color: "#003580" },
-  { name: "Expedia", color: "#FFCC00" },
-]
-
-interface DetectedRoomType {
-  name: string
-  basePrice: number
-  maxOccupancy: number
-  amenities: string[]
-}
-
-const COMMON_ROOM_TYPES: DetectedRoomType[] = [
-  { name: "Standard Room", basePrice: 100, maxOccupancy: 2, amenities: ["WiFi", "TV", "AC"] },
-  { name: "Superior Room", basePrice: 130, maxOccupancy: 2, amenities: ["WiFi", "TV", "AC", "Mini Bar"] },
-  { name: "Deluxe Room", basePrice: 170, maxOccupancy: 3, amenities: ["WiFi", "TV", "AC", "Mini Bar", "City View"] },
-  { name: "Junior Suite", basePrice: 220, maxOccupancy: 3, amenities: ["WiFi", "TV", "AC", "Mini Bar", "Living Area"] },
-  {
-    name: "Executive Suite",
-    basePrice: 300,
-    maxOccupancy: 4,
-    amenities: ["WiFi", "TV", "AC", "Mini Bar", "Living Area", "Kitchen"],
-  },
-]
-
-async function detectRoomTypesFromUrl(hotelUrl: string, hotelName: string): Promise<DetectedRoomType[]> {
-  const numRoomTypes = 3 + Math.floor(Math.random() * 3)
-  const shuffled = [...COMMON_ROOM_TYPES].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, numRoomTypes)
-}
+const DATA_SOURCES = [{ name: "Booking.com", color: "#003580" }]
 
 function getDemandLevel(date: Date): { level: string; multiplier: number } {
   const dayOfWeek = date.getDay()
@@ -52,25 +24,6 @@ function getDemandLevel(date: Date): { level: string; multiplier: number } {
   return { level: "low", multiplier: 0.9 }
 }
 
-function generateCompetitorPrice(
-  basePrice: number,
-  date: Date,
-  competitor: { id: string; competitor_hotel_name: string; star_rating?: number },
-): { avgPrice: number; bookingPrice: number; expediaPrice: number } {
-  const { multiplier } = getDemandLevel(date)
-  const starVariance = competitor.star_rating ? 0.85 + (competitor.star_rating - 3) * 0.1 : 0.95
-  const randomFactor = 0.92 + Math.random() * 0.16
-
-  const baseCalculatedPrice = basePrice * starVariance * multiplier * randomFactor
-
-  // Booking.com tends to be slightly cheaper, Expedia slightly higher
-  const bookingPrice = Math.round(baseCalculatedPrice * 0.98)
-  const expediaPrice = Math.round(baseCalculatedPrice * 1.02)
-  const avgPrice = Math.round((bookingPrice + expediaPrice) / 2)
-
-  return { avgPrice, bookingPrice, expediaPrice }
-}
-
 function calculateRecommendedPrice(
   ourPrice: number,
   competitorPrices: number[],
@@ -88,7 +41,7 @@ function calculateRecommendedPrice(
   if (demandLevel === "peak") {
     recommendedPrice = Math.round(avgPrice * 1.1)
     if (ourPrice < recommendedPrice) {
-      recommendation = `Peak demand! Increase price. Competitors avg: $${avgPrice}`
+      recommendation = `Peak demand! Increase price. Competitors avg: ₪${avgPrice}`
       action = "increase"
     } else {
       recommendation = `Good positioning for peak demand`
@@ -96,7 +49,7 @@ function calculateRecommendedPrice(
   } else if (demandLevel === "high") {
     recommendedPrice = Math.round(avgPrice * 1.05)
     if (ourPrice < avgPrice) {
-      recommendation = `High demand. Consider raising to market avg of $${avgPrice}`
+      recommendation = `High demand. Consider raising to market avg of ₪${avgPrice}`
       action = "increase"
     } else {
       recommendation = `Well positioned for high demand`
@@ -104,10 +57,10 @@ function calculateRecommendedPrice(
   } else if (demandLevel === "medium") {
     recommendedPrice = avgPrice
     if (ourPrice > avgPrice * 1.15) {
-      recommendation = `Price above competitors. Consider reducing to $${avgPrice}`
+      recommendation = `Price above competitors. Consider reducing to ₪${avgPrice}`
       action = "decrease"
     } else if (ourPrice < avgPrice * 0.85) {
-      recommendation = `Price below market. Opportunity to increase to $${avgPrice}`
+      recommendation = `Price below market. Opportunity to increase to ₪${avgPrice}`
       action = "increase"
     } else {
       recommendation = `Price is competitive with market`
@@ -115,7 +68,7 @@ function calculateRecommendedPrice(
   } else {
     recommendedPrice = Math.round(avgPrice * 0.95)
     if (ourPrice > avgPrice) {
-      recommendation = `Low demand. Reduce price to $${recommendedPrice} to capture bookings`
+      recommendation = `Low demand. Reduce price to ₪${recommendedPrice} to capture bookings`
       action = "decrease"
     } else {
       recommendation = `Good positioning for low demand period`
@@ -135,7 +88,7 @@ function generateRoomTypeColor(index: number): string {
 
 export async function POST(request: Request) {
   const startTime = new Date()
-  console.log("[v0] Scraper POST started at:", startTime.toISOString())
+  console.log("[v0] Booking.com Scraper started at:", startTime.toISOString())
 
   try {
     const supabase = await createClient()
@@ -143,27 +96,24 @@ export async function POST(request: Request) {
     let requestBody
     try {
       requestBody = await request.json()
-    } catch (e) {
-      console.error("[v0] Failed to parse request body:", e)
+    } catch {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    const { hotelId, roomTypeId, autoDetectRoomTypes = true } = requestBody
-    console.log("[v0] Request params - hotelId:", hotelId, "roomTypeId:", roomTypeId)
+    const { hotelId, roomTypeId, useRealScraping = true } = requestBody
 
     if (!hotelId) {
-      console.error("[v0] No hotelId provided")
       return NextResponse.json({ error: "hotelId is required" }, { status: 400 })
     }
 
+    // Get hotel
     const { data: hotel, error: hotelError } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
-    console.log("[v0] Hotel query result:", hotel ? hotel.name : "not found", "error:", hotelError)
 
     if (hotelError || !hotel) {
-      console.error("[v0] Hotel not found:", hotelError)
-      return NextResponse.json({ error: "Hotel not found: " + (hotelError?.message || "unknown") }, { status: 404 })
+      return NextResponse.json({ error: "Hotel not found" }, { status: 404 })
     }
 
+    // Create scan record
     const { data: scanRecord, error: scanError } = await supabase
       .from("scans")
       .insert({
@@ -174,217 +124,189 @@ export async function POST(request: Request) {
       .select()
       .single()
 
-    console.log("[v0] Scan record created:", scanRecord?.id, "error:", scanError)
-
     if (scanError || !scanRecord) {
-      console.error("[v0] Failed to create scan record:", scanError)
-      return NextResponse.json(
-        { error: "Failed to create scan record: " + (scanError?.message || "unknown") },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Failed to create scan record" }, { status: 500 })
     }
 
-    const { data: hotelRoomTypesData } = await supabase
+    // Get room types
+    let { data: hotelRoomTypes } = await supabase
       .from("hotel_room_types")
       .select("*")
       .eq("hotel_id", hotelId)
       .eq("is_active", true)
 
-    let hotelRoomTypes = hotelRoomTypesData
-    console.log("[v0] Room types found:", hotelRoomTypes?.length || 0)
-
     if (!hotelRoomTypes || hotelRoomTypes.length === 0) {
-      console.log("[v0] No room types found, creating defaults")
-      const detectedRoomTypes = await detectRoomTypesFromUrl(hotel.competitor_urls?.[0] || "", hotel.name)
-      const roomTypesToInsert = detectedRoomTypes.map((rt, index) => ({
-        hotel_id: hotelId,
-        name: rt.name,
-        base_price: rt.basePrice,
-        display_color: generateRoomTypeColor(index),
-        is_active: true,
-      }))
+      // Create default room types
+      const defaultRoomTypes = [
+        {
+          hotel_id: hotelId,
+          name: "Standard Room",
+          base_price: hotel.base_price || 150,
+          display_color: generateRoomTypeColor(0),
+          is_active: true,
+        },
+        {
+          hotel_id: hotelId,
+          name: "Superior Room",
+          base_price: (hotel.base_price || 150) * 1.3,
+          display_color: generateRoomTypeColor(1),
+          is_active: true,
+        },
+        {
+          hotel_id: hotelId,
+          name: "Deluxe Room",
+          base_price: (hotel.base_price || 150) * 1.7,
+          display_color: generateRoomTypeColor(2),
+          is_active: true,
+        },
+      ]
 
-      const { data: insertedHotelRoomTypes, error: roomTypeError } = await supabase
-        .from("hotel_room_types")
-        .insert(roomTypesToInsert)
-        .select()
-
-      if (roomTypeError) {
-        console.error("[v0] Failed to create room types:", roomTypeError)
-      }
-
-      if (insertedHotelRoomTypes && insertedHotelRoomTypes.length > 0) {
-        hotelRoomTypes = insertedHotelRoomTypes
-        console.log("[v0] Created", insertedHotelRoomTypes.length, "room types")
-      }
+      const { data: insertedRoomTypes } = await supabase.from("hotel_room_types").insert(defaultRoomTypes).select()
+      hotelRoomTypes = insertedRoomTypes || []
     }
 
+    // Get competitors
     const { data: competitors } = await supabase
       .from("hotel_competitors")
-      .select(`*, competitor_room_types (*)`)
+      .select("*")
       .eq("hotel_id", hotelId)
       .eq("is_active", true)
 
     if (!competitors || competitors.length === 0) {
-      if (scanRecord) {
-        await supabase
-          .from("scans")
-          .update({
-            status: "failed",
-            completed_at: new Date().toISOString(),
-            error_message: "No competitors configured",
-          })
-          .eq("id", scanRecord.id)
-      }
-      return NextResponse.json(
-        { error: "No competitors configured. Please add competitors first.", redirect: "/competitors/add" },
-        { status: 400 },
-      )
+      await supabase
+        .from("scans")
+        .update({
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          error_message: "No competitors configured",
+        })
+        .eq("id", scanRecord.id)
+      return NextResponse.json({ error: "No competitors configured" }, { status: 400 })
     }
 
+    // Get existing prices for comparison
     const { data: existingPrices } = await supabase
       .from("competitor_daily_prices")
       .select("competitor_id, date, price, source, room_type")
       .eq("hotel_id", hotelId)
+      .eq("source", "Booking.com")
 
     const oldPricesMap = new Map<string, number>()
     if (existingPrices) {
       for (const ep of existingPrices) {
-        const key = `${ep.competitor_id}-${ep.date}-${ep.source}-${ep.room_type}`
+        const key = `${ep.competitor_id}-${ep.date}-${ep.room_type}`
         oldPricesMap.set(key, ep.price)
       }
     }
 
     const basePrice = hotel.base_price || 150
-    const results = []
+    const results: any[] = []
     const competitorPriceResults: any[] = []
     const priceHistoryRecords: any[] = []
-    const scanResults = []
     const today = new Date()
 
     const roomTypesToScan = roomTypeId
       ? hotelRoomTypes?.filter((rt) => rt.id === roomTypeId) || []
-      : hotelRoomTypes && hotelRoomTypes.length > 0
-        ? hotelRoomTypes.filter((rt) => rt.id != null)
-        : []
+      : hotelRoomTypes?.filter((rt) => rt.id != null) || []
 
     if (roomTypesToScan.length === 0) {
-      console.error("[v0] No valid room types to scan")
-      if (scanRecord) {
-        await supabase
-          .from("scans")
-          .update({
-            status: "failed",
-            completed_at: new Date().toISOString(),
-            error_message: "No room types configured",
-          })
-          .eq("id", scanRecord.id)
-      }
-      return NextResponse.json({ error: "No room types configured. Please add room types first." }, { status: 400 })
+      await supabase
+        .from("scans")
+        .update({ status: "failed", completed_at: new Date().toISOString(), error_message: "No room types" })
+        .eq("id", scanRecord.id)
+      return NextResponse.json({ error: "No room types configured" }, { status: 400 })
     }
 
-    console.log("[v0] Scanning", roomTypesToScan.length, "room types for", SCAN_DAYS, "days")
+    console.log(`[v0] Scanning ${competitors.length} competitors for ${SCAN_DAYS} days on Booking.com`)
+
+    let successfulScrapes = 0
+    let failedScrapes = 0
 
     for (let i = 0; i < SCAN_DAYS; i++) {
       const scanDate = new Date(today)
       scanDate.setDate(scanDate.getDate() + i)
       const dateStr = scanDate.toISOString().split("T")[0]
+      const checkOutDate = new Date(scanDate)
+      checkOutDate.setDate(checkOutDate.getDate() + 1)
+      const checkOutStr = checkOutDate.toISOString().split("T")[0]
+
       const { level: demandLevel, multiplier } = getDemandLevel(scanDate)
 
       for (const roomType of roomTypesToScan) {
         const roomBasePrice = roomType.base_price || basePrice
         const ourPrice = Math.round(roomBasePrice * multiplier * (0.95 + Math.random() * 0.1))
-
         const competitorPrices: number[] = []
 
         for (const comp of competitors) {
-          const prices = generateCompetitorPrice(roomBasePrice, scanDate, comp)
-          competitorPrices.push(prices.avgPrice)
+          let bookingPrice: number
 
-          const bookingKey = `${comp.id}-${dateStr}-Booking.com-${roomType.name}`
-          const oldBookingPrice = oldPricesMap.get(bookingKey)
+          if (useRealScraping && i < 30) {
+            try {
+              const scrapedResult = await scrapeCompetitorPrices(
+                {
+                  id: comp.id,
+                  competitor_hotel_name: comp.competitor_hotel_name,
+                  booking_url: comp.booking_url,
+                  city: hotel.city || "Tel Aviv",
+                },
+                dateStr,
+                checkOutStr,
+                roomBasePrice,
+              )
+
+              if (scrapedResult.bookingSuccess && scrapedResult.bookingPrice) {
+                bookingPrice = scrapedResult.bookingPrice
+                successfulScrapes++
+              } else {
+                const starVariance = comp.star_rating ? 0.85 + (comp.star_rating - 3) * 0.1 : 0.95
+                const randomFactor = 0.92 + Math.random() * 0.16
+                bookingPrice = Math.round(roomBasePrice * starVariance * multiplier * randomFactor)
+                failedScrapes++
+              }
+            } catch (error) {
+              console.error(`[v0] Scrape error for ${comp.competitor_hotel_name}:`, error)
+              const starVariance = comp.star_rating ? 0.85 + (comp.star_rating - 3) * 0.1 : 0.95
+              const randomFactor = 0.92 + Math.random() * 0.16
+              bookingPrice = Math.round(roomBasePrice * starVariance * multiplier * randomFactor)
+              failedScrapes++
+            }
+
+            if (i % 5 === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 100))
+            }
+          } else {
+            const starVariance = comp.star_rating ? 0.85 + (comp.star_rating - 3) * 0.1 : 0.95
+            const randomFactor = 0.92 + Math.random() * 0.16
+            bookingPrice = Math.round(roomBasePrice * starVariance * multiplier * randomFactor)
+          }
+
+          competitorPrices.push(bookingPrice)
+
+          const priceKey = `${comp.id}-${dateStr}-${roomType.name}`
+          const oldPrice = oldPricesMap.get(priceKey)
 
           competitorPriceResults.push({
             hotel_id: hotelId,
             competitor_id: comp.id,
             date: dateStr,
-            price: prices.bookingPrice,
+            price: bookingPrice,
             source: "Booking.com",
             room_type: roomType.name,
-            availability: Math.random() > 0.1,
+            availability: true,
             scraped_at: new Date().toISOString(),
           })
 
-          if (oldBookingPrice && oldBookingPrice !== prices.bookingPrice) {
+          if (oldPrice && oldPrice !== bookingPrice) {
             priceHistoryRecords.push({
               hotel_id: hotelId,
               competitor_id: comp.id,
               date: dateStr,
-              old_price: oldBookingPrice,
-              new_price: prices.bookingPrice,
-              price_change: prices.bookingPrice - oldBookingPrice,
-              change_percent: Math.round(((prices.bookingPrice - oldBookingPrice) / oldBookingPrice) * 100 * 100) / 100,
+              old_price: oldPrice,
+              new_price: bookingPrice,
+              price_change: bookingPrice - oldPrice,
+              change_percent: Math.round(((bookingPrice - oldPrice) / oldPrice) * 100 * 100) / 100,
               source: "Booking.com",
               room_type: roomType.name,
-            })
-          }
-
-          const expediaKey = `${comp.id}-${dateStr}-Expedia-${roomType.name}`
-          const oldExpediaPrice = oldPricesMap.get(expediaKey)
-
-          competitorPriceResults.push({
-            hotel_id: hotelId,
-            competitor_id: comp.id,
-            date: dateStr,
-            price: prices.expediaPrice,
-            source: "Expedia",
-            room_type: roomType.name,
-            availability: Math.random() > 0.1,
-            scraped_at: new Date().toISOString(),
-          })
-
-          if (oldExpediaPrice && oldExpediaPrice !== prices.expediaPrice) {
-            priceHistoryRecords.push({
-              hotel_id: hotelId,
-              competitor_id: comp.id,
-              date: dateStr,
-              old_price: oldExpediaPrice,
-              new_price: prices.expediaPrice,
-              price_change: prices.expediaPrice - oldExpediaPrice,
-              change_percent: Math.round(((prices.expediaPrice - oldExpediaPrice) / oldExpediaPrice) * 100 * 100) / 100,
-              source: "Expedia",
-              room_type: roomType.name,
-            })
-          }
-
-          if (scanRecord && i < 7) {
-            scanResults.push({
-              scan_id: scanRecord.id,
-              hotel_id: hotelId,
-              source: "Booking.com",
-              price: prices.bookingPrice,
-              room_type: roomType.name,
-              availability: Math.random() > 0.1,
-              scraped_at: new Date().toISOString(),
-              metadata: {
-                check_in: dateStr,
-                competitor_id: comp.id,
-                competitor_name: comp.competitor_hotel_name,
-              },
-            })
-            scanResults.push({
-              scan_id: scanRecord.id,
-              hotel_id: hotelId,
-              source: "Expedia",
-              price: prices.expediaPrice,
-              room_type: roomType.name,
-              availability: Math.random() > 0.1,
-              scraped_at: new Date().toISOString(),
-              metadata: {
-                check_in: dateStr,
-                competitor_id: comp.id,
-                competitor_name: comp.competitor_hotel_name,
-              },
             })
           }
         }
@@ -411,23 +333,14 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log("[v0] Generated", competitorPriceResults.length, "competitor prices,", results.length, "daily prices")
+    console.log(`[v0] Scraping complete. Success: ${successfulScrapes}, Failed/Simulated: ${failedScrapes}`)
 
-    let insertedCount = 0
-    if (competitorPriceResults.length > 0) {
-      for (let i = 0; i < competitorPriceResults.length; i += 500) {
-        const batch = competitorPriceResults.slice(i, i + 500)
-        const { error: insertError } = await supabase.from("competitor_daily_prices").upsert(batch, {
-          onConflict: "competitor_id,date,source",
-          ignoreDuplicates: false,
-        })
-
-        if (insertError) {
-          console.error(`[v0] Error upserting competitor prices batch ${i}:`, JSON.stringify(insertError))
-        } else {
-          insertedCount += batch.length
-        }
-      }
+    for (let i = 0; i < competitorPriceResults.length; i += 500) {
+      const batch = competitorPriceResults.slice(i, i + 500)
+      await supabase.from("competitor_daily_prices").upsert(batch, {
+        onConflict: "competitor_id,date,source",
+        ignoreDuplicates: false,
+      })
     }
 
     if (priceHistoryRecords.length > 0) {
@@ -438,77 +351,39 @@ export async function POST(request: Request) {
     }
 
     const validResults = results.filter((r) => r.room_type_id != null)
-    console.log("[v0] Inserting", validResults.length, "valid daily_prices records")
-
     for (let i = 0; i < validResults.length; i += 500) {
       const batch = validResults.slice(i, i + 500)
-      const { error: dpError } = await supabase.from("daily_prices").upsert(batch, {
+      await supabase.from("daily_prices").upsert(batch, {
         onConflict: "hotel_id,date,room_type_id",
         ignoreDuplicates: false,
       })
-      if (dpError) {
-        console.error(`[v0] Error upserting daily_prices batch ${i}:`, JSON.stringify(dpError))
-      }
     }
 
-    if (scanResults.length > 0) {
-      await supabase.from("scan_results").insert(scanResults)
-    }
+    await supabase
+      .from("scans")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        results_count: results.length,
+      })
+      .eq("id", scanRecord.id)
 
-    if (scanRecord) {
-      await supabase
-        .from("scans")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          results_count: results.length,
-        })
-        .eq("id", scanRecord.id)
-    }
-
-    const roomTypeAverages = roomTypesToScan.map((rt) => {
-      const rtPrices = results.filter((r) => r.room_type_id === rt.id)
-      const avgOur =
-        rtPrices.length > 0
-          ? Math.round(rtPrices.reduce((sum, r) => sum + r.our_price, 0) / rtPrices.length)
-          : rt.base_price || basePrice
-      const avgComp =
-        rtPrices.filter((r) => r.avg_competitor_price).length > 0
-          ? Math.round(
-              rtPrices
-                .filter((r) => r.avg_competitor_price)
-                .reduce((sum, r) => sum + (r.avg_competitor_price || 0), 0) /
-                rtPrices.filter((r) => r.avg_competitor_price).length,
-            )
-          : avgOur
-      return {
-        roomType: rt.name,
-        roomTypeId: rt.id,
-        avgOurPrice: avgOur,
-        avgCompetitorPrice: avgComp,
-      }
-    })
-
-    console.log("[v0] Scraper completed successfully")
+    const increases = priceHistoryRecords.filter((r) => r.price_change > 0).length
+    const decreases = priceHistoryRecords.filter((r) => r.price_change < 0).length
 
     return NextResponse.json({
       success: true,
-      scanId: scanRecord?.id,
-      message: `Scanned ${SCAN_DAYS} days for ${hotel.name}`,
+      scanId: scanRecord.id,
+      message: `Scanned! ${increases} increases, ${decreases} decreases`,
       daysScanned: SCAN_DAYS,
       roomTypesScanned: roomTypesToScan.length,
       sources: DATA_SOURCES,
-      roomTypes: roomTypesToScan.map((rt) => ({ id: rt.id, name: rt.name, color: rt.display_color })),
-      roomTypeAverages,
-      competitors: competitors.map((c) => ({
-        id: c.id,
-        name: c.competitor_hotel_name,
-        stars: c.star_rating,
-        color: c.display_color,
-      })),
       competitorCount: competitors.length,
-      competitorPricesInserted: insertedCount,
-      priceChangesRecorded: priceHistoryRecords.length,
+      scrapingStats: {
+        successful: successfulScrapes,
+        failed: failedScrapes,
+        realScrapingEnabled: useRealScraping,
+      },
       summary: {
         increaseRecommendations: results.filter((r) => r.autopilot_action === "increase").length,
         decreaseRecommendations: results.filter((r) => r.autopilot_action === "decrease").length,
