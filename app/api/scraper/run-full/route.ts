@@ -255,13 +255,16 @@ export async function POST(request: Request) {
       for (const competitor of competitors) {
         if (useRealScraping) {
           try {
-            const scrapedResult = await scrapeCompetitorPrices({
-              competitor_hotel_name: competitor.competitor_hotel_name || competitor.name,
-              booking_url: competitor.booking_url,
-              city: hotel.city || "Tel Aviv",
-              checkIn: dateStr,
-              checkOut: new Date(scanDate.getTime() + 86400000).toISOString().split("T")[0],
-            })
+            const scrapedResult = await scrapeCompetitorPrices(
+              {
+                id: competitor.id,
+                competitor_hotel_name: competitor.competitor_hotel_name || competitor.name,
+                booking_url: competitor.booking_url,
+                city: hotel.city || "Tel Aviv",
+              },
+              dateStr,
+              new Date(scanDate.getTime() + 86400000).toISOString().split("T")[0],
+            )
 
             if (scrapedResult.bookingSuccess && scrapedResult.bookingPrice) {
               successfulScrapes++
