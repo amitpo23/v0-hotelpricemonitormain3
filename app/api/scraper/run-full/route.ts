@@ -218,6 +218,13 @@ export async function POST(request: Request) {
     }
 
     console.log(`[v0] Scanning ${competitors.length} competitors for ${SCAN_DAYS} days on Booking.com`)
+    console.log(`[v0] Real scraping enabled: ${useRealScraping}`)
+    console.log(`[v0] Bright Data config:`, {
+      hasProxyHost: !!process.env.BRIGHT_DATA_PROXY_HOST,
+      hasProxyPort: !!process.env.BRIGHT_DATA_PROXY_PORT,
+      hasUsername: !!process.env.BRIGHT_DATA_USERNAME,
+      hasPassword: !!process.env.BRIGHT_DATA_PASSWORD,
+    })
 
     let successfulScrapes = 0
     let failedScrapes = 0
@@ -238,8 +245,6 @@ export async function POST(request: Request) {
         const competitorPrices: number[] = []
 
         for (const comp of competitors) {
-          let bookingPrice: number
-
           if (useRealScraping) {
             try {
               const scrapedResult = await scrapeCompetitorPrices(
@@ -251,11 +256,43 @@ export async function POST(request: Request) {
                 },
                 dateStr,
                 checkOutStr,
-                roomBasePrice,
               )
 
               if (scrapedResult.bookingSuccess && scrapedResult.bookingPrice) {
-                bookingPrice = scrapedResult.bookingPrice
+                const bookingPrice = scrapedResult.bookingPrice
+
+                // Add to competitor prices array for recommendations
+                competitorPrices.push(bookingPrice)
+
+                // Add to database records
+                competitorPriceResults.push({
+                  hotel_id: hotelId,
+                  competitor_id: comp.id,
+                  date: dateStr,
+                  price: bookingPrice,
+                  source: "Booking.com",
+                  room_type: scrapedResult.roomType || "Standard Room",
+                  availability: true,
+                  scraped_at: new Date().toISOString(),
+                })
+
+                // Track price changes for history
+                const key = `${comp.id}-${dateStr}-${scrapedResult.roomType || "Standard Room"}`
+                const oldPrice = oldPricesMap.get(key)
+                if (oldPrice && oldPrice !== bookingPrice) {
+                  priceHistoryRecords.push({
+                    hotel_id: hotelId,
+                    competitor_id: comp.id,
+                    date: dateStr,
+                    old_price: oldPrice,
+                    new_price: bookingPrice,
+                    price_change: bookingPrice - oldPrice,
+                    change_percent: ((bookingPrice - oldPrice) / oldPrice) * 100,
+                    source: "Booking.com",
+                    room_type: scrapedResult.roomType || "Standard Room",
+                  })
+                }
+
                 successfulScrapes++
               } else {
                 failedScrapes++
@@ -295,29 +332,59 @@ export async function POST(request: Request) {
     }
 
     console.log(`[v0] Scraping complete. Real data: ${successfulScrapes}, Failed: ${failedScrapes}`)
+    console.log(`[v0] Data to save: ${competitorPriceResults.length} competitor prices, ${priceHistoryRecords.length} history records, ${results.length} daily prices`)
 
-    for (let i = 0; i < competitorPriceResults.length; i += 500) {
-      const batch = competitorPriceResults.slice(i, i + 500)
-      await supabase.from("competitor_daily_prices").upsert(batch, {
-        onConflict: "competitor_id,date,source",
-        ignoreDuplicates: false,
-      })
+    // Save competitor prices
+    if (competitorPriceResults.length > 0) {
+      for (let i = 0; i < competitorPriceResults.length; i += 500) {
+        const batch = competitorPriceResults.slice(i, i + 500)
+        const { error: upsertError } = await supabase.from("competitor_daily_prices").upsert(batch, {
+          onConflict: "competitor_id,date,source",
+          ignoreDuplicates: false,
+        })
+
+        if (upsertError) {
+          console.error("[v0] Error upserting competitor prices:", upsertError)
+        } else {
+          console.log(`[v0] Saved batch ${Math.floor(i / 500) + 1} of competitor prices (${batch.length} records)`)
+        }
+      }
+    } else {
+      console.log("[v0] No competitor prices to save")
     }
 
+    // Save price history
     if (priceHistoryRecords.length > 0) {
       for (let i = 0; i < priceHistoryRecords.length; i += 500) {
         const batch = priceHistoryRecords.slice(i, i + 500)
-        await supabase.from("competitor_price_history").insert(batch)
+        const { error: historyError } = await supabase.from("competitor_price_history").insert(batch)
+
+        if (historyError) {
+          console.error("[v0] Error inserting price history:", historyError)
+        } else {
+          console.log(`[v0] Saved batch ${Math.floor(i / 500) + 1} of price history (${batch.length} records)`)
+        }
       }
     }
 
+    // Save daily prices with recommendations
     const validResults = results.filter((r) => r.room_type_id != null)
-    for (let i = 0; i < validResults.length; i += 500) {
-      const batch = validResults.slice(i, i + 500)
-      await supabase.from("daily_prices").upsert(batch, {
-        onConflict: "hotel_id,date,room_type_id",
-        ignoreDuplicates: false,
-      })
+    if (validResults.length > 0) {
+      for (let i = 0; i < validResults.length; i += 500) {
+        const batch = validResults.slice(i, i + 500)
+        const { error: dailyError } = await supabase.from("daily_prices").upsert(batch, {
+          onConflict: "hotel_id,date,room_type_id",
+          ignoreDuplicates: false,
+        })
+
+        if (dailyError) {
+          console.error("[v0] Error upserting daily prices:", dailyError)
+        } else {
+          console.log(`[v0] Saved batch ${Math.floor(i / 500) + 1} of daily prices (${batch.length} records)`)
+        }
+      }
+    } else {
+      console.log("[v0] No valid daily prices to save (missing room_type_id)")
     }
 
     await supabase
