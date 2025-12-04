@@ -1,5 +1,11 @@
 // Real Booking.com scraper using multiple methods
 // Based on scraper_findings.md
+// Now includes Bright Data MCP integration!
+
+import { 
+  scrapeBookingWithMCP, 
+  scrapeBookingUrlWithMCP 
+} from './brightdata-mcp-scraper'
 
 export interface BookingPriceResult {
   price: number
@@ -385,40 +391,84 @@ export async function scrapeBookingPrice(
   console.log(`[v0] [BookingScraper] Dates: ${checkIn} to ${checkOut}`)
   console.log(`[v0] [BookingScraper] ========================================`)
 
-  // Try Method 1: Bright Data (if configured)
+  // Try Method 1: Bright Data MCP (MOST POWERFUL!) 🚀
+  if (process.env.BRIGHT_DATA_API_TOKEN) {
+    console.log(`[v0] [BookingScraper] 🚀 Method 1: Bright Data MCP`)
+    try {
+      const mcpResult = await scrapeBookingWithMCP(hotelName, city, checkIn, checkOut)
+      if (mcpResult) {
+        console.log(`[v0] [BookingScraper] ✅ SUCCESS with MCP: ${mcpResult.currency} ${mcpResult.price}`)
+        return mcpResult
+      }
+    } catch (error) {
+      console.log(`[v0] [BookingScraper] MCP failed:`, error)
+    }
+  } else {
+    console.log(`[v0] [BookingScraper] ⏭️  Skipping MCP (no API token)`)
+  }
+
+  // Try Method 2: Bright Data Proxy (legacy)
+  console.log(`[v0] [BookingScraper] 🔄 Method 2: Bright Data Proxy`)
   const brightDataResult = await scrapeViaBrightData(hotelName, city, checkIn, checkOut)
   if (brightDataResult) {
     return brightDataResult
   }
 
-  // Try Method 2: GraphQL API
+  // Try Method 3: GraphQL API
+  console.log(`[v0] [BookingScraper] 🔄 Method 3: GraphQL API`)
   const graphqlResult = await scrapeViaBookingGraphQL(hotelName, city, checkIn, checkOut)
   if (graphqlResult) {
     return graphqlResult
   }
 
-  // Try Method 3: Autocomplete API
+  // Try Method 4: Autocomplete API
+  console.log(`[v0] [BookingScraper] 🔄 Method 4: Autocomplete API`)
   const autocompleteResult = await scrapeViaAutocomplete(hotelName, city)
   if (autocompleteResult) {
     return autocompleteResult
   }
 
-  // Try Method 4: Direct HTML
+  // Try Method 5: Direct HTML
+  console.log(`[v0] [BookingScraper] 🔄 Method 5: Direct HTML`)
   const htmlResult = await scrapeDirectHTML(hotelName, city, checkIn, checkOut)
   if (htmlResult) {
     return htmlResult
   }
 
-  console.log(`[v0] [BookingScraper] ❌ All 4 methods failed for ${hotelName}`)
+  console.log(`[v0] [BookingScraper] ❌ All 5 methods failed for ${hotelName}`)
   return null
 }
 
 // For compatibility with existing code
 export async function scrapeBookingViaHtml(
-  hotelName: string,
-  city: string,
+  hotelUrl: string,
   checkIn: string,
   checkOut: string,
-): Promise<BookingPriceResult | null> {
-  return scrapeBookingPrice(hotelName, city, checkIn, checkOut)
+): Promise<BookingPriceResult[]> {
+  console.log(`[v0] [BookingScraper] Scraping URL: ${hotelUrl}`)
+  
+  // Try MCP first if available
+  if (process.env.BRIGHT_DATA_API_TOKEN) {
+    console.log(`[v0] [BookingScraper] 🚀 Trying MCP for URL scraping...`)
+    try {
+      const mcpResults = await scrapeBookingUrlWithMCP(hotelUrl, checkIn, checkOut)
+      if (mcpResults.length > 0) {
+        console.log(`[v0] [BookingScraper] ✅ SUCCESS with MCP: ${mcpResults.length} prices found`)
+        return mcpResults
+      }
+    } catch (error) {
+      console.log(`[v0] [BookingScraper] MCP URL scraping failed:`, error)
+    }
+  }
+  
+  // Fallback to extracting hotel name and using regular method
+  console.log(`[v0] [BookingScraper] Falling back to standard methods...`)
+  const hotelMatch = hotelUrl.match(/\/hotel\/[a-z]{2}\/([^\/]+)/)
+  if (hotelMatch) {
+    const hotelSlug = hotelMatch[1].replace(/-/g, ' ')
+    const result = await scrapeBookingPrice(hotelSlug, '', checkIn, checkOut)
+    return result ? [result] : []
+  }
+  
+  return []
 }
