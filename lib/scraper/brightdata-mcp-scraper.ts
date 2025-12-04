@@ -12,7 +12,7 @@
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { BookingPriceResult } from './booking-scraper'
 
 interface BrightDataMCPConfig {
@@ -26,41 +26,42 @@ interface MCPToolResult {
     type: string
     text: string
   }>
+  isError?: boolean
 }
 
 /**
- * Initialize Bright Data MCP Client
+ * Initialize Bright Data MCP Client using SSE Transport (Remote)
+ * This uses the remote MCP server at https://mcp.brightdata.com
  */
 async function createMCPClient(config: BrightDataMCPConfig): Promise<Client> {
-  console.log('[BrightDataMCP] Initializing MCP client...')
+  console.log('[BrightDataMCP] Initializing remote MCP client via SSE...')
+  console.log('[BrightDataMCP] Token:', config.apiToken.substring(0, 10) + '...')
   
-  const transport = new StdioClientTransport({
-    command: 'npx',
-    args: ['@brightdata/mcp'],
-    env: {
-      ...process.env,
-      API_TOKEN: config.apiToken,
-      WEB_UNLOCKER_ZONE: config.webUnlockerZone || 'unblocker',
-      BROWSER_ZONE: config.browserZone || 'scraping_browser',
-    },
-  })
-
-  const client = new Client(
-    {
-      name: 'hotel-price-monitor-client',
-      version: '1.0.0',
-    },
-    {
-      capabilities: {
-        tools: {},
+  const mcpUrl = `https://mcp.brightdata.com/sse?token=${config.apiToken}`
+  
+  try {
+    const transport = new SSEClientTransport(new URL(mcpUrl))
+    
+    const client = new Client(
+      {
+        name: 'hotel-price-monitor-client',
+        version: '1.0.0',
       },
-    }
-  )
+      {
+        capabilities: {
+          tools: {},
+        },
+      }
+    )
 
-  await client.connect(transport)
-  console.log('[BrightDataMCP] MCP client connected successfully')
-  
-  return client
+    await client.connect(transport)
+    console.log('[BrightDataMCP] ✅ MCP client connected successfully')
+    
+    return client
+  } catch (error) {
+    console.error('[BrightDataMCP] ❌ Failed to connect:', error)
+    throw error
+  }
 }
 
 /**
@@ -79,7 +80,7 @@ async function listAvailableTools(client: Client): Promise<string[]> {
 }
 
 /**
- * Call an MCP tool
+ * Call an MCP tool with error handling
  */
 async function callTool(
   client: Client,
@@ -93,12 +94,25 @@ async function callTool(
     const result = await client.callTool({
       name: toolName,
       arguments: args,
-    })
+    }) as MCPToolResult
     
-    console.log(`[BrightDataMCP] Tool ${toolName} completed successfully`)
-    return result as MCPToolResult
-  } catch (error) {
-    console.error(`[BrightDataMCP] Error calling tool ${toolName}:`, error)
+    // Check if result indicates an error
+    if (result.isError) {
+      const errorMsg = result.content?.[0]?.text || 'Unknown error'
+      console.error(`[BrightDataMCP] Tool ${toolName} returned error: ${errorMsg}`)
+      
+      // Check for specific error types
+      if (errorMsg.includes('401') || errorMsg.includes('Invalid token')) {
+        throw new Error('INVALID_TOKEN: Token is not valid. Please create a new token in Bright Data Dashboard.')
+      }
+      
+      throw new Error(errorMsg)
+    }
+    
+    console.log(`[BrightDataMCP] ✅ Tool ${toolName} completed successfully`)
+    return result
+  } catch (error: any) {
+    console.error(`[BrightDataMCP] ❌ Error calling tool ${toolName}:`, error.message)
     throw error
   }
 }
