@@ -129,13 +129,27 @@ function getDemandLevel(score: number, occupancyRate: number, trendsScore: numbe
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-  const { hotels, daysAhead = 30 } = await request.json()
+  const {
+    hotels,
+    daysAhead = 30,
+    selectedMonths = [],
+    selectedYear = new Date().getFullYear(),
+    analysisParams = {
+      includeCompetitors: true,
+      includeSeasonality: true,
+      includeEvents: true,
+      includeOccupancy: true,
+      includeBudget: true,
+      includeFutureBookings: true,
+      includeMarketTrends: true,
+    },
+  } = await request.json()
 
   if (!hotels || hotels.length === 0) {
     return NextResponse.json({ error: "No hotels provided" }, { status: 400 })
   }
 
-  const predictionDays = Math.min(180, Math.max(30, daysAhead))
+  const predictionDays = Math.min(365, Math.max(30, daysAhead))
 
   const today = new Date()
   const currentMonth = today.getMonth() + 1
@@ -312,6 +326,7 @@ export async function POST(request: Request) {
   })
 
   const predictions: any[] = []
+  const recommendations: any[] = []
 
   const seasonalityFactors: Record<number, { factor: number; label: string }> = {
     0: { factor: 0.85, label: "winter_low" },
@@ -334,6 +349,8 @@ export async function POST(request: Request) {
     const hotelCompetitors = competitorsByHotel[hotel.id] || []
     const marketData = marketDataByHotel[hotel.id]
 
+    const hotelRecommendations: string[] = []
+
     for (let i = 0; i < predictionDays; i++) {
       const predDate = new Date(today)
       predDate.setDate(predDate.getDate() + i)
@@ -341,6 +358,14 @@ export async function POST(request: Request) {
       const monthDay = `${String(predDate.getMonth() + 1).padStart(2, "0")}-${String(predDate.getDate()).padStart(2, "0")}`
       const predMonth = predDate.getMonth() + 1
       const predYear = predDate.getFullYear()
+
+      if (selectedMonths.length > 0 && !selectedMonths.includes(predMonth)) {
+        continue
+      }
+
+      if (selectedYear && predYear !== selectedYear && predYear !== selectedYear + 1) {
+        continue
+      }
 
       const budgetKey = `${predYear}-${predMonth}`
       const budget = budgetByHotelMonth[hotel.id]?.[budgetKey]
@@ -353,50 +378,64 @@ export async function POST(request: Request) {
       const dayOfMonth = predDate.getDate()
       const daysRemaining = daysInMonth - dayOfMonth + 1
       const dailyRevenueNeeded = daysRemaining > 0 ? budgetGap / daysRemaining : 0
-      const budgetPressure =
-        targetRevenue > 0 ? Math.max(0.92, Math.min(1.18, 1 + (budgetGap / targetRevenue) * 0.25)) : 1.0
 
-      const velocityFactor = bookingVelocity === "increasing" ? 1.05 : bookingVelocity === "decreasing" ? 0.95 : 1.0
+      const budgetPressure =
+        analysisParams.includeBudget && targetRevenue > 0
+          ? Math.max(0.92, Math.min(1.18, 1 + (budgetGap / targetRevenue) * 0.25))
+          : 1.0
+
+      const velocityFactor = analysisParams.includeMarketTrends
+        ? bookingVelocity === "increasing"
+          ? 1.05
+          : bookingVelocity === "decreasing"
+            ? 0.95
+            : 1.0
+        : 1.0
 
       const dayOfWeek = predDate.getDay()
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6
       const month = predDate.getMonth()
 
       const seasonData = seasonalityFactors[month]
-      const seasonality = seasonData.factor
+      const seasonality = analysisParams.includeSeasonality ? seasonData.factor : 1.0
       const weekendFactor = isWeekend ? 1.12 : 1.0
 
       const leadTimeFactor = i < 3 ? 1.15 : i < 7 ? 1.08 : i < 14 ? 1.03 : i < 30 ? 1.0 : i < 60 ? 0.98 : 0.95
 
-      const bookedRooms = bookingsByHotelDate[hotel.id]?.[dateStr] || 0
+      const bookedRooms = analysisParams.includeFutureBookings ? bookingsByHotelDate[hotel.id]?.[dateStr] || 0 : 0
       const occupancyRate = (bookedRooms / totalRooms) * 100
       let occupancyFactor = 1.0
-      if (occupancyRate > 85) occupancyFactor = 1.3
-      else if (occupancyRate > 70) occupancyFactor = 1.2
-      else if (occupancyRate > 55) occupancyFactor = 1.1
-      else if (occupancyRate > 40) occupancyFactor = 1.02
-      else if (occupancyRate < 20) occupancyFactor = 0.92
-      else if (occupancyRate < 10) occupancyFactor = 0.85
+      if (analysisParams.includeOccupancy) {
+        if (occupancyRate > 85) occupancyFactor = 1.3
+        else if (occupancyRate > 70) occupancyFactor = 1.2
+        else if (occupancyRate > 55) occupancyFactor = 1.1
+        else if (occupancyRate > 40) occupancyFactor = 1.02
+        else if (occupancyRate < 20) occupancyFactor = 0.92
+        else if (occupancyRate < 10) occupancyFactor = 0.85
+      }
 
       const compPricesForDate = competitorPricesByDate[dateStr]
-      const bookingAvg = compPricesForDate?.booking.length
-        ? compPricesForDate.booking.reduce((a, b) => a + b, 0) / compPricesForDate.booking.length
-        : null
-      const expediaAvg = compPricesForDate?.expedia.length
-        ? compPricesForDate.expedia.reduce((a, b) => a + b, 0) / compPricesForDate.expedia.length
-        : null
+      const bookingAvg =
+        analysisParams.includeCompetitors && compPricesForDate?.booking.length
+          ? compPricesForDate.booking.reduce((a, b) => a + b, 0) / compPricesForDate.booking.length
+          : null
+      const expediaAvg =
+        analysisParams.includeCompetitors && compPricesForDate?.expedia.length
+          ? compPricesForDate.expedia.reduce((a, b) => a + b, 0) / compPricesForDate.expedia.length
+          : null
 
       const calendarData = dailyPricesByHotelDate[hotel.id]?.[dateStr]
-      const competitorAvg =
-        bookingAvg || expediaAvg || calendarData?.avg_competitor_price
+      const competitorAvg = analysisParams.includeCompetitors
+        ? bookingAvg || expediaAvg || calendarData?.avg_competitor_price
           ? Number(calendarData?.avg_competitor_price)
           : marketData?.avg
+        : null
       const competitorFactor = competitorAvg ? Math.max(0.88, Math.min(1.12, competitorAvg / basePrice)) : 1.0
 
-      const events = holidayMap[monthDay] || []
+      const events = analysisParams.includeEvents ? holidayMap[monthDay] || [] : []
       const eventFactor = events.length > 0 ? events.reduce((max, e) => Math.max(max, e.impact), 1.0) : 1.0
 
-      const trendsFactor = trendsScore / 100
+      const trendsFactor = analysisParams.includeMarketTrends ? trendsScore / 100 : 0.75
 
       const rawPrice =
         basePrice *
@@ -434,6 +473,26 @@ export async function POST(request: Request) {
 
       const confidence = calculateConfidence(confidenceFactors)
 
+      const priceVsBase = ((predictedPrice - basePrice) / basePrice) * 100
+      const priceVsCompetitor = competitorAvg ? ((predictedPrice - competitorAvg) / competitorAvg) * 100 : 0
+
+      let recommendation = null
+      let recommendationType = null
+
+      if (priceVsBase > 20 && demand === "very_high") {
+        recommendation = `העלה מחיר ל-${dateStr} - ביקוש גבוה מאוד`
+        recommendationType = "price_increase"
+      } else if (priceVsBase < -10 && occupancyRate < 30) {
+        recommendation = `שקול מבצע ל-${dateStr} - תפוסה נמוכה`
+        recommendationType = "promotion"
+      } else if (competitorAvg && priceVsCompetitor > 15) {
+        recommendation = `המחיר שלך גבוה מ-15% מהמתחרים ב-${dateStr}`
+        recommendationType = "competitor_alert"
+      } else if (competitorAvg && priceVsCompetitor < -15) {
+        recommendation = `יש מקום להעלות מחיר ב-${dateStr} - מתחת למתחרים`
+        recommendationType = "opportunity"
+      }
+
       predictions.push({
         hotel_id: hotel.id,
         prediction_date: dateStr,
@@ -441,6 +500,8 @@ export async function POST(request: Request) {
         predicted_demand: demand,
         confidence_score: confidence,
         base_price: basePrice,
+        recommendation,
+        recommendation_type: recommendationType,
         factors: {
           seasonality: seasonData.label,
           seasonality_factor: seasonality.toFixed(2),
@@ -462,6 +523,9 @@ export async function POST(request: Request) {
           google_trends_source: trendsSource,
           booking_velocity: bookingVelocity,
           velocity_factor: velocityFactor.toFixed(2),
+          price_vs_base: priceVsBase.toFixed(1),
+          price_vs_competitor: priceVsCompetitor.toFixed(1),
+          analysis_params_used: analysisParams,
           confidence_breakdown: {
             data_quality: (confidenceFactors.dataQuality * 100).toFixed(0) + "%",
             scan_recency: (confidenceFactors.scanRecency * 100).toFixed(0) + "%",
@@ -473,6 +537,18 @@ export async function POST(request: Request) {
           },
         },
       })
+
+      if (recommendation) {
+        recommendations.push({
+          hotel_id: hotel.id,
+          hotel_name: hotel.name,
+          date: dateStr,
+          type: recommendationType,
+          message: recommendation,
+          predicted_price: predictedPrice,
+          confidence,
+        })
+      }
     }
   }
 
@@ -488,12 +564,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
+  const avgConfidence =
+    predictions.length > 0 ? predictions.reduce((sum, p) => sum + p.confidence_score, 0) / predictions.length : 0
+  const avgPrice =
+    predictions.length > 0 ? predictions.reduce((sum, p) => sum + p.predicted_price, 0) / predictions.length : 0
+  const demandDistribution = predictions.reduce(
+    (acc, p) => {
+      acc[p.predicted_demand] = (acc[p.predicted_demand] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
+
   return NextResponse.json({
     success: true,
     count: predictions.length,
     days_ahead: predictionDays,
-    message: `Generated ${predictions.length} predictions for ${hotels.length} hotels (${predictionDays} days)`,
-    algorithm_version: "3.1",
+    selected_months: selectedMonths,
+    selected_year: selectedYear,
+    message: `Generated ${predictions.length} predictions for ${hotels.length} hotels`,
+    algorithm_version: "3.2",
+    statistics: {
+      avg_confidence: (avgConfidence * 100).toFixed(1) + "%",
+      avg_price: Math.round(avgPrice),
+      price_range: {
+        min: Math.min(...predictions.map((p) => p.predicted_price)),
+        max: Math.max(...predictions.map((p) => p.predicted_price)),
+      },
+      demand_distribution: demandDistribution,
+    },
+    recommendations: recommendations.slice(0, 20), // Top 20 recommendations
+    recommendations_count: recommendations.length,
+    analysis_params: analysisParams,
     data_sources: {
       internal: {
         scan_results: recentResults?.length || 0,
