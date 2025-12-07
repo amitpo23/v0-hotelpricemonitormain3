@@ -9,13 +9,22 @@ export async function POST(request: Request) {
     const {
       data: { user },
     } = await supabase.auth.getUser()
+
     if (!user) {
+      console.log("[v0] Approve user - No authenticated user")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: currentProfile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single()
+    console.log("[v0] Approve user - Current user:", user.email)
 
-    if (!currentProfile?.is_admin) {
+    const { data: currentProfile } = await supabase.from("profiles").select("is_admin, role").eq("id", user.id).single()
+
+    console.log("[v0] Approve user - Current profile:", currentProfile)
+
+    const isAdmin = currentProfile?.is_admin === true || currentProfile?.role === "admin"
+
+    if (!isAdmin) {
+      console.log("[v0] Approve user - User is not admin")
       return NextResponse.json({ error: "Forbidden - Admin only" }, { status: 403 })
     }
 
@@ -24,6 +33,8 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 })
     }
+
+    console.log("[v0] Approve user - Approving userId:", userId)
 
     // Approve the user
     const { error } = await supabase
@@ -36,13 +47,14 @@ export async function POST(request: Request) {
       .eq("id", userId)
 
     if (error) {
-      console.error("Error approving user:", error)
+      console.error("[v0] Error approving user:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    console.log("[v0] Approve user - Success!")
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error in approve user API:", error)
+    console.error("[v0] Error in approve user API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
