@@ -28,6 +28,7 @@ import {
 } from "@/components/icons"
 import { DashboardCharts } from "./dashboard-charts"
 import { DashboardFilters } from "./dashboard-filters"
+import { UserActions } from "./user-actions"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -901,7 +902,7 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                     </div>
-                    <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>
+                    <UserActions userId={user.id} userEmail={user.email} />
                   </div>
                 ))}
               </div>
