@@ -7,14 +7,24 @@ export async function POST(request: Request) {
     const supabase = await createClient()
 
     const cookieStore = await cookies()
-    const userCookie = cookieStore.get("user")
+    const authCookie = cookieStore.get("supabase-auth-token")
 
     let currentUser = null
-    if (userCookie?.value) {
+    if (authCookie?.value) {
       try {
-        currentUser = JSON.parse(userCookie.value)
+        const tokenData = JSON.parse(authCookie.value)
+        if (Array.isArray(tokenData) && tokenData[0]) {
+          const tokenParts = tokenData[0].split(".")
+          if (tokenParts[1]) {
+            const payload = JSON.parse(atob(tokenParts[1]))
+            currentUser = {
+              id: payload.sub,
+              email: payload.email,
+            }
+          }
+        }
       } catch (e) {
-        console.log("[v0] Failed to parse user cookie")
+        console.log("[v0] Failed to parse supabase-auth-token cookie")
       }
     }
 
@@ -48,7 +58,6 @@ export async function POST(request: Request) {
 
     console.log("[v0] Approve user - Approving userId:", userId)
 
-    // Approve the user
     const { error } = await supabase
       .from("profiles")
       .update({
