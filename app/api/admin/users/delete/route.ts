@@ -1,25 +1,30 @@
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+
+const SUPABASE_URL = "https://dqhmraeyisoigxzsitiz.supabase.co"
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxaG1yYWV5aXNvaWd4enNpdGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNTcxODEsImV4cCI6MjA3OTYzMzE4MX0.gOmmQBEpT2GJw97dFmlVBX1CtGpfAhARX71K3NlIx8I"
 
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
+    const authSupabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
     const cookieStore = await cookies()
-    const authToken = cookieStore.get("supabase-auth-token")
+    const authToken = cookieStore.get("sb-auth-token")
 
-    let currentUser = null
-    if (authToken?.value) {
-      try {
-        const tokenData = JSON.parse(authToken.value)
-        currentUser = tokenData.user
-      } catch (e) {
-        console.log("[v0] Failed to parse auth token")
-      }
+    if (!authToken?.value) {
+      console.log("[v0] Delete user - No auth token")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (!currentUser || !currentUser.id) {
+    // Get user from access token
+    const { data: { user: currentUser }, error: authError } = await authSupabase.auth.getUser(authToken.value)
+
+    if (authError || !currentUser) {
+      console.log("[v0] Delete user - Invalid auth token:", authError?.message)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
