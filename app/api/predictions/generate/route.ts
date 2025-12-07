@@ -153,32 +153,27 @@ export async function POST(request: Request) {
     let startDate: Date
     let predictionDays: number
 
+    console.log(
+      `[v0] Input: selectedYear=${selectedYear}, selectedMonths=${JSON.stringify(selectedMonths)}, currentYear=${currentYear}, currentMonth=${currentMonth}`,
+    )
+
     if (selectedMonths.length > 0) {
-      // If specific months selected, start from the first day of the earliest selected month
       const earliestMonth = Math.min(...selectedMonths)
-      const startYear = selectedYear
-
-      // Check if the selected month is in the future
-      if (startYear > currentYear || (startYear === currentYear && earliestMonth > currentMonth)) {
-        // Future month - start from first day of that month
-        startDate = new Date(startYear, earliestMonth - 1, 1)
-      } else if (startYear === currentYear && earliestMonth === currentMonth) {
-        // Current month - start from today
-        startDate = new Date(today)
-      } else {
-        // Past month in selected year - start from first day anyway (for historical analysis)
-        startDate = new Date(startYear, earliestMonth - 1, 1)
-      }
-
-      // Calculate days to cover all selected months
       const latestMonth = Math.max(...selectedMonths)
-      const endDate = new Date(startYear, latestMonth, 0) // Last day of latest month
+
+      // Always start from first day of earliest selected month in selected year
+      startDate = new Date(selectedYear, earliestMonth - 1, 1)
+
+      // End date is last day of latest selected month
+      const endDate = new Date(selectedYear, latestMonth, 0)
       predictionDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-      // Ensure at least 30 days and at most 400 days
-      predictionDays = Math.max(30, Math.min(400, predictionDays))
+      // Ensure reasonable range
+      predictionDays = Math.max(28, Math.min(400, predictionDays))
+
+      console.log(`[v0] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}, days=${predictionDays}`)
     } else {
-      // No specific months - start from today
+      // No specific months - use daysAhead from today
       startDate = new Date(today)
       predictionDays = daysAhead
     }
@@ -409,12 +404,11 @@ export async function POST(request: Request) {
         const predMonth = predDate.getMonth() + 1
         const predYear = predDate.getFullYear()
 
-        if (selectedMonths.length > 0 && !selectedMonths.includes(predMonth)) {
-          continue
-        }
-
-        if (selectedYear && predYear !== selectedYear && predYear !== selectedYear + 1) {
-          continue
+        if (selectedMonths.length > 0) {
+          // Only include dates in selected months AND selected year
+          if (!selectedMonths.includes(predMonth) || predYear !== selectedYear) {
+            continue
+          }
         }
 
         const budgetKey = `${predYear}-${predMonth}`
@@ -602,11 +596,14 @@ export async function POST(request: Request) {
       }
     }
 
-    await supabase
-      .from("price_predictions")
-      .delete()
-      .in("hotel_id", finalHotelIds)
-      .gte("prediction_date", today.toISOString().split("T")[0])
+    // Delete old predictions for these hotels from today onwards
+    for (const hotelId of finalHotelIds) {
+      await supabase
+        .from("price_predictions")
+        .delete()
+        .eq("hotel_id", hotelId)
+        .gte("prediction_date", today.toISOString().split("T")[0])
+    }
 
     const { error } = await supabase.from("price_predictions").insert(predictions)
 
@@ -626,21 +623,29 @@ export async function POST(request: Request) {
       {} as Record<string, number>,
     )
 
+    const priceRange =
+      predictions.length > 0
+        ? {
+            min: Math.min(...predictions.map((p) => p.predicted_price)),
+            max: Math.max(...predictions.map((p) => p.predicted_price)),
+          }
+        : { min: 0, max: 0 }
+
     return NextResponse.json({
       success: true,
       count: predictions.length,
       days_ahead: predictionDays,
       selected_months: selectedMonths,
       selected_year: selectedYear,
-      message: `Generated ${predictions.length} predictions for ${finalHotelIds.length} hotels`,
+      message:
+        predictions.length > 0
+          ? `Generated ${predictions.length} predictions for ${finalHotelIds.length} hotels`
+          : `No predictions generated - check selected months/year`,
       algorithm_version: "3.2",
       statistics: {
         avg_confidence: (avgConfidence * 100).toFixed(1) + "%",
         avg_price: Math.round(avgPrice),
-        price_range: {
-          min: Math.min(...predictions.map((p) => p.predicted_price)),
-          max: Math.max(...predictions.map((p) => p.predicted_price)),
-        },
+        price_range: priceRange,
         demand_distribution: demandDistribution,
       },
       recommendations: recommendations.slice(0, 20), // Top 20 recommendations
@@ -668,7 +673,13 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("Error generating predictions:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Error generating predictions:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
