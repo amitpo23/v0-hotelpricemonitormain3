@@ -404,16 +404,16 @@ export async function scrapeBookingPrice(
   // Method 3: Puppeteer with Bright Data
   try {
     console.log(`[v0] [BookingScraper] Method 3: Puppeteer with Bright Data`)
-    const puppeteerPrice = await scrapeWithPuppeteer(hotelName, city, checkIn, checkOut)
-    if (puppeteerPrice) {
+    const puppeteerResult = await scrapeWithPuppeteer(hotelName, city, checkIn, checkOut)
+    if (puppeteerResult && puppeteerResult.price && puppeteerResult.price > 0) {
       return {
         success: true,
         results: [
           {
-            price: puppeteerPrice,
-            roomType: "Standard Room",
-            currency: "ILS",
-            available: true,
+            price: puppeteerResult.price,
+            roomType: puppeteerResult.roomType || "Standard Room",
+            currency: puppeteerResult.currency || "ILS",
+            available: puppeteerResult.available,
             hasBreakfast: false,
             source: "puppeteer",
           },

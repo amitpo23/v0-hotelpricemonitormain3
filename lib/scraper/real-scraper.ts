@@ -52,14 +52,42 @@ export async function scrapeCompetitorAllRooms(
     if (response.success && response.results.length > 0) {
       console.log(`[v0] [RealScraper] SUCCESS: Found ${response.results.length} room types`)
       response.results.forEach((r, i) => {
-        console.log(`[v0] [RealScraper]   Room ${i + 1}: ${r.roomType} - ${r.price} ${r.currency}`)
+        const priceNum = typeof r.price === "number" ? r.price : (r.price as any)?.price || 0
+        console.log(`[v0] [RealScraper]   Room ${i + 1}: ${r.roomType} - ${priceNum} ${r.currency}`)
       })
 
+      const validRooms = response.results
+        .map((r) => ({
+          ...r,
+          price:
+            typeof r.price === "number"
+              ? r.price
+              : typeof (r.price as any)?.price === "number"
+                ? (r.price as any).price
+                : 0,
+        }))
+        .filter((r) => r.price > 0 && r.price < 100000)
+
+      if (validRooms.length === 0) {
+        console.log(`[v0] [RealScraper] No valid prices found after filtering`)
+        return {
+          competitorId: competitor.id,
+          competitorName: competitor.competitor_hotel_name,
+          date: checkIn,
+          rooms: [],
+          scrapedAt: new Date().toISOString(),
+          success: false,
+          source: response.source,
+          errorMessage: "No valid prices found",
+        }
+      }
+
+      console.log(`[v0] [RealScraper] Valid rooms after filtering: ${validRooms.length}`)
       return {
         competitorId: competitor.id,
         competitorName: competitor.competitor_hotel_name,
         date: checkIn,
-        rooms: response.results,
+        rooms: validRooms,
         scrapedAt: new Date().toISOString(),
         success: true,
         source: response.source,

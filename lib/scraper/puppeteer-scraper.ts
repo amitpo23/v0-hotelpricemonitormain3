@@ -15,13 +15,19 @@ function getBrightDataEndpoint(): string {
   const username = process.env.BRIGHT_DATA_USERNAME
   const password = process.env.BRIGHT_DATA_PASSWORD
 
+  console.log(`[v0] [Puppeteer] BRIGHT_DATA_USERNAME set: ${!!username}`)
+  console.log(`[v0] [Puppeteer] BRIGHT_DATA_PASSWORD set: ${!!password}`)
+
   if (username && password) {
-    // Build WebSocket URL from credentials
+    console.log(`[v0] [Puppeteer] Using username: ${username.substring(0, 40)}...`)
     return `wss://${username}:${password}@brd.superproxy.io:9222`
   }
 
-  // Fallback to full WebSocket URL if provided
-  return process.env.BRIGHT_DATA_BROWSER_WS || ""
+  // User has scraping_browser3 with password sz74zisg17x5
+  const defaultUsername = "brd-customer-hl_b8df3680-zone-scraping_browser3"
+  const defaultPassword = "sz74zisg17x5"
+  console.log(`[v0] [Puppeteer] Using default credentials for scraping_browser3`)
+  return `wss://${defaultUsername}:${defaultPassword}@brd.superproxy.io:9222`
 }
 
 export async function scrapeWithPuppeteer(
