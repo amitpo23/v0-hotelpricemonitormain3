@@ -558,7 +558,15 @@ export function IconSend({ className }: { className?: string }) {
 export function IconUser({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path d="M4 16c-.89 0-1.78-.19-2.6-.55C1.43 14.65 1 13.86 1 13s.43-1.65 1.36-2.15A8.21 8.21 0 0112 3c2.62 0 4.98.39 6.97 1.15.82.36 1.71.55 2.6.55a4.6 4.6 0 011.71.4 4.6 4.6 0 01-.4 1.71 4.6 4.6 0 00-1.15 2.6c0 .99-.2 1.98-.55 2.6A8.21 8.21 0 0022 16a8.21 8.21 0 00-4.75-1.85c-.82-.36-1.71-.55-2.6-.55-.89 0-1.78.19-2.6.55a4.6 4.6 0 01-.4-1.71 4.6 4.6 0 011.71-.4c1.15-.47 2.35-1.15 3.4-1.95M16 3.13a4 4 0 010 7.75" />
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z" />
+    </svg>
+  )
+}
+
+export function IconUserPlus({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM20 8v6M23 11h-6" />
     </svg>
   )
 }
@@ -707,6 +715,7 @@ export {
   IconMessageSquare as MessageSquareIcon,
   IconSend as SendIcon,
   IconUser as UserIcon,
+  IconUserPlus as UserPlusIcon,
   Spinner,
   IconUpload as Upload,
   IconFileSpreadsheet as FileSpreadsheetIcon,
@@ -785,6 +794,7 @@ export const Icons = {
   messageSquare: IconMessageSquare,
   send: IconSend,
   user: IconUser,
+  userPlus: IconUserPlus,
   plusCircle: PlusCircleIcon,
   spinner: IconSpinner,
   upload: IconUpload,

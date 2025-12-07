@@ -22,6 +22,9 @@ import {
   CalendarDaysIcon,
   ArrowRightIcon,
   ArrowLeftIcon,
+  ShieldIcon,
+  UserPlusIcon,
+  XCircleIcon,
 } from "@/components/icons"
 import { DashboardCharts } from "./dashboard-charts"
 import { DashboardFilters } from "./dashboard-filters"
@@ -49,6 +52,7 @@ export default async function DashboardPage() {
     { data: competitorPrices },
     { data: allBookings },
     { data: confirmedBookings },
+    { data: profiles },
   ] = await Promise.all([
     supabase.from("hotels").select("*"),
     supabase.from("scan_results").select("*").order("scraped_at", { ascending: false }).limit(100),
@@ -80,6 +84,7 @@ export default async function DashboardPage() {
       .select("*")
       .eq("status", "confirmed")
       .gte("check_in_date", today),
+    supabase.from("profiles").select("*").order("created_at", { ascending: false }),
   ])
 
   const totalBookings = allBookings?.length || 0
@@ -255,6 +260,11 @@ export default async function DashboardPage() {
   // Last scan time
   const lastScan =
     dailyPrices && dailyPrices.length > 0 ? new Date(dailyPrices[0].updated_at || dailyPrices[0].created_at) : null
+
+  const totalUsers = profiles?.length || 0
+  const pendingUsers = profiles?.filter((p: any) => !p.is_approved) || []
+  const approvedUsers = profiles?.filter((p: any) => p.is_approved) || []
+  const adminUsers = profiles?.filter((p: any) => p.is_admin) || []
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -452,6 +462,30 @@ export default async function DashboardPage() {
           value={unreadAlerts.toString()}
           color={unreadAlerts > 0 ? "red" : "slate"}
           alert={unreadAlerts > 0}
+        />
+        <MetricCard
+          icon={<ShieldIcon className="h-4 w-4" />}
+          label="Approved Users"
+          value={approvedUsers.length.toString()}
+          color="cyan"
+        />
+        <MetricCard
+          icon={<UserPlusIcon className="h-4 w-4" />}
+          label="Pending Users"
+          value={pendingUsers.length.toString()}
+          color="yellow"
+        />
+        <MetricCard
+          icon={<XCircleIcon className="h-4 w-4" />}
+          label="Total Users"
+          value={totalUsers.toString()}
+          color="purple"
+        />
+        <MetricCard
+          icon={<UsersIcon className="h-4 w-4" />}
+          label="Admin Users"
+          value={adminUsers.length.toString()}
+          color="green"
         />
       </div>
 
@@ -815,6 +849,102 @@ export default async function DashboardPage() {
                 </Link>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900/50 border-slate-800">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between text-white">
+              <div className="flex items-center gap-2">
+                <UsersIcon className="h-5 w-5 text-cyan-400" />
+                Users / משתמשים
+              </div>
+              {pendingUsers.length > 0 && (
+                <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{pendingUsers.length} ממתינים</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* Stats Row */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-white">{totalUsers}</div>
+                <div className="text-xs text-slate-400">סה״כ</div>
+              </div>
+              <div className="bg-green-500/10 rounded-lg p-3 text-center border border-green-500/20">
+                <div className="text-2xl font-bold text-green-400">{approvedUsers.length}</div>
+                <div className="text-xs text-slate-400">מאושרים</div>
+              </div>
+              <div className="bg-yellow-500/10 rounded-lg p-3 text-center border border-yellow-500/20">
+                <div className="text-2xl font-bold text-yellow-400">{pendingUsers.length}</div>
+                <div className="text-xs text-slate-400">ממתינים</div>
+              </div>
+            </div>
+
+            {/* Pending Users List */}
+            {pendingUsers.length > 0 ? (
+              <div className="space-y-2">
+                <div className="text-sm text-slate-400 mb-2">ממתינים לאישור:</div>
+                {pendingUsers.slice(0, 5).map((user: any) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 bg-yellow-500/5 rounded-lg border border-yellow-500/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                        <UserPlusIcon className="h-4 w-4 text-yellow-400" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm text-white">{user.email}</div>
+                        <div className="text-xs text-slate-500">
+                          {new Date(user.created_at).toLocaleDateString("he-IL")}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Pending</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <CheckCircleIcon className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">כל המשתמשים מאושרים</p>
+              </div>
+            )}
+
+            {/* All Users Preview */}
+            {approvedUsers.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-800">
+                <div className="text-sm text-slate-400 mb-2">משתמשים פעילים:</div>
+                <div className="flex flex-wrap gap-2">
+                  {approvedUsers.slice(0, 4).map((user: any) => (
+                    <div
+                      key={user.id}
+                      className="flex items-center gap-2 px-2 py-1 bg-slate-800/50 rounded-full text-xs"
+                    >
+                      <div className={`w-2 h-2 rounded-full ${user.is_admin ? "bg-purple-400" : "bg-green-400"}`} />
+                      <span className="text-slate-300">{user.email?.split("@")[0]}</span>
+                      {user.is_admin && <ShieldIcon className="h-3 w-3 text-purple-400" />}
+                    </div>
+                  ))}
+                  {approvedUsers.length > 4 && (
+                    <div className="px-2 py-1 bg-slate-800/50 rounded-full text-xs text-slate-400">
+                      +{approvedUsers.length - 4} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <Link href="/admin">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full mt-4 border-slate-700 text-slate-300 bg-transparent hover:bg-slate-800"
+              >
+                ניהול משתמשים מלא
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
