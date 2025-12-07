@@ -596,18 +596,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Delete old predictions for these hotels from today onwards
-    for (const hotelId of finalHotelIds) {
-      await supabase
-        .from("price_predictions")
-        .delete()
-        .eq("hotel_id", hotelId)
-        .gte("prediction_date", today.toISOString().split("T")[0])
-    }
-
-    const { error } = await supabase.from("price_predictions").insert(predictions)
+    // First, let's just insert with upsert to handle duplicates
+    const { error } = await supabase.from("price_predictions").upsert(predictions, {
+      onConflict: "hotel_id,prediction_date",
+      ignoreDuplicates: false,
+    })
 
     if (error) {
+      console.log("[v0] Supabase insert error:", error)
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
