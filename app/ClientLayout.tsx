@@ -14,12 +14,11 @@ import {
   IconTarget,
   IconUsers,
   IconBook,
-  ShieldIcon,
   LogOutIcon,
   ChevronDownIcon,
 } from "@/components/icons"
 import { usePathname, useRouter } from "next/navigation"
-import { Suspense } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useAuth, AuthProvider } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import {
@@ -56,8 +55,22 @@ function NavContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, hotels, selectedHotel, setSelectedHotel, signOut, loading } = useAuth()
+  const [pendingUsersCount, setPendingUsersCount] = useState(0)
 
-  // Don't show nav on auth pages
+  useEffect(() => {
+    if (user?.is_admin) {
+      fetch("/api/admin/users")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.users) {
+            const pending = data.users.filter((u: any) => !u.is_approved).length
+            setPendingUsersCount(pending)
+          }
+        })
+        .catch(console.error)
+    }
+  }, [user?.is_admin])
+
   const isAuthPage = pathname?.startsWith("/auth")
   const isLandingPage = pathname === "/"
   if (isAuthPage || isLandingPage) {
@@ -97,12 +110,16 @@ function NavContent({ children }: { children: React.ReactNode }) {
             <NavLink href="/predictions" icon={<IconChart className="h-4 w-4" />} label="Predictions" />
             <NavLink href="/alerts" icon={<IconBell className="h-4 w-4" />} label="Alerts" />
             {user?.is_admin && (
-              <NavLink href="/admin" icon={<ShieldIcon className="h-4 w-4" />} label="Admin" highlight />
+              <NavLink
+                href="/admin"
+                icon={<IconUsers className="h-4 w-4" />}
+                label="Users"
+                badge={pendingUsersCount > 0 ? pendingUsersCount : undefined}
+              />
             )}
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Hotel Selector */}
             {hotels.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -127,7 +144,6 @@ function NavContent({ children }: { children: React.ReactNode }) {
               </DropdownMenu>
             )}
 
-            {/* User Menu */}
             {user && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -159,7 +175,7 @@ function NavContent({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </nav>
-      <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">{children}</main>
+      <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-950">{children}</main>
     </>
   )
 }
@@ -189,11 +205,13 @@ function NavLink({
   icon,
   label,
   highlight,
+  badge,
 }: {
   href: string
   icon: React.ReactNode
   label: string
   highlight?: boolean
+  badge?: number
 }) {
   const pathname = usePathname()
   const isActive = pathname === href || pathname?.startsWith(href + "/")
@@ -201,7 +219,7 @@ function NavLink({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm
+      className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm
         ${
           isActive
             ? "bg-slate-800 text-white"
@@ -212,6 +230,11 @@ function NavLink({
     >
       {icon}
       {label}
+      {badge !== undefined && badge > 0 && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+          {badge}
+        </span>
+      )}
     </Link>
   )
 }
