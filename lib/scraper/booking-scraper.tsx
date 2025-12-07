@@ -194,9 +194,11 @@ async function scrapeViaTavily(
   checkOut: string,
 ): Promise<BookingScraperResponse> {
   try {
+    console.log(`[v0] [BookingScraper] Tavily API Key present: ${TAVILY_API_KEY ? "YES" : "NO"}`)
     console.log(`[v0] [BookingScraper] Method: Tavily Search for ${hotelName}`)
 
     const searchQuery = `${hotelName} ${city} booking.com price ${checkIn} to ${checkOut}`
+    console.log(`[v0] [BookingScraper] Tavily query: ${searchQuery}`)
 
     const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
@@ -216,11 +218,13 @@ async function scrapeViaTavily(
     console.log(`[v0] [BookingScraper] Tavily status: ${response.status}`)
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.log(`[v0] [BookingScraper] Tavily error response: ${errorText.slice(0, 200)}`)
       return { success: false, results: [], source: "tavily", error: `HTTP ${response.status}` }
     }
 
     const data = await response.json()
-    console.log(`[v0] [BookingScraper] Tavily results: ${data.results?.length || 0}`)
+    console.log(`[v0] [BookingScraper] Tavily results count: ${data.results?.length || 0}`)
 
     const allRooms: BookingPriceResult[] = []
 

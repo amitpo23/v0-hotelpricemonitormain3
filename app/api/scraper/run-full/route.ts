@@ -211,8 +211,11 @@ export async function POST(request: Request) {
         }
 
         if (!competitor.booking_url && !competitor.competitor_hotel_name) {
+          console.log(`[v0] Skipping competitor - no booking_url or name: ${competitor.id}`)
           continue
         }
+
+        console.log(`[v0] Starting scrape for: ${competitor.competitor_hotel_name || competitor.name}`)
 
         try {
           const scrapedResult = await scrapeCompetitorAllRooms(
@@ -224,6 +227,10 @@ export async function POST(request: Request) {
             },
             dateStr,
             checkOutDate,
+          )
+
+          console.log(
+            `[v0] Scrape result for ${competitor.competitor_hotel_name}: success=${scrapedResult.success}, rooms=${scrapedResult.rooms.length}`,
           )
 
           if (scrapedResult.success && scrapedResult.rooms.length > 0) {
