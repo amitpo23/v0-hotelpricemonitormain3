@@ -24,19 +24,15 @@ export async function POST(request: Request) {
     const { data: { user: currentUser }, error: authError } = await authSupabase.auth.getUser(authToken.value)
 
     if (authError || !currentUser) {
-      console.log("[v0] Approve user - Invalid auth token:", authError?.message)
+      console.log("[v0] Approve user - Invalid auth token")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    console.log("[v0] Approve user - Current user:", currentUser.email)
 
     const { data: currentProfile } = await supabase
       .from("profiles")
       .select("is_admin, role")
       .eq("id", currentUser.id)
       .single()
-
-    console.log("[v0] Approve user - Current profile:", currentProfile)
 
     const isAdmin = currentProfile?.is_admin === true || currentProfile?.role === "admin"
 
@@ -47,11 +43,18 @@ export async function POST(request: Request) {
 
     const { userId } = await request.json()
 
-    if (!userId) {
+    // Validate userId
+    if (!userId || typeof userId !== "string") {
       return NextResponse.json({ error: "User ID required" }, { status: 400 })
     }
 
-    console.log("[v0] Approve user - Approving userId:", userId)
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId)) {
+      return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 })
+    }
+
+    console.log("[v0] Approve user - Approving userId:", userId.substring(0, 8) + "...")
 
     // Approve the user
     const { error } = await supabase

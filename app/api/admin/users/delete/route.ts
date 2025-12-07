@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const { data: { user: currentUser }, error: authError } = await authSupabase.auth.getUser(authToken.value)
 
     if (authError || !currentUser) {
-      console.log("[v0] Delete user - Invalid auth token:", authError?.message)
+      console.log("[v0] Delete user - Invalid auth token")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -42,8 +42,15 @@ export async function POST(request: Request) {
 
     const { userId } = await request.json()
 
-    if (!userId) {
+    // Validate userId
+    if (!userId || typeof userId !== "string") {
       return NextResponse.json({ error: "User ID required" }, { status: 400 })
+    }
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId)) {
+      return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 })
     }
 
     // Don't allow deleting yourself
