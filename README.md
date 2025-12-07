@@ -35,22 +35,37 @@ Continue building your app on:
 
 ⚠️ **Important**: This project runs on Vercel Serverless Functions, which **cannot** run Puppeteer or browser automation tools.
 
-#### Recommended Setup: Tavily API
+#### Recommended Setup: Choose One
 
-The scraper uses **Tavily Search API** for reliable scraping that works on Vercel:
-
+**Option 1: Tavily API (Best for search-based scraping)**
 1. Get a Tavily API key from [Tavily.com](https://tavily.com)
 2. Configure in Vercel **Environment Variables**:
    ```
    TAVILY_API_KEY=tvly-xxxxxxxxxx
    ```
-3. Redeploy your project
 
-#### Alternative Methods (Built-in)
+**Option 2: ScraperAPI (Best for bypassing blocks)**
+1. Get a ScraperAPI key from [ScraperAPI.com](https://www.scraperapi.com/)
+2. Configure in Vercel **Environment Variables**:
+   ```
+   SCRAPER_API_KEY=your-api-key-here
+   ```
 
-The scraper also tries these methods automatically:
-- Direct Booking.com API calls (may be blocked by CAPTCHA)
-- HTML parsing of search results
+**You can use both!** The scraper will try:
+1. Tavily first (fastest)
+2. ScraperAPI second (bypasses blocks)
+3. Direct API calls (fallback)
+4. HTML parsing (fallback)
+
+Then redeploy your project.
+
+#### How It Works
+
+The scraper tries multiple methods in order:
+- **Tavily Search**: Fast AI-powered search (needs `TAVILY_API_KEY`)
+- **ScraperAPI**: Bypasses CAPTCHA and blocks (needs `SCRAPER_API_KEY`)
+- **Direct Booking.com API**: Free but may be blocked
+- **HTML Parsing**: Free but may be blocked
 
 #### Why Not Bright Data?
 

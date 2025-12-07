@@ -14,24 +14,49 @@
 
 ---
 
-## הגדרת Tavily API (מומלץ)
+## הגדרת Scraping APIs (בחר אחד או שניהם)
 
-### 1. קבל API Key מ-Tavily
+### אפשרות 1: Tavily API (מומלץ לחיפוש מהיר)
 
+**יתרונות:**
+- ✅ מהיר מאוד (AI-powered search)
+- ✅ לא נחסם
+- ✅ 1,000 searches חינם לחודש
+
+**הגדרה:**
 1. היכנס ל-[Tavily.com](https://tavily.com)
 2. הירשם או התחבר
 3. לך ל-**API Keys**
 4. העתק את ה-API Key שלך
-
-### 2. הגדר ב-Vercel
-
-1. לך ל-[Vercel Dashboard](https://vercel.com)
-2. **Project Settings** → **Environment Variables**
-3. הוסף:
+5. הוסף ב-Vercel:
    ```
    TAVILY_API_KEY=tvly-xxxxxxxxxx
    ```
+
+### אפשרות 2: ScraperAPI (מומלץ לעקיפת CAPTCHA)
+
+**יתרונות:**
+- ✅ עוקף CAPTCHA ו-blocks
+- ✅ JavaScript rendering
+- ✅ 5,000 requests חינם לחודש
+
+**הגדרה:**
+1. היכנס ל-[ScraperAPI.com](https://www.scraperapi.com/)
+2. הירשם או התחבר
+3. העתק את ה-API Key מה-Dashboard
+4. הוסף ב-Vercel:
+   ```
+   SCRAPER_API_KEY=your-api-key-here
+   ```
+
+### הגדרה ב-Vercel
+
+1. לך ל-[Vercel Dashboard](https://vercel.com)
+2. **Project Settings** → **Environment Variables**
+3. הוסף את ה-API Keys שקיבלת
 4. **Redeploy** את הפרויקט
+
+**💡 טיפ:** אפשר להשתמש בשני ה-APIs יחד! הסורק ינסה את Tavily קודם (מהיר יותר) ואז ScraperAPI (אם Tavily נכשל).
 
 ---
 

@@ -23,7 +23,7 @@ export interface BookingScraperResponse {
   error?: string
 }
 
-function extractAllRoomsFromHTML(html: string): BookingPriceResult[] {
+export function extractAllRoomsFromHTML(html: string): BookingPriceResult[] {
   const rooms: BookingPriceResult[] = []
   const seenRooms = new Set<string>()
 
@@ -414,19 +414,49 @@ export async function scrapeBookingPrice(
   console.log(`[v0] [BookingScraper] Dates: ${checkIn} to ${checkOut}`)
   console.log(`[v0] [BookingScraper] ========================================`)
 
-  // Method 0: Tavily (most reliable)
+  // Method 0: Tavily (most reliable for Vercel)
   const tavilyResult = await scrapeViaTavily(hotelName, city, checkIn, checkOut)
   if (tavilyResult.success && tavilyResult.results.length > 0) {
     return tavilyResult
   }
 
-  // Method 1: Booking Search API
+  // Method 1: ScraperAPI (works on Vercel, bypasses blocks)
+  try {
+    console.log(`[v0] [BookingScraper] Method 1: ScraperAPI`)
+    const { scrapeWithScraperAPI, scrapeHotelPageWithScraperAPI } = await import("./scraperapi-scraper")
+
+    // Try search results first
+    const scraperApiResult = await scrapeWithScraperAPI(hotelName, city, checkIn, checkOut)
+    if (scraperApiResult.success && scraperApiResult.rooms.length > 0) {
+      console.log(`[v0] [BookingScraper] ScraperAPI found ${scraperApiResult.rooms.length} rooms`)
+      return {
+        success: true,
+        results: scraperApiResult.rooms,
+        source: "scraperapi",
+      }
+    }
+
+    // Try direct hotel page
+    const hotelPageResult = await scrapeHotelPageWithScraperAPI(hotelName, city, checkIn, checkOut)
+    if (hotelPageResult.success && hotelPageResult.rooms.length > 0) {
+      console.log(`[v0] [BookingScraper] ScraperAPI hotel page found ${hotelPageResult.rooms.length} rooms`)
+      return {
+        success: true,
+        results: hotelPageResult.rooms,
+        source: "scraperapi",
+      }
+    }
+  } catch (error) {
+    console.error("[v0] [BookingScraper] ScraperAPI error:", error)
+  }
+
+  // Method 2: Booking Search API (fallback, may be blocked)
   const bookingApiResult = await scrapeViaBookingSearchAPI(hotelName, city, checkIn, checkOut)
   if (bookingApiResult.success && bookingApiResult.results.length > 0) {
     return bookingApiResult
   }
 
-  // Method 2: Direct HTML with autocomplete
+  // Method 3: Direct HTML with autocomplete (fallback, may be blocked)
   const directResult = await scrapeViaDirectHTML(hotelName, city, checkIn, checkOut)
   if (directResult.success && directResult.results.length > 0) {
     return directResult
@@ -466,12 +496,18 @@ export async function scrapeBookingPrice(
 
   console.log(`[v0] [BookingScraper] All methods failed for ${hotelName}`)
   console.log(`[v0] [BookingScraper] Available methods on Vercel:`)
-  console.log(`[v0] [BookingScraper]   1. Tavily Search (recommended)`)
-  console.log(`[v0] [BookingScraper]   2. Booking.com Search API (may be blocked)`)
-  console.log(`[v0] [BookingScraper]   3. Direct HTML scraping (may be blocked)`)
+  console.log(`[v0] [BookingScraper]   1. Tavily Search (recommended - needs TAVILY_API_KEY)`)
+  console.log(`[v0] [BookingScraper]   2. ScraperAPI (bypasses blocks - needs SCRAPER_API_KEY)`)
+  console.log(`[v0] [BookingScraper]   3. Booking.com Search API (may be blocked by CAPTCHA)`)
+  console.log(`[v0] [BookingScraper]   4. Direct HTML scraping (may be blocked)`)
   console.log(`[v0] [BookingScraper] NOTE: Puppeteer cannot work on Vercel Serverless Functions`)
 
-  return { success: false, results: [], source: "none", error: "All available methods failed. Puppeteer not supported on Vercel." }
+  return {
+    success: false,
+    results: [],
+    source: "none",
+    error: "All available methods failed. Check API keys: TAVILY_API_KEY or SCRAPER_API_KEY",
+  }
 }
 
 export async function scrapeBookingViaHtml(
