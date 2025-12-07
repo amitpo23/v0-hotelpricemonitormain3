@@ -11,10 +11,18 @@ export interface PuppeteerScrapeResult {
   error?: string
 }
 
-// Bright Data Scraping Browser credentials
-const BRIGHT_DATA_WS_ENDPOINT =
-  process.env.BRIGHT_DATA_BROWSER_WS ||
-  "wss://brd-customer-hl_b8df3680-zone-scraping_browser3:sz74zisg17x5@brd.superproxy.io:9222"
+function getBrightDataEndpoint(): string {
+  const username = process.env.BRIGHT_DATA_USERNAME
+  const password = process.env.BRIGHT_DATA_PASSWORD
+
+  if (username && password) {
+    // Build WebSocket URL from credentials
+    return `wss://${username}:${password}@brd.superproxy.io:9222`
+  }
+
+  // Fallback to full WebSocket URL if provided
+  return process.env.BRIGHT_DATA_BROWSER_WS || ""
+}
 
 export async function scrapeWithPuppeteer(
   hotelName: string,
@@ -25,13 +33,29 @@ export async function scrapeWithPuppeteer(
   console.log(`[v0] [Puppeteer] Starting scrape for ${hotelName} in ${city}`)
   console.log(`[v0] [Puppeteer] Dates: ${checkIn} to ${checkOut}`)
 
+  const wsEndpoint = getBrightDataEndpoint()
+
+  if (!wsEndpoint) {
+    console.log(`[v0] [Puppeteer] No Bright Data credentials configured`)
+    return {
+      price: null,
+      roomType: "",
+      currency: "ILS",
+      available: false,
+      source: "puppeteer",
+      error: "Bright Data credentials not configured",
+    }
+  }
+
+  console.log(`[v0] [Puppeteer] Using WebSocket endpoint: ${wsEndpoint.substring(0, 30)}...`)
+
   let browser = null
 
   try {
     // Connect to Bright Data Scraping Browser
     console.log(`[v0] [Puppeteer] Connecting to Bright Data browser...`)
     browser = await puppeteer.connect({
-      browserWSEndpoint: BRIGHT_DATA_WS_ENDPOINT,
+      browserWSEndpoint: wsEndpoint,
     })
     console.log(`[v0] [Puppeteer] Connected!`)
 
@@ -178,7 +202,7 @@ function buildBookingSearchUrl(hotelName: string, city: string, checkIn: Date, c
     group_adults: "2",
     no_rooms: "1",
     group_children: "0",
-    selected_currency: "USD",
+    selected_currency: "ILS",
   })
 
   return `https://www.booking.com/searchresults.html?${params.toString()}`
