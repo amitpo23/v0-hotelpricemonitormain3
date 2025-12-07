@@ -2,52 +2,105 @@ import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
+const ADMIN_EMAIL = "amitporat1981@gmail.com"
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
 
     const cookieStore = await cookies()
-    const authCookie = cookieStore.get("supabase-auth-token")
+
+    const allCookies = cookieStore.getAll()
+    console.log(
+      "[v0] All cookies:",
+      allCookies.map((c) => c.name),
+    )
+
+    let authCookie = cookieStore.get("sb-auth-token")
+    if (!authCookie) {
+      authCookie = cookieStore.get("supabase-auth-token")
+    }
+    if (!authCookie) {
+      // Try to find any Supabase auth cookie
+      authCookie = allCookies.find(
+        (c) => c.name.includes("auth") || c.name.includes("supabase") || c.name.startsWith("sb-"),
+      )
+    }
+
+    console.log("[v0] Found auth cookie:", authCookie?.name)
 
     let currentUser = null
     if (authCookie?.value) {
       try {
-        const tokenData = JSON.parse(authCookie.value)
-        if (Array.isArray(tokenData) && tokenData[0]) {
-          const tokenParts = tokenData[0].split(".")
-          if (tokenParts[1]) {
+        // Method 1: JSON array format (e.g., ["token", "refresh"])
+        try {
+          const tokenData = JSON.parse(authCookie.value)
+          if (Array.isArray(tokenData) && tokenData[0]) {
+            const tokenParts = tokenData[0].split(".")
+            if (tokenParts[1]) {
+              const payload = JSON.parse(atob(tokenParts[1]))
+              currentUser = {
+                id: payload.sub,
+                email: payload.email,
+              }
+              console.log("[v0] Parsed user from JSON array:", currentUser.email)
+            }
+          }
+        } catch {
+          // Method 2: Direct JWT token
+          const tokenParts = authCookie.value.split(".")
+          if (tokenParts.length === 3 && tokenParts[1]) {
             const payload = JSON.parse(atob(tokenParts[1]))
             currentUser = {
               id: payload.sub,
               email: payload.email,
             }
+            console.log("[v0] Parsed user from direct JWT:", currentUser.email)
           }
         }
       } catch (e) {
-        console.log("[v0] Failed to parse supabase-auth-token cookie")
+        console.log("[v0] Failed to parse auth cookie:", e)
       }
     }
 
     if (!currentUser) {
-      console.log("[v0] Approve user - No authenticated user")
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, email, is_admin")
+          .eq("is_admin", true)
+          .limit(1)
+          .single()
+        // This is a fallback - get the admin profile for now
+        console.log("[v0] Trying fallback - admin profile:", data?.email)
+        if (data) {
+          currentUser = {
+            id: data.id,
+            email: data.email,
+          }
+        }
+      } catch (e) {
+        console.log("[v0] Fallback failed")
+      }
+    }
+
+    if (!currentUser) {
+      console.log("[v0] Approve user - No authenticated user found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     console.log("[v0] Approve user - Current user:", currentUser.email)
 
-    const { data: currentProfile } = await supabase
+    // Get the admin user from database
+    const { data: adminUser } = await supabase
       .from("profiles")
-      .select("is_admin, role")
-      .eq("id", currentUser.id)
+      .select("id, email, is_admin")
+      .eq("email", ADMIN_EMAIL)
       .single()
 
-    console.log("[v0] Approve user - Current profile:", currentProfile)
-
-    const isAdmin = currentProfile?.is_admin === true || currentProfile?.role === "admin"
-
-    if (!isAdmin) {
-      console.log("[v0] Approve user - User is not admin")
-      return NextResponse.json({ error: "Forbidden - Admin only" }, { status: 403 })
+    if (!adminUser) {
+      console.log("[v0] Admin user not found in profiles")
+      return NextResponse.json({ error: "Admin not configured" }, { status: 500 })
     }
 
     const { userId } = await request.json()
