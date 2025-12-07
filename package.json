@@ -80,7 +80,7 @@
     "tailwindcss": "^4.1.9",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "latest",
-    "undici": "latest",
+    "undici": "7.16.0",
     "xlsx": "latest"
   },
   "devDependencies": {

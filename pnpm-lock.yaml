@@ -222,7 +222,7 @@ importers:
         specifier: latest
         version: 1.4.0
       undici:
-        specifier: latest
+        specifier: 7.16.0
         version: 7.16.0
       xlsx:
         specifier: latest

@@ -149,9 +149,47 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No hotels provided" }, { status: 400 })
   }
 
-  const predictionDays = Math.min(365, Math.max(30, daysAhead))
-
   const today = new Date()
+  let startDate: Date
+  let endDate: Date
+
+  if (selectedMonths.length > 0) {
+    // Find the earliest and latest selected month
+    const minMonth = Math.min(...selectedMonths)
+    const maxMonth = Math.max(...selectedMonths)
+
+    // Start from the first day of the earliest selected month
+    startDate = new Date(selectedYear, minMonth - 1, 1)
+
+    // If start date is in the past, use today
+    if (startDate < today) {
+      startDate = today
+    }
+
+    // End at the last day of the latest selected month
+    endDate = new Date(selectedYear, maxMonth, 0) // Day 0 of next month = last day of current month
+
+    // Ensure we cover at least daysAhead if months span is smaller
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysDiff < daysAhead) {
+      endDate = new Date(startDate.getTime() + daysAhead * 24 * 60 * 60 * 1000)
+    }
+  } else {
+    // No specific months selected - use daysAhead from today
+    startDate = today
+    endDate = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000)
+  }
+
+  const predictionDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+
+  console.log("[v0] Predictions date range:", {
+    startDate: startDate.toISOString().split("T")[0],
+    endDate: endDate.toISOString().split("T")[0],
+    predictionDays,
+    selectedMonths,
+    selectedYear,
+  })
+
   const currentMonth = today.getMonth() + 1
   const currentYear = today.getFullYear()
 
@@ -352,7 +390,7 @@ export async function POST(request: Request) {
     const hotelRecommendations: string[] = []
 
     for (let i = 0; i < predictionDays; i++) {
-      const predDate = new Date(today)
+      const predDate = new Date(startDate)
       predDate.setDate(predDate.getDate() + i)
       const dateStr = predDate.toISOString().split("T")[0]
       const monthDay = `${String(predDate.getMonth() + 1).padStart(2, "0")}-${String(predDate.getDate()).padStart(2, "0")}`
@@ -363,7 +401,7 @@ export async function POST(request: Request) {
         continue
       }
 
-      if (selectedYear && predYear !== selectedYear && predYear !== selectedYear + 1) {
+      if (predYear !== selectedYear) {
         continue
       }
 

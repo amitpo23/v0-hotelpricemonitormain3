@@ -88,6 +88,14 @@ export function GeneratePredictionsButton({ hotels }: { hotels: Hotel[] }) {
 
     setLoading(true)
     try {
+      console.log("[v0] Generating predictions:", {
+        selectedMonths,
+        selectedYear,
+        daysAhead,
+        hotelsCount: hotels.length,
+        analysisParams,
+      })
+
       const res = await fetch("/api/predictions/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,12 +108,24 @@ export function GeneratePredictionsButton({ hotels }: { hotels: Hotel[] }) {
         }),
       })
 
+      const data = await res.json()
+      console.log("[v0] Predictions response:", {
+        ok: res.ok,
+        status: res.status,
+        predictionsCount: data.stats?.totalPredictions || 0,
+        error: data.error,
+      })
+
       if (res.ok) {
         const now = new Date()
         setLastGenerated(now)
         localStorage.setItem("predictions_last_generated", now.toISOString())
         router.refresh()
+      } else {
+        console.error("[v0] Failed to generate predictions:", data.error)
       }
+    } catch (error) {
+      console.error("[v0] Error generating predictions:", error)
     } finally {
       setLoading(false)
     }

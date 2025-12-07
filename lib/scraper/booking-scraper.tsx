@@ -1,5 +1,3 @@
-import { ProxyAgent } from "undici"
-
 export interface BookingPriceResult {
   price: number
   originalPrice?: number
@@ -183,6 +181,7 @@ export function extractPricesFromHTML(html: string): number[] {
 }
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "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"
+const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY
 
 async function scrapeViaTavily(
   hotelName: string,
@@ -391,80 +390,64 @@ async function scrapeViaDirectHTML(
   }
 }
 
-async function fetchViaBrightDataProxy(url: string): Promise<string | null> {
-  const username = process.env.BRIGHT_DATA_USERNAME || "brd-customer-hl_b8df3680-zone-scraping_browser3"
-  const password = process.env.BRIGHT_DATA_PASSWORD || "sz74zisg17x5"
-
-  // Bright Data proxy URL - using port 22225 for HTTP proxy
-  const proxyUrl = `http://${username}:${password}@brd.superproxy.io:22225`
-
-  console.log("[v0] [BrightData Proxy] Attempting fetch via proxy...")
-  console.log("[v0] [BrightData Proxy] Target URL:", url)
-
-  try {
-    const dispatcher = new ProxyAgent(proxyUrl)
-
-    const response = await fetch(url, {
-      // @ts-ignore - dispatcher is valid for undici
-      dispatcher,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Cache-Control": "no-cache",
-      },
-    })
-
-    console.log("[v0] [BrightData Proxy] Response status:", response.status)
-
-    if (!response.ok) {
-      console.log("[v0] [BrightData Proxy] Response not OK:", response.statusText)
-      return null
-    }
-
-    const html = await response.text()
-    console.log("[v0] [BrightData Proxy] Got HTML, length:", html.length)
-    return html
-  } catch (error) {
-    console.error("[v0] [BrightData Proxy] Error:", error)
-    return null
-  }
-}
-
-async function scrapeViaBrightDataProxy(
+async function scrapeViaScraperAPI(
   hotelName: string,
-  location: string,
+  city: string,
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult[]> {
-  console.log("[v0] [Method: BrightData Proxy] Starting...")
-
-  // Build Booking.com search URL
-  const searchParams = new URLSearchParams({
-    ss: `${hotelName} ${location}`,
-    checkin: checkIn,
-    checkout: checkOut,
-    group_adults: "2",
-    no_rooms: "1",
-    group_children: "0",
-    selected_currency: "ILS",
-  })
-
-  const url = `https://www.booking.com/searchresults.html?${searchParams.toString()}`
-
-  const html = await fetchViaBrightDataProxy(url)
-
-  if (!html) {
-    console.log("[v0] [Method: BrightData Proxy] No HTML returned")
+  if (!SCRAPER_API_KEY) {
+    console.log(`[v0] [ScraperAPI] No API key configured, skipping`)
     return []
   }
 
-  const rooms = extractAllRoomsFromHTML(html)
-  console.log("[v0] [Method: BrightData Proxy] Extracted rooms:", rooms.length)
+  try {
+    console.log(`[v0] [ScraperAPI] Starting scrape for ${hotelName}`)
 
-  return rooms.map((r) => ({ ...r, source: "brightdata_proxy" }))
+    const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
+      hotelName + " " + city,
+    )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
+
+    // ScraperAPI endpoint with render=true for JavaScript rendering
+    const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(searchUrl)}&render=true&country_code=il`
+
+    const response = await fetch(scraperUrl, {
+      headers: {
+        Accept: "text/html",
+      },
+    })
+
+    console.log(`[v0] [ScraperAPI] Response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log(`[v0] [ScraperAPI] Error: ${errorText.slice(0, 200)}`)
+      return []
+    }
+
+    const html = await response.text()
+    console.log(`[v0] [ScraperAPI] Got HTML: ${html.length} bytes`)
+
+    if (html.includes("captcha") || html.includes("Access Denied") || html.length < 5000) {
+      console.log(`[v0] [ScraperAPI] Got blocked or captcha`)
+      return []
+    }
+
+    const rooms = extractAllRoomsFromHTML(html)
+    rooms.forEach((r) => {
+      r.source = "scraper_api"
+    })
+
+    if (rooms.length > 0) {
+      console.log(`[v0] [ScraperAPI] Found ${rooms.length} rooms`)
+      return rooms
+    }
+
+    return []
+  } catch (error) {
+    console.error(`[v0] [ScraperAPI] Error:`, error)
+    return []
+  }
 }
 
 export async function scrapeBookingPrices(
@@ -477,24 +460,7 @@ export async function scrapeBookingPrices(
   console.log("[v0] [BookingScraper] Starting scrape for:", hotelName)
   console.log("[v0] [BookingScraper] Dates:", checkIn, "to", checkOut)
 
-  // Method 0: Bright Data HTTP Proxy (most reliable)
-  try {
-    console.log("[v0] [BookingScraper] Trying Method 0: Bright Data Proxy...")
-    const proxyResults = await scrapeViaBrightDataProxy(hotelName, location, checkIn, checkOut)
-    if (proxyResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 0 SUCCESS! Found", proxyResults.length, "rooms")
-      return {
-        success: true,
-        results: proxyResults,
-        source: "brightdata_proxy",
-      }
-    }
-    console.log("[v0] [BookingScraper] Method 0 returned no results")
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Method 0 failed:", error)
-  }
-
-  // Method 1: Tavily Search (AI-powered)
+  // Method 1: Tavily Search (AI-powered, fastest)
   try {
     console.log("[v0] [BookingScraper] Trying Method 1: Tavily...")
     const tavilyResults = await scrapeViaTavily(hotelName, location, checkIn, checkOut)
@@ -511,38 +477,55 @@ export async function scrapeBookingPrices(
     console.error("[v0] [BookingScraper] Method 1 failed:", error)
   }
 
-  // Method 2: Direct Booking.com Search API
+  // Method 2: ScraperAPI (bypasses blocks)
   try {
-    console.log("[v0] [BookingScraper] Trying Method 2: Booking Search API...")
+    console.log("[v0] [BookingScraper] Trying Method 2: ScraperAPI...")
+    const scraperResults = await scrapeViaScraperAPI(hotelName, location, checkIn, checkOut)
+    if (scraperResults.length > 0) {
+      console.log("[v0] [BookingScraper] Method 2 SUCCESS! Found", scraperResults.length, "rooms")
+      return {
+        success: true,
+        results: scraperResults,
+        source: "scraper_api",
+      }
+    }
+    console.log("[v0] [BookingScraper] Method 2 returned no results or no API key")
+  } catch (error) {
+    console.error("[v0] [BookingScraper] Method 2 failed:", error)
+  }
+
+  // Method 3: Direct Booking.com Search API
+  try {
+    console.log("[v0] [BookingScraper] Trying Method 3: Booking Search API...")
     const searchResults = await scrapeViaBookingSearchAPI(hotelName, location, checkIn, checkOut)
     if (searchResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 2 SUCCESS! Found", searchResults.length, "rooms")
+      console.log("[v0] [BookingScraper] Method 3 SUCCESS! Found", searchResults.length, "rooms")
       return {
         success: true,
         results: searchResults,
         source: "booking_api",
       }
     }
-    console.log("[v0] [BookingScraper] Method 2 returned no results")
+    console.log("[v0] [BookingScraper] Method 3 returned no results")
   } catch (error) {
-    console.error("[v0] [BookingScraper] Method 2 failed:", error)
+    console.error("[v0] [BookingScraper] Method 3 failed:", error)
   }
 
-  // Method 3: Direct HTML fetch (last resort)
+  // Method 4: Direct HTML fetch (last resort)
   try {
-    console.log("[v0] [BookingScraper] Trying Method 3: Direct HTML...")
-    const directResults = await scrapeViaDirectHTML(hotelName, location, checkIn, checkOut, bookingUrl)
+    console.log("[v0] [BookingScraper] Trying Method 4: Direct HTML...")
+    const directResults = await scrapeViaDirectHTML(hotelName, location, checkIn, checkOut)
     if (directResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 3 SUCCESS! Found", directResults.length, "rooms")
+      console.log("[v0] [BookingScraper] Method 4 SUCCESS! Found", directResults.length, "rooms")
       return {
         success: true,
         results: directResults,
         source: "direct_html",
       }
     }
-    console.log("[v0] [BookingScraper] Method 3 returned no results")
+    console.log("[v0] [BookingScraper] Method 4 returned no results")
   } catch (error) {
-    console.error("[v0] [BookingScraper] Method 3 failed:", error)
+    console.error("[v0] [BookingScraper] Method 4 failed:", error)
   }
 
   console.log("[v0] [BookingScraper] All methods failed")
