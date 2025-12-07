@@ -296,21 +296,57 @@ export async function POST(request: Request) {
     console.log(`[v0] ========================================`)
 
     if (competitorPriceResults.length > 0) {
+      console.log(`[v0] Sample record:`, JSON.stringify(competitorPriceResults[0]))
+
       const batchSize = 100
+      let savedCount = 0
+
       for (let i = 0; i < competitorPriceResults.length; i += batchSize) {
         const batch = competitorPriceResults.slice(i, i + batchSize)
 
-        const { error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
-          batch.map((r) => ({ ...r, scraped_at: new Date().toISOString() })),
-          { onConflict: "hotel_id,competitor_id,date,source,room_type" },
+        const { data, error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
+          batch.map((r) => ({
+            hotel_id: r.hotel_id,
+            competitor_id: r.competitor_id,
+            date: r.date,
+            price: r.price,
+            source: r.source,
+            room_type: r.room_type,
+            scraped_at: new Date().toISOString(),
+          })),
+          { onConflict: "competitor_id,date,source" },
         )
 
         if (competitorError) {
-          console.error(`[v0] Batch ${Math.floor(i / batchSize) + 1} error:`, competitorError)
+          console.error(`[v0] Batch ${Math.floor(i / batchSize) + 1} error:`, JSON.stringify(competitorError))
+
+          // Try inserting one by one to see which record fails
+          for (const record of batch) {
+            const { error: singleError } = await supabase.from("competitor_daily_prices").upsert(
+              {
+                hotel_id: record.hotel_id,
+                competitor_id: record.competitor_id,
+                date: record.date,
+                price: record.price,
+                source: record.source,
+                room_type: record.room_type,
+                scraped_at: new Date().toISOString(),
+              },
+              { onConflict: "competitor_id,date,source" },
+            )
+            if (singleError) {
+              console.error(`[v0] Single record error:`, JSON.stringify(singleError), `Record:`, JSON.stringify(record))
+            } else {
+              savedCount++
+            }
+          }
         } else {
+          savedCount += batch.length
           console.log(`[v0] Saved batch ${Math.floor(i / batchSize) + 1}: ${batch.length} records`)
         }
       }
+
+      console.log(`[v0] TOTAL SAVED: ${savedCount} records`)
     }
 
     if (results.length > 0) {
