@@ -1,23 +1,35 @@
 import { createClient } from "@/lib/supabase/server"
+import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
 
-    // Check if current user is admin
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const cookieStore = await cookies()
+    const userCookie = cookieStore.get("user")
 
-    if (!user) {
+    let currentUser = null
+    if (userCookie?.value) {
+      try {
+        currentUser = JSON.parse(userCookie.value)
+      } catch (e) {
+        console.log("[v0] Failed to parse user cookie")
+      }
+    }
+
+    if (!currentUser) {
       console.log("[v0] Approve user - No authenticated user")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[v0] Approve user - Current user:", user.email)
+    console.log("[v0] Approve user - Current user:", currentUser.email)
 
-    const { data: currentProfile } = await supabase.from("profiles").select("is_admin, role").eq("id", user.id).single()
+    const { data: currentProfile } = await supabase
+      .from("profiles")
+      .select("is_admin, role")
+      .eq("id", currentUser.id)
+      .single()
 
     console.log("[v0] Approve user - Current profile:", currentProfile)
 
