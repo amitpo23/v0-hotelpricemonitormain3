@@ -7,18 +7,19 @@ export async function POST(request: Request) {
     const supabase = await createClient()
 
     const cookieStore = await cookies()
-    const userCookie = cookieStore.get("user")
+    const authToken = cookieStore.get("supabase-auth-token")
 
     let currentUser = null
-    if (userCookie?.value) {
+    if (authToken?.value) {
       try {
-        currentUser = JSON.parse(userCookie.value)
+        const tokenData = JSON.parse(authToken.value)
+        currentUser = tokenData.user
       } catch (e) {
-        console.log("[v0] Failed to parse user cookie")
+        console.log("[v0] Failed to parse auth token")
       }
     }
 
-    if (!currentUser) {
+    if (!currentUser || !currentUser.id) {
       console.log("[v0] Approve user - No authenticated user")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
