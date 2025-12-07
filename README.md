@@ -28,3 +28,17 @@ Continue building your app on:
 2. Deploy your chats from the v0 interface
 3. Changes are automatically pushed to this repository
 4. Vercel deploys the latest version from this repository
+
+## Configuration
+
+### Booking.com Scraper Setup
+
+This project uses Bright Data for scraping hotel prices from Booking.com. To set it up:
+
+1. See **[BRIGHT_DATA_SETUP.md](./BRIGHT_DATA_SETUP.md)** for detailed setup instructions
+2. Configure environment variables in Vercel:
+   - `BRIGHT_DATA_USERNAME` - Your Bright Data username (format: `brd-customer-<id>-zone-scraping_browser`)
+   - `BRIGHT_DATA_PASSWORD` - Your Bright Data password
+   - `TAVILY_API_KEY` - Your Tavily API key for search
+
+**Important**: Make sure your zone name is `scraping_browser` without any number suffix!

@@ -19,14 +19,24 @@ function getBrightDataEndpoint(): string {
   console.log(`[v0] [Puppeteer] BRIGHT_DATA_PASSWORD set: ${!!password}`)
 
   if (username && password) {
-    console.log(`[v0] [Puppeteer] Using username: ${username.substring(0, 40)}...`)
-    return `wss://${username}:${password}@brd.superproxy.io:9222`
+    // Fix zone name format - Bright Data Scraping Browser should use just 'scraping_browser'
+    // NOT 'scraping_browser1', 'scraping_browser2', etc.
+    let fixedUsername = username
+    if (username.includes("scraping_browser")) {
+      // Remove any number suffix from scraping_browser zone
+      fixedUsername = username.replace(/scraping_browser\d+/, "scraping_browser")
+      if (fixedUsername !== username) {
+        console.log(`[v0] [Puppeteer] Fixed zone name: ${username} -> ${fixedUsername}`)
+      }
+    }
+    console.log(`[v0] [Puppeteer] Using username: ${fixedUsername.substring(0, 50)}...`)
+    return `wss://${fixedUsername}:${password}@brd.superproxy.io:9222`
   }
 
-  // User has scraping_browser3 with password sz74zisg17x5
-  const defaultUsername = "brd-customer-hl_b8df3680-zone-scraping_browser3"
+  // Default credentials - use 'scraping_browser' without number suffix
+  const defaultUsername = "brd-customer-hl_b8df3680-zone-scraping_browser"
   const defaultPassword = "sz74zisg17x5"
-  console.log(`[v0] [Puppeteer] Using default credentials for scraping_browser3`)
+  console.log(`[v0] [Puppeteer] Using default credentials for scraping_browser`)
   return `wss://${defaultUsername}:${defaultPassword}@brd.superproxy.io:9222`
 }
 
@@ -63,7 +73,7 @@ export async function scrapeWithPuppeteer(
     browser = await puppeteer.connect({
       browserWSEndpoint: wsEndpoint,
     })
-    console.log(`[v0] [Puppeteer] Connected!`)
+    console.log(`[v0] [Puppeteer] Connected successfully!`)
 
     const page = await browser.newPage()
 
@@ -179,6 +189,18 @@ export async function scrapeWithPuppeteer(
   } catch (error) {
     console.error(`[v0] [Puppeteer] Error:`, error)
 
+    // Provide helpful error messages
+    let errorMessage = error instanceof Error ? error.message : "Unknown error"
+    if (errorMessage.includes("407") || errorMessage.includes("Unexpected server response: 407")) {
+      console.error(`[v0] [Puppeteer] 407 Proxy Authentication Error - Check your Bright Data credentials!`)
+      console.error(
+        `[v0] [Puppeteer] Make sure BRIGHT_DATA_USERNAME and BRIGHT_DATA_PASSWORD are correct in Vercel environment variables`,
+      )
+      console.error(`[v0] [Puppeteer] Zone should be 'scraping_browser' (without number suffix)`)
+      errorMessage =
+        "Bright Data authentication failed (407). Check credentials in Vercel environment variables. Zone should be 'scraping_browser' without number suffix."
+    }
+
     if (browser) {
       try {
         await browser.close()
@@ -193,7 +215,7 @@ export async function scrapeWithPuppeteer(
       currency: "USD",
       available: false,
       source: "puppeteer-brightdata",
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     }
   }
 }
