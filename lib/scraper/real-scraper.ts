@@ -1,4 +1,4 @@
-import { scrapeBookingPrice } from "./booking-scraper"
+import { scrapeBookingPrice, type BookingPriceResult, type BookingScraperResponse } from "./booking-scraper"
 
 export interface CompetitorPriceResult {
   competitorId: string
@@ -12,6 +12,87 @@ export interface CompetitorPriceResult {
   errorMessage?: string
 }
 
+export interface CompetitorMultiRoomResult {
+  competitorId: string
+  competitorName: string
+  date: string
+  rooms: BookingPriceResult[]
+  scrapedAt: string
+  success: boolean
+  source: string
+  errorMessage?: string
+}
+
+export async function scrapeCompetitorAllRooms(
+  competitor: {
+    id: string
+    competitor_hotel_name: string
+    booking_url?: string | null
+    city?: string
+  },
+  checkIn: string,
+  checkOut: string,
+): Promise<CompetitorMultiRoomResult> {
+  const city = competitor.city || "Tel Aviv"
+
+  console.log(`[v0] [RealScraper] ========================================`)
+  console.log(`[v0] [RealScraper] Scraping ALL ROOMS: ${competitor.competitor_hotel_name}`)
+  console.log(`[v0] [RealScraper] City: ${city}`)
+  console.log(`[v0] [RealScraper] Date: ${checkIn} to ${checkOut}`)
+
+  try {
+    const response: BookingScraperResponse = await scrapeBookingPrice(
+      competitor.competitor_hotel_name,
+      city,
+      checkIn,
+      checkOut,
+      competitor.booking_url || undefined,
+    )
+
+    if (response.success && response.results.length > 0) {
+      console.log(`[v0] [RealScraper] SUCCESS: Found ${response.results.length} room types`)
+      response.results.forEach((r, i) => {
+        console.log(`[v0] [RealScraper]   Room ${i + 1}: ${r.roomType} - ${r.price} ${r.currency}`)
+      })
+
+      return {
+        competitorId: competitor.id,
+        competitorName: competitor.competitor_hotel_name,
+        date: checkIn,
+        rooms: response.results,
+        scrapedAt: new Date().toISOString(),
+        success: true,
+        source: response.source,
+      }
+    } else {
+      console.log(`[v0] [RealScraper] FAILED: ${response.error || "No rooms found"}`)
+      return {
+        competitorId: competitor.id,
+        competitorName: competitor.competitor_hotel_name,
+        date: checkIn,
+        rooms: [],
+        scrapedAt: new Date().toISOString(),
+        success: false,
+        source: response.source,
+        errorMessage: response.error || "No rooms found",
+      }
+    }
+  } catch (error) {
+    console.error(`[v0] [RealScraper] ERROR:`, error)
+    return {
+      competitorId: competitor.id,
+      competitorName: competitor.competitor_hotel_name,
+      date: checkIn,
+      rooms: [],
+      scrapedAt: new Date().toISOString(),
+      success: false,
+      source: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+// Keep old function for backwards compatibility
 export async function scrapeCompetitorPrices(
   competitor: {
     id: string
@@ -22,43 +103,32 @@ export async function scrapeCompetitorPrices(
   checkIn: string,
   checkOut: string,
 ): Promise<CompetitorPriceResult> {
-  const result: CompetitorPriceResult = {
-    competitorId: competitor.id,
-    competitorName: competitor.competitor_hotel_name,
-    date: checkIn,
+  const multiResult = await scrapeCompetitorAllRooms(competitor, checkIn, checkOut)
+
+  // Return the first/cheapest room for backwards compatibility
+  if (multiResult.success && multiResult.rooms.length > 0) {
+    const cheapestRoom = multiResult.rooms.reduce((min, r) => (r.price < min.price ? r : min), multiResult.rooms[0])
+    return {
+      competitorId: multiResult.competitorId,
+      competitorName: multiResult.competitorName,
+      date: multiResult.date,
+      bookingPrice: cheapestRoom.price,
+      avgPrice: cheapestRoom.price,
+      roomType: cheapestRoom.roomType,
+      scrapedAt: multiResult.scrapedAt,
+      bookingSuccess: true,
+    }
+  }
+
+  return {
+    competitorId: multiResult.competitorId,
+    competitorName: multiResult.competitorName,
+    date: multiResult.date,
     bookingPrice: null,
     avgPrice: null,
     roomType: "",
-    scrapedAt: new Date().toISOString(),
+    scrapedAt: multiResult.scrapedAt,
     bookingSuccess: false,
+    errorMessage: multiResult.errorMessage,
   }
-
-  const city = competitor.city || "Tel Aviv"
-
-  console.log(`[v0] [RealScraper] ========================================`)
-  console.log(`[v0] [RealScraper] Scraping: ${competitor.competitor_hotel_name}`)
-  console.log(`[v0] [RealScraper] City: ${city}`)
-  console.log(`[v0] [RealScraper] Date: ${checkIn} to ${checkOut}`)
-
-  try {
-    console.log(`[v0] [RealScraper] Searching Booking.com by hotel name`)
-    const bookingResult = await scrapeBookingPrice(competitor.competitor_hotel_name, city, checkIn, checkOut)
-
-    if (bookingResult) {
-      result.bookingPrice = bookingResult.price
-      result.roomType = bookingResult.roomType
-      result.bookingSuccess = true
-      result.avgPrice = bookingResult.price
-      console.log(`[v0] [RealScraper] SUCCESS: ${result.bookingPrice} ${bookingResult.currency}`)
-    } else {
-      result.errorMessage = "Hotel not found or no prices available"
-      console.log(`[v0] [RealScraper] FAILED: Hotel not found or no prices`)
-    }
-  } catch (error) {
-    result.errorMessage = error instanceof Error ? error.message : "Unknown error"
-    console.error(`[v0] [RealScraper] ERROR:`, error)
-  }
-
-  console.log(`[v0] [RealScraper] Final result: ${result.bookingSuccess ? "SUCCESS" : "FAILED"}`)
-  return result
 }

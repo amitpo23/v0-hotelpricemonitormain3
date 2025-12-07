@@ -1,4 +1,4 @@
-// Real Booking.com scraper using multiple methods
+// Real Booking.com scraper - returns ALL room types
 // Based on scraper_findings.md and Puppeteer selectors
 
 import { scrapeWithPuppeteer } from "./puppeteer-scraper"
@@ -16,190 +16,175 @@ export interface BookingPriceResult {
   roomsLeft?: number
 }
 
-// Extract prices from HTML using multiple patterns
-function extractPricesFromHTML(html: string): number[] {
-  const prices: number[] = []
+export interface BookingScraperResponse {
+  success: boolean
+  results: BookingPriceResult[]
+  source: string
+  error?: string
+}
 
-  const patterns = [
-    // Data-testid patterns
-    /data-testid="price-and-discounted-price"[^>]*>([^<]*₪[\d,]+)/g,
-    /data-testid="price-and-discounted-price"[^>]*>([^<]*\$[\d,]+)/g,
-    // Data attributes
-    /data-price="(\d+)"/g,
-    /data-price-amount="(\d+)"/g,
-    // JSON in page
-    /"grossPrice":\s*{\s*"value":\s*([\d.]+)/g,
-    /"price":\s*([\d.]+)/g,
-    /"min_price":\s*([\d.]+)/g,
-    /"total_price":\s*([\d.]+)/g,
-    /"displayPrice":\s*"[^"]*?([\d,]+)/g,
-    // Currency patterns
-    /₪\s*([\d,]+)/g,
-    /ILS\s*([\d,]+)/g,
-    /US\$\s*([\d,]+)/g,
-    // Price display patterns
-    /class="[^"]*price[^"]*"[^>]*>\s*[₪$]?\s*([\d,]+)/gi,
-  ]
+function extractAllRoomsFromHTML(html: string): BookingPriceResult[] {
+  const rooms: BookingPriceResult[] = []
+  const seenRooms = new Set<string>()
 
-  for (const pattern of patterns) {
-    let match
-    const regex = new RegExp(pattern.source, pattern.flags)
-    while ((match = regex.exec(html)) !== null) {
-      const numMatch = match[1] || match[0]
-      const numStr = numMatch.replace(/[^\d.]/g, "")
-      const price = Number.parseFloat(numStr)
-      if (price > 50 && price < 50000 && !prices.includes(price)) {
-        prices.push(price)
+  // Pattern 1: Property card format (search results)
+  const propertyCardPattern = /<div[^>]*data-testid="property-card"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/gi
+  let match
+
+  while ((match = propertyCardPattern.exec(html)) !== null) {
+    const cardHtml = match[1]
+
+    // Extract room type
+    const roomTypeMatch =
+      cardHtml.match(/data-testid="title"[^>]*>([^<]+)</i) ||
+      cardHtml.match(/class="[^"]*room[^"]*name[^"]*"[^>]*>([^<]+)</i) ||
+      cardHtml.match(/<span[^>]*>([^<]*(?:Room|Suite|Studio|Apartment)[^<]*)</i)
+
+    // Extract price
+    const priceMatch =
+      cardHtml.match(/data-testid="price-and-discounted-price"[^>]*>[^₪$]*[₪$]\s*([\d,]+)/i) ||
+      cardHtml.match(/₪\s*([\d,]+)/i) ||
+      cardHtml.match(/\$\s*([\d,]+)/i) ||
+      cardHtml.match(/ILS\s*([\d,]+)/i)
+
+    if (priceMatch) {
+      const price = Number.parseFloat(priceMatch[1].replace(/,/g, ""))
+      const roomType = roomTypeMatch ? roomTypeMatch[1].trim() : "Standard Room"
+      const key = `${roomType}-${price}`
+
+      if (price > 50 && price < 50000 && !seenRooms.has(key)) {
+        seenRooms.add(key)
+        rooms.push({
+          price,
+          roomType,
+          currency: "ILS",
+          available: true,
+          hasBreakfast: cardHtml.toLowerCase().includes("breakfast"),
+          source: "booking_html",
+        })
       }
     }
   }
 
-  return prices.sort((a, b) => a - b)
-}
+  // Pattern 2: Room table format (hotel page)
+  const roomTablePattern = /<tr[^>]*data-block-id[^>]*>([\s\S]*?)<\/tr>/gi
 
-// Method 1: Booking.com Search API (free, no proxy)
-async function scrapeViaBookingSearchAPI(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
-  try {
-    console.log(`[v0] [BookingScraper] Method 1: Booking.com Search API for ${hotelName}`)
+  while ((match = roomTablePattern.exec(html)) !== null) {
+    const rowHtml = match[1]
 
-    const searchUrl = `https://www.booking.com/autocomplete/api/v1/results?query=${encodeURIComponent(
-      hotelName + " " + city,
-    )}&lang=en-us&sb=1&src=searchresults`
+    const roomTypeMatch =
+      rowHtml.match(/class="[^"]*room[^"]*"[^>]*>([^<]+)</i) ||
+      rowHtml.match(/<span[^>]*class="[^"]*hprt-roomtype[^"]*"[^>]*>([^<]+)</i) ||
+      rowHtml.match(/<a[^>]*class="[^"]*room_link[^"]*"[^>]*>([^<]+)</i)
 
-    const searchResponse = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-        Referer: "https://www.booking.com/",
-      },
-    })
+    const priceMatch =
+      rowHtml.match(/data-price="(\d+)"/i) || rowHtml.match(/₪\s*([\d,]+)/i) || rowHtml.match(/\$\s*([\d,]+)/i)
 
-    if (!searchResponse.ok) {
-      console.log(`[v0] [BookingScraper] Search API failed: ${searchResponse.status}`)
-      return null
-    }
+    if (priceMatch) {
+      const price = Number.parseFloat(priceMatch[1].replace(/,/g, ""))
+      const roomType = roomTypeMatch ? roomTypeMatch[1].trim() : "Room"
+      const key = `${roomType}-${price}`
 
-    const searchData = await searchResponse.json()
-    console.log(`[v0] [BookingScraper] Search results count: ${searchData?.results?.length || 0}`)
-
-    let hotelSlug = null
-
-    if (searchData?.results) {
-      for (const result of searchData.results) {
-        if (result.dest_type === "hotel" || result.type === "ho") {
-          hotelSlug = result.b_hotel_url || result.url
-          console.log(`[v0] [BookingScraper] Found: ${result.label}`)
-          break
-        }
+      if (price > 50 && price < 50000 && !seenRooms.has(key)) {
+        seenRooms.add(key)
+        rooms.push({
+          price,
+          roomType,
+          currency: "ILS",
+          available: true,
+          hasBreakfast: rowHtml.toLowerCase().includes("breakfast"),
+          source: "booking_table",
+        })
       }
     }
+  }
 
-    if (hotelSlug) {
-      const hotelUrl = hotelSlug.startsWith("http") ? hotelSlug : `https://www.booking.com${hotelSlug}`
-      const fullUrl = `${hotelUrl}?checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS`
+  // Pattern 3: JSON data in page
+  const jsonPatterns = [/"rooms":\s*\[([\s\S]*?)\]/g, /"b_blocks":\s*\[([\s\S]*?)\]/g]
 
-      console.log(`[v0] [BookingScraper] Trying hotel page: ${fullUrl}`)
+  for (const pattern of jsonPatterns) {
+    const jsonMatch = pattern.exec(html)
+    if (jsonMatch) {
+      try {
+        // Try to parse room data from JSON
+        const pricePattern = /"(?:price|min_price|total_price|grossPrice)":\s*{?\s*"?(?:value)?[":]*\s*([\d.]+)/g
+        const roomPattern = /"(?:room_name|name|room_type)":\s*"([^"]+)"/g
 
-      const hotelResponse = await fetch(fullUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          Accept: "text/html",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-      })
+        let priceM, roomM
+        const prices: number[] = []
+        const roomNames: string[] = []
 
-      if (hotelResponse.ok) {
-        const html = await hotelResponse.text()
-        console.log(`[v0] [BookingScraper] Hotel page: ${html.length} bytes`)
+        while ((priceM = pricePattern.exec(jsonMatch[1])) !== null) {
+          prices.push(Number.parseFloat(priceM[1]))
+        }
+        while ((roomM = roomPattern.exec(jsonMatch[1])) !== null) {
+          roomNames.push(roomM[1])
+        }
 
-        const prices = extractPricesFromHTML(html)
-        if (prices.length > 0) {
-          console.log(`[v0] [BookingScraper] SUCCESS via Hotel Page: ${prices[0]} ILS`)
-          return {
-            price: prices[0],
-            roomType: "Standard Room",
-            currency: "ILS",
-            available: true,
-            hasBreakfast: false,
-            source: "booking_hotel_page",
+        for (let i = 0; i < prices.length; i++) {
+          const price = prices[i]
+          const roomType = roomNames[i] || `Room ${i + 1}`
+          const key = `${roomType}-${price}`
+
+          if (price > 50 && price < 50000 && !seenRooms.has(key)) {
+            seenRooms.add(key)
+            rooms.push({
+              price,
+              roomType,
+              currency: "ILS",
+              available: true,
+              hasBreakfast: false,
+              source: "booking_json",
+            })
           }
         }
+      } catch (e) {
+        // JSON parse failed, continue
+      }
+    }
+  }
+
+  // Pattern 4: Simple price extraction as fallback
+  if (rooms.length === 0) {
+    const simplePrices: number[] = []
+    const pricePatterns = [/₪\s*([\d,]+)/g, /ILS\s*([\d,]+)/g, /data-price="(\d+)"/g, /"price":\s*([\d.]+)/g]
+
+    for (const pattern of pricePatterns) {
+      let m
+      const regex = new RegExp(pattern.source, pattern.flags)
+      while ((m = regex.exec(html)) !== null) {
+        const price = Number.parseFloat(m[1].replace(/,/g, ""))
+        if (price > 50 && price < 50000 && !simplePrices.includes(price)) {
+          simplePrices.push(price)
+        }
       }
     }
 
-    console.log(`[v0] [BookingScraper] No price found via Booking API`)
-    return null
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Booking API error:", error)
-    return null
+    // Create rooms from unique prices
+    simplePrices
+      .sort((a, b) => a - b)
+      .slice(0, 10)
+      .forEach((price, i) => {
+        rooms.push({
+          price,
+          roomType: i === 0 ? "Economy Room" : i === 1 ? "Standard Room" : `Room Type ${i + 1}`,
+          currency: "ILS",
+          available: true,
+          hasBreakfast: false,
+          source: "booking_simple",
+        })
+      })
   }
+
+  return rooms
 }
 
-// Method 2: Direct HTML scrape
-async function scrapeViaDirectHTML(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-): Promise<BookingPriceResult | null> {
-  try {
-    console.log(`[v0] [BookingScraper] Method 2: Direct HTML scrape`)
-
-    const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
-      hotelName + " " + city,
-    )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
-
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-      },
-    })
-
-    if (!response.ok) {
-      console.log(`[v0] [BookingScraper] Direct HTML failed: ${response.status}`)
-      return null
-    }
-
-    const html = await response.text()
-    console.log(`[v0] [BookingScraper] Got HTML: ${html.length} bytes`)
-
-    if (html.includes("captcha") || html.includes("Access Denied") || html.length < 10000) {
-      console.log(`[v0] [BookingScraper] Blocked or captcha detected`)
-      return null
-    }
-
-    const prices = extractPricesFromHTML(html)
-    console.log(`[v0] [BookingScraper] Extracted ${prices.length} prices: ${prices.slice(0, 5).join(", ")}`)
-
-    if (prices.length > 0) {
-      console.log(`[v0] [BookingScraper] SUCCESS via Direct HTML: ${prices[0]} ILS`)
-      return {
-        price: prices[0],
-        roomType: "Standard Room",
-        currency: "ILS",
-        available: true,
-        hasBreakfast: false,
-        source: "booking_direct",
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Direct HTML error:", error)
-    return null
-  }
+// Keep old function for backwards compatibility
+function extractPricesFromHTML(html: string): number[] {
+  const rooms = extractAllRoomsFromHTML(html)
+  return rooms.map((r) => r.price)
 }
 
-const BRIGHT_DATA_API_TOKEN = process.env.BRIGHT_DATA_API_TOKEN || "8f5159d5-2a68-4337-aee4-000587559bda"
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "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"
 
 async function scrapeViaTavily(
@@ -207,7 +192,7 @@ async function scrapeViaTavily(
   city: string,
   checkIn: string,
   checkOut: string,
-): Promise<BookingPriceResult | null> {
+): Promise<BookingScraperResponse> {
   try {
     console.log(`[v0] [BookingScraper] Method: Tavily Search for ${hotelName}`)
 
@@ -231,228 +216,228 @@ async function scrapeViaTavily(
     console.log(`[v0] [BookingScraper] Tavily status: ${response.status}`)
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.log(`[v0] [BookingScraper] Tavily error: ${errorText}`)
-      return null
+      return { success: false, results: [], source: "tavily", error: `HTTP ${response.status}` }
     }
 
     const data = await response.json()
     console.log(`[v0] [BookingScraper] Tavily results: ${data.results?.length || 0}`)
 
-    // Extract prices from Tavily results
-    const allPrices: number[] = []
+    const allRooms: BookingPriceResult[] = []
 
     if (data.results) {
       for (const result of data.results) {
-        // Check raw content for prices
         if (result.raw_content) {
-          const prices = extractPricesFromHTML(result.raw_content)
-          allPrices.push(...prices)
+          const rooms = extractAllRoomsFromHTML(result.raw_content)
+          rooms.forEach((r) => {
+            r.source = "tavily"
+          })
+          allRooms.push(...rooms)
         }
-        // Check content snippet
         if (result.content) {
-          const priceMatch = result.content.match(/[₪$]?\s*([\d,]+)\s*(ILS|USD|per night|לילה)/gi)
-          if (priceMatch) {
-            for (const match of priceMatch) {
-              const numStr = match.replace(/[^\d]/g, "")
-              const price = Number.parseInt(numStr, 10)
-              if (price > 100 && price < 50000) {
-                allPrices.push(price)
-              }
-            }
-          }
+          const rooms = extractAllRoomsFromHTML(result.content)
+          rooms.forEach((r) => {
+            r.source = "tavily"
+          })
+          allRooms.push(...rooms)
         }
       }
     }
 
-    // Also check answer if available
-    if (data.answer) {
-      const answerPrices = data.answer.match(/[₪$]?\s*([\d,]+)\s*(ILS|USD|per night|לילה)/gi)
-      if (answerPrices) {
-        for (const match of answerPrices) {
-          const numStr = match.replace(/[^\d]/g, "")
-          const price = Number.parseInt(numStr, 10)
-          if (price > 100 && price < 50000) {
-            allPrices.push(price)
-          }
-        }
-      }
+    if (allRooms.length > 0) {
+      console.log(`[v0] [BookingScraper] Tavily found ${allRooms.length} rooms`)
+      return { success: true, results: allRooms, source: "tavily" }
     }
 
-    const uniquePrices = [...new Set(allPrices)].sort((a, b) => a - b)
-    console.log(`[v0] [BookingScraper] Tavily extracted prices: ${uniquePrices.slice(0, 5).join(", ")}`)
-
-    if (uniquePrices.length > 0) {
-      console.log(`[v0] [BookingScraper] SUCCESS via Tavily: ${uniquePrices[0]} ILS`)
-      return {
-        price: uniquePrices[0],
-        roomType: "Standard Room",
-        currency: "ILS",
-        available: true,
-        hasBreakfast: false,
-        source: "tavily_search",
-      }
-    }
-
-    return null
+    return { success: false, results: [], source: "tavily", error: "No prices found" }
   } catch (error) {
     console.error("[v0] [BookingScraper] Tavily error:", error)
-    return null
+    return { success: false, results: [], source: "tavily", error: String(error) }
   }
 }
 
-// New Method: Bright Data Web Unlocker API
-async function scrapeViaBrightDataAPI(
+async function scrapeViaBookingSearchAPI(
   hotelName: string,
   city: string,
   checkIn: string,
   checkOut: string,
-): Promise<BookingPriceResult | null> {
+): Promise<BookingScraperResponse> {
   try {
-    console.log(`[v0] [BookingScraper] Method: Bright Data API for ${hotelName}`)
+    console.log(`[v0] [BookingScraper] Method: Booking.com Search API for ${hotelName}`)
 
-    const targetUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
+    const searchUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
       hotelName + " " + city,
     )}&checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS&lang=en-us&group_adults=2&no_rooms=1`
 
-    console.log(`[v0] [BookingScraper] Target URL: ${targetUrl}`)
-
-    const response = await fetch("https://api.brightdata.com/request", {
-      method: "POST",
+    const response = await fetch(searchUrl, {
       headers: {
-        Authorization: `Bearer ${BRIGHT_DATA_API_TOKEN}`,
-        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept: "text/html",
+        "Accept-Language": "en-US,en;q=0.9",
       },
-      body: JSON.stringify({
-        zone: "web_unlocker1",
-        url: targetUrl,
-        format: "raw",
-      }),
     })
 
-    console.log(`[v0] [BookingScraper] Bright Data API status: ${response.status}`)
-
     if (!response.ok) {
-      const errorText = await response.text()
-      console.log(`[v0] [BookingScraper] Bright Data API error: ${errorText}`)
-      return null
+      return { success: false, results: [], source: "booking_api", error: `HTTP ${response.status}` }
     }
 
     const html = await response.text()
-    console.log(`[v0] [BookingScraper] Got HTML via Bright Data: ${html.length} bytes`)
+    console.log(`[v0] [BookingScraper] Got HTML: ${html.length} bytes`)
 
-    if (html.length < 5000) {
-      console.log(`[v0] [BookingScraper] HTML too short, likely blocked`)
-      return null
+    if (html.includes("captcha") || html.includes("Access Denied") || html.length < 10000) {
+      return { success: false, results: [], source: "booking_api", error: "Blocked or captcha" }
     }
 
-    const prices = extractPricesFromHTML(html)
-    console.log(`[v0] [BookingScraper] Extracted ${prices.length} prices: ${prices.slice(0, 5).join(", ")}`)
+    const rooms = extractAllRoomsFromHTML(html)
+    rooms.forEach((r) => {
+      r.source = "booking_api"
+    })
 
-    if (prices.length > 0) {
-      console.log(`[v0] [BookingScraper] SUCCESS via Bright Data API: ${prices[0]} ILS`)
-      return {
-        price: prices[0],
-        roomType: "Standard Room",
-        currency: "ILS",
-        available: true,
-        hasBreakfast: false,
-        source: "brightdata_api",
-      }
+    if (rooms.length > 0) {
+      console.log(`[v0] [BookingScraper] Found ${rooms.length} rooms via Booking API`)
+      return { success: true, results: rooms, source: "booking_api" }
     }
 
-    return null
+    return { success: false, results: [], source: "booking_api", error: "No prices found" }
   } catch (error) {
-    console.error("[v0] [BookingScraper] Bright Data API error:", error)
-    return null
+    console.error("[v0] [BookingScraper] Booking API error:", error)
+    return { success: false, results: [], source: "booking_api", error: String(error) }
   }
 }
 
-// Main scraping function - tries all methods in order
+async function scrapeViaDirectHTML(
+  hotelName: string,
+  city: string,
+  checkIn: string,
+  checkOut: string,
+): Promise<BookingScraperResponse> {
+  try {
+    console.log(`[v0] [BookingScraper] Method: Direct HTML scrape`)
+
+    // Try autocomplete first to get hotel URL
+    const searchUrl = `https://www.booking.com/autocomplete/api/v1/results?query=${encodeURIComponent(
+      hotelName + " " + city,
+    )}&lang=en-us`
+
+    const searchResponse = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept: "application/json",
+      },
+    })
+
+    if (searchResponse.ok) {
+      const searchData = await searchResponse.json()
+
+      if (searchData?.results) {
+        for (const result of searchData.results) {
+          if (result.dest_type === "hotel" || result.type === "ho") {
+            const hotelSlug = result.b_hotel_url || result.url
+            if (hotelSlug) {
+              const hotelUrl = hotelSlug.startsWith("http") ? hotelSlug : `https://www.booking.com${hotelSlug}`
+              const fullUrl = `${hotelUrl}?checkin=${checkIn}&checkout=${checkOut}&selected_currency=ILS`
+
+              console.log(`[v0] [BookingScraper] Fetching hotel page: ${fullUrl}`)
+
+              const hotelResponse = await fetch(fullUrl, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                  Accept: "text/html",
+                },
+              })
+
+              if (hotelResponse.ok) {
+                const html = await hotelResponse.text()
+                const rooms = extractAllRoomsFromHTML(html)
+                rooms.forEach((r) => {
+                  r.source = "booking_direct"
+                })
+
+                if (rooms.length > 0) {
+                  console.log(`[v0] [BookingScraper] Found ${rooms.length} rooms via Direct HTML`)
+                  return { success: true, results: rooms, source: "booking_direct" }
+                }
+              }
+            }
+            break
+          }
+        }
+      }
+    }
+
+    return { success: false, results: [], source: "booking_direct", error: "No prices found" }
+  } catch (error) {
+    console.error("[v0] [BookingScraper] Direct HTML error:", error)
+    return { success: false, results: [], source: "booking_direct", error: String(error) }
+  }
+}
+
 export async function scrapeBookingPrice(
   hotelName: string,
   city: string,
   checkIn: string,
   checkOut: string,
   bookingUrl?: string,
-): Promise<BookingPriceResult | null> {
+): Promise<BookingScraperResponse> {
   console.log(`[v0] [BookingScraper] ========================================`)
-  console.log(`[v0] [BookingScraper] Scraping: ${hotelName}`)
-  console.log(`[v0] [BookingScraper] City: ${city}`)
+  console.log(`[v0] [BookingScraper] Scraping: ${hotelName} in ${city}`)
   console.log(`[v0] [BookingScraper] Dates: ${checkIn} to ${checkOut}`)
+  console.log(`[v0] [BookingScraper] ========================================`)
 
-  try {
-    console.log(`[v0] [BookingScraper] Method 0: Tavily Search`)
-    const tavilyResult = await scrapeViaTavily(hotelName, city, checkIn, checkOut)
-    if (tavilyResult) {
-      return tavilyResult
-    }
-  } catch (error) {
-    console.error(`[v0] [BookingScraper] Tavily failed:`, error)
+  // Method 0: Tavily (most reliable)
+  const tavilyResult = await scrapeViaTavily(hotelName, city, checkIn, checkOut)
+  if (tavilyResult.success && tavilyResult.results.length > 0) {
+    return tavilyResult
   }
 
-  // Method 1: Bright Data API
-  try {
-    console.log(`[v0] [BookingScraper] Method 1: Bright Data API`)
-    const result = await scrapeViaBrightDataAPI(hotelName, city, checkIn, checkOut)
-    if (result) {
-      return result
-    }
-  } catch (error) {
-    console.error(`[v0] [BookingScraper] Bright Data API failed:`, error)
+  // Method 1: Booking Search API
+  const bookingApiResult = await scrapeViaBookingSearchAPI(hotelName, city, checkIn, checkOut)
+  if (bookingApiResult.success && bookingApiResult.results.length > 0) {
+    return bookingApiResult
   }
 
-  // Method 2: Puppeteer with Bright Data Scraping Browser
-  try {
-    console.log(`[v0] [BookingScraper] Method 2: Puppeteer with Bright Data`)
-    const puppeteerResult = await scrapeWithPuppeteer(hotelName, city, checkIn, checkOut)
+  // Method 2: Direct HTML with autocomplete
+  const directResult = await scrapeViaDirectHTML(hotelName, city, checkIn, checkOut)
+  if (directResult.success && directResult.results.length > 0) {
+    return directResult
+  }
 
-    if (puppeteerResult.price) {
-      console.log(`[v0] [BookingScraper] SUCCESS with Puppeteer: ${puppeteerResult.price} ${puppeteerResult.currency}`)
+  // Method 3: Puppeteer with Bright Data
+  try {
+    console.log(`[v0] [BookingScraper] Method 3: Puppeteer with Bright Data`)
+    const puppeteerPrice = await scrapeWithPuppeteer(hotelName, city, checkIn, checkOut)
+    if (puppeteerPrice) {
       return {
-        price: puppeteerResult.price,
-        roomType: puppeteerResult.roomType,
-        currency: puppeteerResult.currency,
-        available: puppeteerResult.available,
-        hasBreakfast: false,
-        source: "puppeteer-brightdata",
+        success: true,
+        results: [
+          {
+            price: puppeteerPrice,
+            roomType: "Standard Room",
+            currency: "ILS",
+            available: true,
+            hasBreakfast: false,
+            source: "puppeteer",
+          },
+        ],
+        source: "puppeteer",
       }
     }
-    console.log(`[v0] [BookingScraper] Puppeteer returned no price, trying next method...`)
   } catch (error) {
-    console.error(`[v0] [BookingScraper] Puppeteer failed:`, error)
+    console.error("[v0] [BookingScraper] Puppeteer error:", error)
   }
 
-  // Method 3: Booking.com Search API
-  try {
-    const result = await scrapeViaBookingSearchAPI(hotelName, city, checkIn, checkOut)
-    if (result) {
-      return result
-    }
-  } catch (error) {
-    console.error(`[v0] [BookingScraper] Search API failed:`, error)
-  }
-
-  // Method 4: Direct HTML
-  try {
-    const result = await scrapeViaDirectHTML(hotelName, city, checkIn, checkOut)
-    if (result) {
-      return result
-    }
-  } catch (error) {
-    console.error(`[v0] [BookingScraper] Direct HTML failed:`, error)
-  }
-
-  console.log(`[v0] [BookingScraper] All methods failed`)
-  return null
+  console.log(`[v0] [BookingScraper] All methods failed for ${hotelName}`)
+  return { success: false, results: [], source: "none", error: "All methods failed" }
 }
 
-// Alias for backwards compatibility
 export async function scrapeBookingViaHtml(
   hotelName: string,
   city: string,
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult | null> {
-  return scrapeBookingPrice(hotelName, city, checkIn, checkOut)
+  const response = await scrapeBookingPrice(hotelName, city, checkIn, checkOut)
+  if (response.success && response.results.length > 0) {
+    return response.results[0]
+  }
+  return null
 }
