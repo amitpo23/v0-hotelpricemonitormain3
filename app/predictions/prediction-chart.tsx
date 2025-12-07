@@ -14,7 +14,7 @@ import {
   Bar,
 } from "recharts"
 import { Button } from "@/components/ui/button"
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons"
+import { ChevronLeftIcon, ChevronRightIcon, SparklesIcon, RefreshCwIcon } from "@/components/icons"
 
 interface PredictionChartProps {
   predictions: any[]
@@ -26,6 +26,7 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
     const now = new Date()
     return { month: now.getMonth(), year: now.getFullYear() }
   })
+  const [isGenerating, setIsGenerating] = useState(false)
 
   // Filter predictions for selected month
   const filteredPredictions = predictions.filter((p) => {
@@ -83,6 +84,47 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
     })
   }
 
+  const generatePredictionsForMonth = async () => {
+    setIsGenerating(true)
+    try {
+      const response = await fetch("/api/predictions/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          months: [selectedMonth.month + 1], // API expects 1-indexed months
+          year: selectedMonth.year,
+          daysAhead: 35, // A bit more than a month to cover edges
+          analysisParams: {
+            includeCompetitors: true,
+            includeSeasonality: true,
+            includeEvents: true,
+            includeOccupancy: true,
+            includeBudget: true,
+            includeFutureBookings: true,
+            includeMarketTrends: true,
+          },
+          // hotelIds will be auto-fetched by API if not provided
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Generated predictions:", data)
+        // Refresh the page to show new predictions
+        window.location.reload()
+      } else {
+        const error = await response.json()
+        console.error("[v0] Failed to generate predictions:", error)
+        alert("שגיאה ביצירת חיזויים: " + (error.error || "Unknown error"))
+      }
+    } catch (error) {
+      console.error("[v0] Error generating predictions:", error)
+      alert("שגיאה ביצירת חיזויים")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   const monthNames = [
     "ינואר",
     "פברואר",
@@ -100,8 +142,26 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
 
   if (predictions.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-slate-500">
-        No prediction data available - לחץ Generate Predictions
+      <div className="h-[300px] flex flex-col items-center justify-center text-slate-500 gap-4">
+        <SparklesIcon className="h-12 w-12 text-slate-400" />
+        <p>No prediction data available</p>
+        <Button
+          onClick={generatePredictionsForMonth}
+          disabled={isGenerating}
+          className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700"
+        >
+          {isGenerating ? (
+            <>
+              <RefreshCwIcon className="h-4 w-4 mr-2 animate-spin" />
+              מייצר חיזויים...
+            </>
+          ) : (
+            <>
+              <SparklesIcon className="h-4 w-4 mr-2" />
+              צור חיזויים
+            </>
+          )}
+        </Button>
       </div>
     )
   }
@@ -124,8 +184,28 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
       {/* Chart */}
       <div className="h-[350px]">
         {chartData.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-500">
-            אין חיזויים לחודש זה - לחץ Generate Predictions
+          <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
+            <SparklesIcon className="h-12 w-12 text-slate-400" />
+            <p>
+              אין חיזויים לחודש {monthNames[selectedMonth.month]} {selectedMonth.year}
+            </p>
+            <Button
+              onClick={generatePredictionsForMonth}
+              disabled={isGenerating}
+              className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700"
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCwIcon className="h-4 w-4 mr-2 animate-spin" />
+                  מייצר חיזויים...
+                </>
+              ) : (
+                <>
+                  <SparklesIcon className="h-4 w-4 mr-2" />
+                  צור חיזויים ל{monthNames[selectedMonth.month]} {selectedMonth.year}
+                </>
+              )}
+            </Button>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
