@@ -197,62 +197,89 @@ async function scrapeViaTavily(
     console.log(`[v0] [BookingScraper] Tavily API Key present: ${TAVILY_API_KEY ? "YES" : "NO"}`)
     console.log(`[v0] [BookingScraper] Method: Tavily Search for ${hotelName}`)
 
-    const searchQuery = `${hotelName} ${city} booking.com price ${checkIn} to ${checkOut}`
-    console.log(`[v0] [BookingScraper] Tavily query: ${searchQuery}`)
+    // Try multiple search queries for better results
+    const searchQueries = [
+      `${hotelName} hotel ${city} booking.com rooms prices ${checkIn}`,
+      `"${hotelName}" ${city} booking.com accommodation`,
+      `${hotelName} ${city} hotel room rates`,
+    ]
 
-    const response = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query: searchQuery,
-        search_depth: "advanced",
-        include_raw_content: true,
-        max_results: 5,
-        include_domains: ["booking.com"],
-      }),
-    })
+    let allRooms: BookingPriceResult[] = []
 
-    console.log(`[v0] [BookingScraper] Tavily status: ${response.status}`)
+    for (const searchQuery of searchQueries) {
+      console.log(`[v0] [BookingScraper] Tavily query: ${searchQuery}`)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.log(`[v0] [BookingScraper] Tavily error response: ${errorText.slice(0, 200)}`)
-      return { success: false, results: [], source: "tavily", error: `HTTP ${response.status}` }
-    }
+      const response = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          api_key: TAVILY_API_KEY,
+          query: searchQuery,
+          search_depth: "advanced",
+          include_raw_content: true,
+          max_results: 10, // Increased from 5 to 10
+          include_domains: ["booking.com"],
+        }),
+      })
 
-    const data = await response.json()
-    console.log(`[v0] [BookingScraper] Tavily results count: ${data.results?.length || 0}`)
+      console.log(`[v0] [BookingScraper] Tavily status: ${response.status}`)
 
-    const allRooms: BookingPriceResult[] = []
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.log(`[v0] [BookingScraper] Tavily error response: ${errorText.slice(0, 200)}`)
+        continue // Try next query
+      }
 
-    if (data.results) {
-      for (const result of data.results) {
-        if (result.raw_content) {
-          const rooms = extractAllRoomsFromHTML(result.raw_content)
-          rooms.forEach((r) => {
-            r.source = "tavily"
-          })
-          allRooms.push(...rooms)
+      const data = await response.json()
+      console.log(`[v0] [BookingScraper] Tavily results count: ${data.results?.length || 0}`)
+
+      if (data.results) {
+        for (const result of data.results) {
+          console.log(`[v0] [BookingScraper] Tavily result URL: ${result.url || "N/A"}`)
+
+          // Try raw_content first (more detailed)
+          if (result.raw_content) {
+            const rooms = extractAllRoomsFromHTML(result.raw_content)
+            console.log(`[v0] [BookingScraper] Extracted ${rooms.length} rooms from raw_content`)
+            rooms.forEach((r) => {
+              r.source = "tavily"
+            })
+            allRooms.push(...rooms)
+          }
+
+          // Also try regular content
+          if (result.content) {
+            const rooms = extractAllRoomsFromHTML(result.content)
+            console.log(`[v0] [BookingScraper] Extracted ${rooms.length} rooms from content`)
+            rooms.forEach((r) => {
+              r.source = "tavily"
+            })
+            allRooms.push(...rooms)
+          }
         }
-        if (result.content) {
-          const rooms = extractAllRoomsFromHTML(result.content)
-          rooms.forEach((r) => {
-            r.source = "tavily"
-          })
-          allRooms.push(...rooms)
-        }
+      }
+
+      // If we found rooms, no need to try other queries
+      if (allRooms.length > 0) {
+        console.log(`[v0] [BookingScraper] Tavily found ${allRooms.length} total rooms`)
+        break
       }
     }
 
-    if (allRooms.length > 0) {
-      console.log(`[v0] [BookingScraper] Tavily found ${allRooms.length} rooms`)
-      return { success: true, results: allRooms, source: "tavily" }
+    // Deduplicate rooms by price+roomType
+    const uniqueRooms = Array.from(
+      new Map(allRooms.map((r) => [`${r.price}-${r.roomType}`, r])).values(),
+    )
+
+    if (uniqueRooms.length > 0) {
+      console.log(`[v0] [BookingScraper] Tavily found ${uniqueRooms.length} unique rooms after deduplication`)
+      return { success: true, results: uniqueRooms, source: "tavily" }
     }
 
-    return { success: false, results: [], source: "tavily", error: "No prices found" }
+    console.log(`[v0] [BookingScraper] Tavily: No prices found in any query`)
+    return { success: false, results: [], source: "tavily", error: "No prices found in search results" }
   } catch (error) {
     console.error("[v0] [BookingScraper] Tavily error:", error)
     return { success: false, results: [], source: "tavily", error: String(error) }
@@ -406,6 +433,13 @@ export async function scrapeBookingPrice(
   }
 
   // Method 3: Puppeteer with Bright Data
+  // NOTE: Puppeteer CANNOT work on Vercel Serverless Functions
+  // - No Chrome/Chromium available
+  // - 50MB bundle size limit
+  // - Cannot run browser processes
+  // - Even with Bright Data, the WebSocket connection fails from Vercel
+  // Keeping this commented out for documentation purposes
+  /*
   try {
     console.log(`[v0] [BookingScraper] Method 3: Puppeteer with Bright Data`)
     const puppeteerResult = await scrapeWithPuppeteer(hotelName, city, checkIn, checkOut)
@@ -428,9 +462,16 @@ export async function scrapeBookingPrice(
   } catch (error) {
     console.error("[v0] [BookingScraper] Puppeteer error:", error)
   }
+  */
 
   console.log(`[v0] [BookingScraper] All methods failed for ${hotelName}`)
-  return { success: false, results: [], source: "none", error: "All methods failed" }
+  console.log(`[v0] [BookingScraper] Available methods on Vercel:`)
+  console.log(`[v0] [BookingScraper]   1. Tavily Search (recommended)`)
+  console.log(`[v0] [BookingScraper]   2. Booking.com Search API (may be blocked)`)
+  console.log(`[v0] [BookingScraper]   3. Direct HTML scraping (may be blocked)`)
+  console.log(`[v0] [BookingScraper] NOTE: Puppeteer cannot work on Vercel Serverless Functions`)
+
+  return { success: false, results: [], source: "none", error: "All available methods failed. Puppeteer not supported on Vercel." }
 }
 
 export async function scrapeBookingViaHtml(

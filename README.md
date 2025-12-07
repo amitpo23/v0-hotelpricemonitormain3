@@ -33,12 +33,31 @@ Continue building your app on:
 
 ### Booking.com Scraper Setup
 
-This project uses Bright Data for scraping hotel prices from Booking.com. To set it up:
+⚠️ **Important**: This project runs on Vercel Serverless Functions, which **cannot** run Puppeteer or browser automation tools.
 
-1. See **[BRIGHT_DATA_SETUP.md](./BRIGHT_DATA_SETUP.md)** for detailed setup instructions
-2. Configure environment variables in Vercel:
-   - `BRIGHT_DATA_USERNAME` - Your Bright Data username (format: `brd-customer-<id>-zone-scraping_browser`)
-   - `BRIGHT_DATA_PASSWORD` - Your Bright Data password
-   - `TAVILY_API_KEY` - Your Tavily API key for search
+#### Recommended Setup: Tavily API
 
-**Important**: Make sure your zone name is `scraping_browser` without any number suffix!
+The scraper uses **Tavily Search API** for reliable scraping that works on Vercel:
+
+1. Get a Tavily API key from [Tavily.com](https://tavily.com)
+2. Configure in Vercel **Environment Variables**:
+   ```
+   TAVILY_API_KEY=tvly-xxxxxxxxxx
+   ```
+3. Redeploy your project
+
+#### Alternative Methods (Built-in)
+
+The scraper also tries these methods automatically:
+- Direct Booking.com API calls (may be blocked by CAPTCHA)
+- HTML parsing of search results
+
+#### Why Not Bright Data?
+
+Bright Data and Puppeteer **do not work** on Vercel because:
+- No Chrome/Chromium available
+- 50MB bundle size limit
+- Cannot run browser processes
+- Limited execution time
+
+See **[BRIGHT_DATA_SETUP.md](./BRIGHT_DATA_SETUP.md)** for more details about limitations.

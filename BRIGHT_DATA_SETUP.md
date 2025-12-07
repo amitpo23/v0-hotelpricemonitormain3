@@ -1,6 +1,45 @@
-# Bright Data Setup Guide
+# Booking.com Scraper Setup Guide
 
-## הבעיה שתוקנה
+## ⚠️ חשוב: מגבלות Vercel
+
+**Puppeteer ו-Bright Data לא יכולים לעבוד ב-Vercel Serverless Functions!**
+
+סיבות:
+- ❌ אין Chrome/Chromium זמין ב-Vercel
+- ❌ מגבלת גודל של 50MB ל-Serverless Functions
+- ❌ לא ניתן להריץ browser processes
+- ❌ מגבלת זמן ריצה: 10 שניות (Hobby) / 60 שניות (Pro)
+
+**הפתרון**: השתמש רק ב-**Tavily Search API** - זה עובד מעולה ב-Vercel!
+
+---
+
+## הגדרת Tavily API (מומלץ)
+
+### 1. קבל API Key מ-Tavily
+
+1. היכנס ל-[Tavily.com](https://tavily.com)
+2. הירשם או התחבר
+3. לך ל-**API Keys**
+4. העתק את ה-API Key שלך
+
+### 2. הגדר ב-Vercel
+
+1. לך ל-[Vercel Dashboard](https://vercel.com)
+2. **Project Settings** → **Environment Variables**
+3. הוסף:
+   ```
+   TAVILY_API_KEY=tvly-xxxxxxxxxx
+   ```
+4. **Redeploy** את הפרויקט
+
+---
+
+## (לא רלוונטי ל-Vercel) Bright Data Setup
+
+**שים לב**: חלק זה רלוונטי רק אם אתה מריץ את הפרויקט על שרת משלך (לא Vercel).
+
+### הבעיה שתוקנה
 הסורק נכשל עם שגיאה 407 (Proxy Authentication Required) כי שם הזונה היה לא נכון.
 
 ## הפתרון
