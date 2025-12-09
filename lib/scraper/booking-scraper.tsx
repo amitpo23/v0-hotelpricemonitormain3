@@ -182,6 +182,8 @@ export function extractPricesFromHTML(html: string): number[] {
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "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"
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY
+const APIFY_API_KEY = process.env.APIFY_API_KEY
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY
 
 async function scrapeViaTavily(
   hotelName: string,
@@ -450,6 +452,221 @@ async function scrapeViaScraperAPI(
   }
 }
 
+async function scrapeViaApify(
+  hotelName: string,
+  city: string,
+  checkIn: string,
+  checkOut: string,
+): Promise<BookingPriceResult[]> {
+  if (!APIFY_API_KEY) {
+    console.log(`[v0] [Apify] No API key configured, skipping`)
+    return []
+  }
+
+  try {
+    console.log(`[v0] [Apify] Starting scrape for ${hotelName} in ${city}`)
+
+    // Use Apify's Booking.com scraper actor
+    const actorInput = {
+      search: `${hotelName} ${city}`,
+      maxItems: 5,
+      sortBy: "distance_from_search",
+      currency: "ILS",
+      language: "en-gb",
+      checkIn: checkIn,
+      checkOut: checkOut,
+      adults: 2,
+      rooms: 1,
+    }
+
+    // Start the actor run
+    const runResponse = await fetch(
+      `https://api.apify.com/v2/acts/voyager~booking-scraper/runs?token=${APIFY_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(actorInput),
+      },
+    )
+
+    if (!runResponse.ok) {
+      console.log(`[v0] [Apify] Failed to start actor: ${runResponse.status}`)
+      return []
+    }
+
+    const runData = await runResponse.json()
+    const runId = runData.data?.id
+
+    if (!runId) {
+      console.log(`[v0] [Apify] No run ID returned`)
+      return []
+    }
+
+    console.log(`[v0] [Apify] Actor run started: ${runId}`)
+
+    // Wait for the run to complete (max 30 seconds)
+    let status = "RUNNING"
+    let attempts = 0
+    const maxAttempts = 15
+
+    while (status === "RUNNING" && attempts < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      const statusResponse = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_KEY}`)
+
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json()
+        status = statusData.data?.status || "FAILED"
+        console.log(`[v0] [Apify] Run status: ${status} (attempt ${attempts + 1}/${maxAttempts})`)
+      }
+
+      attempts++
+    }
+
+    if (status !== "SUCCEEDED") {
+      console.log(`[v0] [Apify] Run did not succeed: ${status}`)
+      return []
+    }
+
+    // Fetch results from dataset
+    const datasetResponse = await fetch(
+      `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${APIFY_API_KEY}`,
+    )
+
+    if (!datasetResponse.ok) {
+      console.log(`[v0] [Apify] Failed to fetch dataset: ${datasetResponse.status}`)
+      return []
+    }
+
+    const items = await datasetResponse.json()
+    console.log(`[v0] [Apify] Got ${items.length} results`)
+
+    const rooms: BookingPriceResult[] = []
+
+    for (const item of items) {
+      // Check if this is the hotel we're looking for
+      const itemName = (item.name || item.hotel_name || "").toLowerCase()
+      const searchName = hotelName.toLowerCase()
+
+      if (!itemName.includes(searchName.split(" ")[0])) {
+        continue // Skip if not matching hotel
+      }
+
+      // Extract price from various fields
+      const price = item.price || item.min_price || item.raw_price
+
+      if (price && typeof price === "number" && price > 50 && price < 50000) {
+        rooms.push({
+          price,
+          originalPrice: item.original_price,
+          roomType: item.room_type || item.room_name || "Standard Room",
+          currency: item.currency || "ILS",
+          available: item.availability !== false,
+          hasBreakfast: item.breakfast_included || false,
+          source: "apify",
+        })
+      }
+
+      // Also check rooms array if present
+      if (item.rooms && Array.isArray(item.rooms)) {
+        for (const room of item.rooms) {
+          const roomPrice = room.price || room.min_price
+          if (roomPrice && typeof roomPrice === "number" && roomPrice > 50 && roomPrice < 50000) {
+            rooms.push({
+              price: roomPrice,
+              roomType: room.name || room.room_type || "Room",
+              currency: room.currency || "ILS",
+              available: true,
+              hasBreakfast: room.breakfast_included || false,
+              source: "apify",
+            })
+          }
+        }
+      }
+    }
+
+    if (rooms.length > 0) {
+      console.log(`[v0] [Apify] Found ${rooms.length} rooms`)
+      return rooms
+    }
+
+    console.log(`[v0] [Apify] No valid rooms found in results`)
+    return []
+  } catch (error) {
+    console.error(`[v0] [Apify] Error:`, error)
+    return []
+  }
+}
+
+async function scrapeViaRapidAPI(
+  hotelName: string,
+  city: string,
+  checkIn: string,
+  checkOut: string,
+): Promise<BookingPriceResult[]> {
+  if (!RAPIDAPI_KEY) {
+    console.log(`[v0] [RapidAPI] No API key configured, skipping`)
+    return []
+  }
+
+  try {
+    console.log(`[v0] [RapidAPI] Starting scrape for ${hotelName}`)
+
+    // Use Booking.com API on RapidAPI
+    const searchUrl = `https://booking-com.p.rapidapi.com/v1/hotels/search?checkin_date=${checkIn}&checkout_date=${checkOut}&dest_type=city&units=metric&order_by=popularity&adults_number=2&room_number=1&dest_id=-781545&filter_by_currency=ILS&locale=en-gb&page_number=0&include_adjacency=true`
+
+    const response = await fetch(searchUrl, {
+      headers: {
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": "booking-com.p.rapidapi.com",
+      },
+    })
+
+    if (!response.ok) {
+      console.log(`[v0] [RapidAPI] Request failed: ${response.status}`)
+      return []
+    }
+
+    const data = await response.json()
+    const results = data.result || []
+    const rooms: BookingPriceResult[] = []
+
+    for (const hotel of results) {
+      const hotelNameLower = (hotel.hotel_name || "").toLowerCase()
+      const searchNameLower = hotelName.toLowerCase()
+
+      if (!hotelNameLower.includes(searchNameLower.split(" ")[0])) {
+        continue
+      }
+
+      const price = hotel.min_total_price || hotel.price_breakdown?.gross_price
+
+      if (price && price > 50 && price < 50000) {
+        rooms.push({
+          price: Math.round(price),
+          roomType: hotel.unit_configuration_label || "Standard Room",
+          currency: hotel.currency_code || "ILS",
+          available: true,
+          hasBreakfast: hotel.hotel_include_breakfast || false,
+          source: "rapidapi",
+        })
+      }
+    }
+
+    if (rooms.length > 0) {
+      console.log(`[v0] [RapidAPI] Found ${rooms.length} rooms`)
+      return rooms
+    }
+
+    return []
+  } catch (error) {
+    console.error(`[v0] [RapidAPI] Error:`, error)
+    return []
+  }
+}
+
 export async function scrapeBookingPrices(
   hotelName: string,
   location: string,
@@ -459,6 +676,22 @@ export async function scrapeBookingPrices(
 ): Promise<BookingScraperResponse> {
   console.log("[v0] [BookingScraper] Starting scrape for:", hotelName)
   console.log("[v0] [BookingScraper] Dates:", checkIn, "to", checkOut)
+
+  try {
+    console.log("[v0] [BookingScraper] Trying Method 0: Apify...")
+    const apifyResults = await scrapeViaApify(hotelName, location, checkIn, checkOut)
+    if (apifyResults.length > 0) {
+      console.log("[v0] [BookingScraper] Method 0 SUCCESS! Found", apifyResults.length, "rooms")
+      return {
+        success: true,
+        results: apifyResults,
+        source: "apify",
+      }
+    }
+    console.log("[v0] [BookingScraper] Method 0 returned no results or no API key")
+  } catch (error) {
+    console.error("[v0] [BookingScraper] Method 0 failed:", error)
+  }
 
   // Method 1: Tavily Search (AI-powered, fastest)
   try {
@@ -475,6 +708,22 @@ export async function scrapeBookingPrices(
     console.log("[v0] [BookingScraper] Method 1 returned no results")
   } catch (error) {
     console.error("[v0] [BookingScraper] Method 1 failed:", error)
+  }
+
+  try {
+    console.log("[v0] [BookingScraper] Trying Method 1.5: RapidAPI...")
+    const rapidResults = await scrapeViaRapidAPI(hotelName, location, checkIn, checkOut)
+    if (rapidResults.length > 0) {
+      console.log("[v0] [BookingScraper] Method 1.5 SUCCESS! Found", rapidResults.length, "rooms")
+      return {
+        success: true,
+        results: rapidResults,
+        source: "rapidapi",
+      }
+    }
+    console.log("[v0] [BookingScraper] Method 1.5 returned no results or no API key")
+  } catch (error) {
+    console.error("[v0] [BookingScraper] Method 1.5 failed:", error)
   }
 
   // Method 2: ScraperAPI (bypasses blocks)

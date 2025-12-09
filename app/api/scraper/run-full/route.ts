@@ -167,6 +167,7 @@ export async function POST(request: Request) {
       price: number
       source: string
       room_type: string
+      availability: boolean
     }> = []
 
     const priceHistoryRecords: Array<{
@@ -248,6 +249,7 @@ export async function POST(request: Request) {
                 price: room.price,
                 source: "Booking.com",
                 room_type: room.roomType,
+                availability: true,
               })
             }
           } else {
@@ -311,7 +313,7 @@ export async function POST(request: Request) {
       for (let i = 0; i < competitorPriceResults.length; i += batchSize) {
         const batch = competitorPriceResults.slice(i, i + batchSize)
 
-        const { data, error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
+        const { data, error: competitorError } = await supabase.from("competitor_daily_prices").insert(
           batch.map((r) => ({
             hotel_id: r.hotel_id,
             competitor_id: r.competitor_id,
@@ -319,41 +321,20 @@ export async function POST(request: Request) {
             price: r.price,
             source: r.source,
             room_type: r.room_type,
+            availability: r.availability,
             scraped_at: new Date().toISOString(),
           })),
-          { onConflict: "competitor_id,date,source" },
         )
 
         if (competitorError) {
           console.error(`[v0] Batch ${Math.floor(i / batchSize) + 1} error:`, JSON.stringify(competitorError))
-
-          // Try inserting one by one to see which record fails
-          for (const record of batch) {
-            const { error: singleError } = await supabase.from("competitor_daily_prices").upsert(
-              {
-                hotel_id: record.hotel_id,
-                competitor_id: record.competitor_id,
-                date: record.date,
-                price: record.price,
-                source: record.source,
-                room_type: record.room_type,
-                scraped_at: new Date().toISOString(),
-              },
-              { onConflict: "competitor_id,date,source" },
-            )
-            if (singleError) {
-              console.error(`[v0] Single record error:`, JSON.stringify(singleError), `Record:`, JSON.stringify(record))
-            } else {
-              savedCount++
-            }
-          }
         } else {
           savedCount += batch.length
           console.log(`[v0] Saved batch ${Math.floor(i / batchSize) + 1}: ${batch.length} records`)
         }
       }
 
-      console.log(`[v0] TOTAL SAVED: ${savedCount} records`)
+      console.log(`[v0] TOTAL SAVED to competitor_daily_prices: ${savedCount} records`)
     }
 
     if (results.length > 0) {
@@ -361,17 +342,41 @@ export async function POST(request: Request) {
         hotel_id: hotelId,
         room_type_id: r.room_type_id,
         date: r.date,
-        base_price: r.our_price,
+        our_price: r.our_price, // ✅ Correct column name
         recommended_price: r.recommended_price,
         demand_level: r.demand_level,
-        competitor_avg_price: r.competitor_avg,
-        data_sources: r.data_sources,
+        avg_competitor_price: r.competitor_avg, // ✅ Correct column name
+        min_competitor_price: r.competitor_avg ? Math.round(r.competitor_avg * 0.9) : null,
+        max_competitor_price: r.competitor_avg ? Math.round(r.competitor_avg * 1.1) : null,
+        price_recommendation: r.recommendation,
+        autopilot_action: r.autopilot_action,
+        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       }))
 
-      const { error: pricesError } = await supabase
-        .from("daily_prices")
-        .upsert(dailyPricesData, { onConflict: "hotel_id,date,room_type_id" })
-      if (pricesError) console.error("[v0] Error saving daily prices:", pricesError)
+      console.log(`[v0] Saving ${dailyPricesData.length} daily_prices records`)
+      console.log(`[v0] Sample daily_price:`, JSON.stringify(dailyPricesData[0]))
+
+      const { error: pricesError } = await supabase.from("daily_prices").insert(dailyPricesData)
+
+      if (pricesError) {
+        console.error("[v0] Error saving daily prices:", JSON.stringify(pricesError))
+
+        // Try inserting one by one to identify the problematic record
+        let savedDailyCount = 0
+        for (const record of dailyPricesData) {
+          const { error: singleError } = await supabase.from("daily_prices").insert(record)
+
+          if (singleError) {
+            console.error(`[v0] Single daily_price error:`, JSON.stringify(singleError))
+          } else {
+            savedDailyCount++
+          }
+        }
+        console.log(`[v0] Saved ${savedDailyCount}/${dailyPricesData.length} daily_prices individually`)
+      } else {
+        console.log(`[v0] Successfully saved ${dailyPricesData.length} daily_prices records`)
+      }
     }
 
     const increases = results.filter((r) => r.autopilot_action === "increase").length
