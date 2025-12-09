@@ -359,19 +359,27 @@ export async function POST(request: Request) {
     if (results.length > 0) {
       const dailyPricesData = results.map((r) => ({
         hotel_id: hotelId,
-        room_type_id: r.room_type_id,
         date: r.date,
-        base_price: r.our_price,
+        our_price: r.our_price,
         recommended_price: r.recommended_price,
         demand_level: r.demand_level,
-        competitor_avg_price: r.competitor_avg,
-        data_sources: r.data_sources,
+        avg_competitor_price: r.competitor_avg,
+        min_competitor_price: r.competitor_avg ? Math.round(r.competitor_avg * 0.9) : null,
+        max_competitor_price: r.competitor_avg ? Math.round(r.competitor_avg * 1.1) : null,
+        price_recommendation: r.recommendation,
+        autopilot_action: r.autopilot_action,
+        updated_at: new Date().toISOString(),
       }))
 
       const { error: pricesError } = await supabase
         .from("daily_prices")
-        .upsert(dailyPricesData, { onConflict: "hotel_id,date,room_type_id" })
-      if (pricesError) console.error("[v0] Error saving daily prices:", pricesError)
+        .upsert(dailyPricesData, { onConflict: "hotel_id,date" })
+
+      if (pricesError) {
+        console.error("[v0] Error saving daily prices:", pricesError)
+      } else {
+        console.log(`[v0] Successfully saved ${dailyPricesData.length} daily prices`)
+      }
     }
 
     const increases = results.filter((r) => r.autopilot_action === "increase").length
