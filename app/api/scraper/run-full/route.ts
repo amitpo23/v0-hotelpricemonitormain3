@@ -229,11 +229,17 @@ export async function POST(request: Request) {
             checkOutDate,
           )
 
+          if (!scrapedResult) {
+            failedScrapes++
+            console.log(`[v0] FAILED: ${competitor.competitor_hotel_name} - null result`)
+            continue
+          }
+
           console.log(
-            `[v0] Scrape result for ${competitor.competitor_hotel_name}: success=${scrapedResult.success}, rooms=${scrapedResult.rooms.length}`,
+            `[v0] Scrape result for ${competitor.competitor_hotel_name}: success=${scrapedResult.success}, rooms=${scrapedResult.rooms?.length || 0}`,
           )
 
-          if (scrapedResult.success && scrapedResult.rooms.length > 0) {
+          if (scrapedResult.success && scrapedResult.rooms && scrapedResult.rooms.length > 0) {
             successfulScrapes++
             totalRoomsFound += scrapedResult.rooms.length
             console.log(`[v0] SUCCESS: ${competitor.competitor_hotel_name} - ${scrapedResult.rooms.length} room types`)
@@ -252,7 +258,9 @@ export async function POST(request: Request) {
             }
           } else {
             failedScrapes++
-            console.log(`[v0] FAILED: ${competitor.competitor_hotel_name} for ${dateStr}`)
+            console.log(
+              `[v0] FAILED: ${competitor.competitor_hotel_name} for ${dateStr}${scrapedResult.errorMessage ? ` - ${scrapedResult.errorMessage}` : ""}`,
+            )
           }
         } catch (error) {
           failedScrapes++
