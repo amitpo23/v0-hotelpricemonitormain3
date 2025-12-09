@@ -87,15 +87,6 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
   const generatePredictionsForMonth = async () => {
     setIsGenerating(true)
     try {
-      console.log(
-        "[v0] generatePredictionsForMonth - selectedMonth:",
-        selectedMonth,
-        "sending month:",
-        selectedMonth.month + 1,
-        "year:",
-        selectedMonth.year,
-      )
-
       const response = await fetch("/api/predictions/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
