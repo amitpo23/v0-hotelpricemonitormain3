@@ -2,6 +2,7 @@ export interface BookingPriceResult {
   price: number
   originalPrice?: number
   roomType: string
+  roomName?: string
   currency: string
   available: boolean
   hasBreakfast: boolean
@@ -9,6 +10,9 @@ export interface BookingPriceResult {
   discount?: number
   source?: string
   roomsLeft?: number
+  mealPlan?: string
+  maxOccupancy?: number
+  rawData?: any
 }
 
 export interface BookingScraperResponse {

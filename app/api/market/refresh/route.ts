@@ -14,91 +14,65 @@ export async function POST() {
 
     const today = new Date().toISOString().split("T")[0]
 
-    // Generate simulated market data for each hotel location
-    const locations = [...new Set(hotels.map((h) => h.location).filter(Boolean))]
-
-    for (const location of locations) {
-      // Check if we already have data for today
-      const { data: existing } = await supabase
-        .from("regional_market_data")
-        .select("id")
-        .eq("city", location)
-        .eq("date", today)
-        .single()
-
-      if (!existing) {
-        // Generate regional market data
-        const baseOccupancy = 60 + Math.random() * 30
-        const basePrice = 100 + Math.random() * 150
-        const demandLevels = ["low", "medium", "high", "peak"]
-        const demandLevel = demandLevels[Math.floor(Math.random() * demandLevels.length)]
-
-        await supabase.from("regional_market_data").insert({
-          region: "Default Region",
-          city: location,
-          date: today,
-          avg_hotel_price: basePrice,
-          avg_occupancy_rate: baseOccupancy,
-          total_hotels_tracked: Math.floor(10 + Math.random() * 40),
-          demand_level: demandLevel,
-          weather_impact: Math.random() > 0.5 ? "Sunny" : "Cloudy",
-          events: Math.random() > 0.7 ? [{ name: "Local Conference", date: today, impact: "positive" }] : null,
-        })
-      }
-    }
-
-    // Generate competitor data for each hotel
+    // Aggregate REAL competitor data for each hotel
     for (const hotel of hotels) {
-      const competitors = ["Booking.com", "Expedia", "Hotels.com", "Agoda", "Trivago"]
+      // Get real competitor prices from scraper
+      const { data: competitors } = await supabase
+        .from("hotel_competitors")
+        .select("id, competitor_hotel_name")
+        .eq("hotel_id", hotel.id)
+        .eq("is_active", true)
 
-      const basePrice = Number(hotel.base_price) || 150
+      if (!competitors || competitors.length === 0) continue
 
+      const competitorIds = competitors.map((c) => c.id)
+
+      // Get today's scraped prices
+      const { data: todayPrices } = await supabase
+        .from("competitor_daily_prices")
+        .select("competitor_id, price, room_type, source, scraped_at")
+        .in("competitor_id", competitorIds)
+        .eq("date", today)
+        .order("scraped_at", { ascending: false })
+
+      if (!todayPrices || todayPrices.length === 0) continue
+
+      // Update competitor_data with real scraped prices (no mock data)
       for (const competitor of competitors) {
-        // Random price variation around hotel's base price
-        const variance = (Math.random() - 0.5) * 0.4 // -20% to +20%
-        const competitorPrice = basePrice * (1 + variance)
+        const competitorPrices = todayPrices.filter((p) => p.competitor_id === competitor.id)
+        if (competitorPrices.length === 0) continue
 
-        await supabase.from("competitor_data").insert({
-          hotel_id: hotel.id,
-          competitor_name: competitor,
-          competitor_url: `https://${competitor.toLowerCase().replace(/\./g, "")}.com`,
-          price: competitorPrice,
-          availability: Math.random() > 0.1,
-          rating: 3.5 + Math.random() * 1.5,
-          review_count: Math.floor(100 + Math.random() * 900),
-          room_type: "Standard Room",
-        })
+        // Get the most recent price for each room type
+        const roomTypePrices = new Map<string, number>()
+        for (const price of competitorPrices) {
+          const key = price.room_type || "Standard"
+          if (!roomTypePrices.has(key)) {
+            roomTypePrices.set(key, price.price)
+          }
+        }
+
+        // Insert real competitor data
+        for (const [roomType, price] of roomTypePrices) {
+          await supabase.from("competitor_data").upsert(
+            {
+              hotel_id: hotel.id,
+              competitor_name: competitor.competitor_hotel_name,
+              price: price,
+              room_type: roomType,
+              availability: true,
+              scraped_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "hotel_id,competitor_name,room_type",
+            },
+          )
+        }
       }
-    }
-
-    // Generate demand factors
-    const factorTypes = ["event", "holiday", "season", "weather", "economic"]
-    const factorNames = [
-      "Summer Season Peak",
-      "Local Festival",
-      "Business Conference",
-      "Holiday Weekend",
-      "Good Weather Forecast",
-    ]
-
-    for (let i = 0; i < 3; i++) {
-      const factorType = factorTypes[Math.floor(Math.random() * factorTypes.length)]
-      const factorName = factorNames[Math.floor(Math.random() * factorNames.length)]
-      const impactScore = (Math.random() - 0.3) * 0.6 // Mostly positive impact
-
-      await supabase.from("demand_factors").insert({
-        region: "Default Region",
-        date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-        factor_type: factorType,
-        factor_name: factorName,
-        impact_score: impactScore,
-        description: `${factorName} expected to ${impactScore > 0 ? "increase" : "decrease"} demand`,
-      })
     }
 
     return NextResponse.json({
       success: true,
-      message: "Market data refreshed successfully",
+      message: "Market data refreshed from real scraped data",
     })
   } catch (error) {
     console.error("Error refreshing market data:", error)

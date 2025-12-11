@@ -167,7 +167,12 @@ export async function POST(request: Request) {
       price: number
       source: string
       room_type: string
+      room_name: string
       availability: boolean
+      original_price: number | null
+      meal_plan: string | null
+      max_occupancy: number | null
+      raw_data: any | null
     }> = []
 
     const priceHistoryRecords: Array<{
@@ -249,7 +254,12 @@ export async function POST(request: Request) {
                 price: room.price,
                 source: "Booking.com",
                 room_type: room.roomType,
+                room_name: room.roomName || room.roomType,
                 availability: true,
+                original_price: room.originalPrice || null,
+                meal_plan: room.mealPlan || null,
+                max_occupancy: room.maxOccupancy || null,
+                raw_data: room.rawData || null,
               })
             }
           } else {
@@ -321,7 +331,12 @@ export async function POST(request: Request) {
             price: r.price,
             source: r.source,
             room_type: r.room_type,
+            room_name: r.room_name,
             availability: r.availability,
+            original_price: r.original_price,
+            meal_plan: r.meal_plan,
+            max_occupancy: r.max_occupancy,
+            raw_data: r.raw_data,
             scraped_at: new Date().toISOString(),
           })),
           {
