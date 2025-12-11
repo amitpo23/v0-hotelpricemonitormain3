@@ -313,7 +313,7 @@ export async function POST(request: Request) {
       for (let i = 0; i < competitorPriceResults.length; i += batchSize) {
         const batch = competitorPriceResults.slice(i, i + batchSize)
 
-        const { data, error: competitorError } = await supabase.from("competitor_daily_prices").insert(
+        const { data, error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
           batch.map((r) => ({
             hotel_id: r.hotel_id,
             competitor_id: r.competitor_id,
@@ -324,6 +324,10 @@ export async function POST(request: Request) {
             availability: r.availability,
             scraped_at: new Date().toISOString(),
           })),
+          {
+            onConflict: "competitor_id,date,source",
+            ignoreDuplicates: false,
+          },
         )
 
         if (competitorError) {
