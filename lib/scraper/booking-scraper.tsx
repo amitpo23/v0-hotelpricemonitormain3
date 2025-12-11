@@ -473,12 +473,12 @@ async function scrapeViaApify(
       token: APIFY_API_KEY,
     })
 
-    const searchQuery = `${hotelName} hotel ${city}`
+    const searchQuery = `${hotelName} ${city}`
 
     // Prepare Actor input for voyager/booking-scraper
     const input = {
       search: searchQuery,
-      maxItems: 5, // Reduced to get faster results
+      maxItems: 3, // Reduced to 3 for faster results
       sortBy: "distance_from_search",
       currency: "ILS",
       language: "en-gb",
@@ -492,27 +492,16 @@ async function scrapeViaApify(
       },
     }
 
-    console.log(`[v0] [Apify] Running actor with input:`, input)
+    console.log(`[v0] [Apify] Running actor with input:`, JSON.stringify(input))
 
-    // Using startRun + waitForFinish for better control
-    const run = await client.actor("voyager/booking-scraper").start(input)
-
-    console.log(`[v0] [Apify] Actor started with runId: ${run.id}`)
-
-    // Wait for up to 25 seconds for results
-    const finishedRun = await client.run(run.id).waitForFinish({
-      waitSecs: 25,
+    const run = await client.actor("voyager/booking-scraper").call(input, {
+      waitSecs: 40, // Wait up to 40 seconds
     })
 
-    console.log(`[v0] [Apify] Actor run status: ${finishedRun.status}`)
-
-    // Even if not fully succeeded, try to get partial results
-    if (finishedRun.status !== "SUCCEEDED" && finishedRun.status !== "RUNNING") {
-      console.log(`[v0] [Apify] Run status: ${finishedRun.status}`)
-    }
+    console.log(`[v0] [Apify] Actor completed with status: ${run.status}`)
 
     // Fetch results from the run's dataset
-    const { items } = await client.dataset(finishedRun.defaultDatasetId).listItems()
+    const { items } = await client.dataset(run.defaultDatasetId).listItems()
 
     console.log(`[v0] [Apify] Got ${items.length} hotel results`)
 
@@ -524,62 +513,79 @@ async function scrapeViaApify(
     const rooms: BookingPriceResult[] = []
 
     for (const item of items as any[]) {
-      // Check if this is the hotel we're looking for
-      const itemName = (item.name || item.hotel_name || "").toLowerCase()
-      const searchName = hotelName.toLowerCase()
-      const firstWord = searchName.split(" ")[0]
+      console.log(`[v0] [Apify] Processing hotel: ${item.name || item.hotel_name || "unknown"}`)
 
-      // Match by first word of hotel name (relaxed matching)
-      const matchFound = itemName.includes(firstWord) || itemName.includes(searchName) || firstWord.length <= 3 // Allow short names
-
-      if (!matchFound) {
-        console.log(`[v0] [Apify] Skipping ${itemName} - doesn't match ${firstWord}`)
-        continue
-      }
-
-      console.log(`[v0] [Apify] Processing hotel: ${item.name}`)
-
-      // Extract price from various possible fields
-      let price: number | null = null
-
-      // Try multiple price extraction methods
-      if (item.price && typeof item.price === "number") {
-        price = item.price
-      } else if (item.price && typeof item.price === "string") {
-        const match = item.price.match(/[\d,]+/)
-        if (match) price = Number.parseInt(match[0].replace(/,/g, ""))
-      } else if (item.rawPrice) {
-        price = typeof item.rawPrice === "number" ? item.rawPrice : Number.parseInt(item.rawPrice)
-      } else if (item.priceBreakdown?.grossPrice?.value) {
-        price = item.priceBreakdown.grossPrice.value
-      }
-
-      // Try to extract from rooms array
-      if (!price && item.rooms && Array.isArray(item.rooms)) {
+      // 1. Try rooms array first (most detailed)
+      if (item.rooms && Array.isArray(item.rooms)) {
         for (const room of item.rooms) {
-          if (room.price) {
-            const roomPrice =
-              typeof room.price === "number" ? room.price : Number.parseInt(String(room.price).replace(/[^\d]/g, ""))
-            if (roomPrice > 0) {
-              rooms.push({
-                price: roomPrice,
-                currency: "ILS",
-                roomType: room.name || room.roomType || "Standard Room",
-                source: "Apify",
-              })
+          // Try various price fields
+          let roomPrice: number | null = null
+
+          if (room.b_raw_price) {
+            roomPrice = Number.parseFloat(room.b_raw_price)
+          } else if (room.price) {
+            roomPrice =
+              typeof room.price === "number" ? room.price : Number.parseFloat(String(room.price).replace(/[^\d.]/g, ""))
+          } else if (room.b_price) {
+            const match = String(room.b_price).match(/[\d,]+/)
+            if (match) roomPrice = Number.parseInt(match[0].replace(/,/g, ""))
+          }
+
+          if (roomPrice && roomPrice > 0) {
+            rooms.push({
+              price: Math.round(roomPrice),
+              currency: "ILS",
+              roomType: room.name || room.roomName || room.b_name || "Room",
+              source: "Apify",
+            })
+            console.log(`[v0] [Apify] Found room price: ₪${roomPrice} for ${room.name || "Room"}`)
+          }
+
+          // Also check roomOptions within room
+          if (room.roomOptions && Array.isArray(room.roomOptions)) {
+            for (const option of room.roomOptions) {
+              let optPrice: number | null = null
+              if (option.b_raw_price) {
+                optPrice = Number.parseFloat(option.b_raw_price)
+              } else if (option.b_price) {
+                const match = String(option.b_price).match(/[\d,]+/)
+                if (match) optPrice = Number.parseInt(match[0].replace(/,/g, ""))
+              }
+              if (optPrice && optPrice > 0) {
+                rooms.push({
+                  price: Math.round(optPrice),
+                  currency: "ILS",
+                  roomType: room.name || option.name || "Room Option",
+                  source: "Apify",
+                })
+                console.log(`[v0] [Apify] Found option price: ₪${optPrice}`)
+              }
             }
           }
         }
       }
 
-      // Add main price if found
-      if (price && price > 0) {
+      // 2. Try direct price fields
+      let mainPrice: number | null = null
+      if (item.price && typeof item.price === "number") {
+        mainPrice = item.price
+      } else if (item.price && typeof item.price === "string") {
+        const match = item.price.match(/[\d,]+/)
+        if (match) mainPrice = Number.parseInt(match[0].replace(/,/g, ""))
+      } else if (item.rawPrice) {
+        mainPrice = typeof item.rawPrice === "number" ? item.rawPrice : Number.parseFloat(item.rawPrice)
+      } else if (item.priceBreakdown?.grossPrice?.value) {
+        mainPrice = item.priceBreakdown.grossPrice.value
+      }
+
+      if (mainPrice && mainPrice > 0) {
         rooms.push({
-          price: price,
+          price: Math.round(mainPrice),
           currency: "ILS",
           roomType: item.roomType || item.roomName || "Standard Room",
           source: "Apify",
         })
+        console.log(`[v0] [Apify] Found main price: ₪${mainPrice}`)
       }
     }
 
@@ -592,7 +598,7 @@ async function scrapeViaApify(
       }
     }
 
-    console.log(`[v0] [Apify] Extracted ${uniqueRooms.length} unique room prices`)
+    console.log(`[v0] [Apify] Extracted ${uniqueRooms.length} unique room prices from ${rooms.length} total`)
     return uniqueRooms
   } catch (error) {
     console.error(`[v0] [Apify] Error:`, error)
