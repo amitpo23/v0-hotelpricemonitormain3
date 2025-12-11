@@ -20,6 +20,7 @@ export interface BookingScraperResponse {
   results: BookingPriceResult[]
   source: string
   error?: string
+  method?: string
 }
 
 function extractAllRoomsFromHTML(html: string): BookingPriceResult[] {
@@ -462,36 +463,23 @@ async function scrapeViaApify(
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult[]> {
-  console.log(
-    `[v0] [Apify] Starting scrape - hotelName: "${hotelName}", city: "${city}", checkIn: ${checkIn}, checkOut: ${checkOut}`,
-  )
-  console.log(`[v0] [Apify] APIFY_API_KEY exists: ${!!APIFY_API_KEY}, length: ${APIFY_API_KEY?.length || 0}`)
+  console.log(`[v0] [Apify] Starting search for "${hotelName}" in ${city}`)
 
   if (!APIFY_API_KEY) {
-    console.log(`[v0] [Apify] ❌ No API key configured (APIFY_API_KEY is empty), skipping`)
+    console.log(`[v0] [Apify] No API key configured`)
     return []
   }
 
-  console.log(`[v0] [Apify] ✅ API key found: ${APIFY_API_KEY.substring(0, 8)}...`)
-
   try {
-    console.log(`[v0] [Apify] Starting scrape for ${hotelName} in ${city}`)
-
-    // Dynamic import to avoid bundling if not needed
     const { ApifyClient } = await import("apify-client")
-
-    const client = new ApifyClient({
-      token: APIFY_API_KEY,
-    })
-
-    const searchQuery = `${hotelName} hotel ${city}`
+    const client = new ApifyClient({ token: APIFY_API_KEY })
 
     const ACTOR_ID = "oeiQgfg5fsmIJB7Cn"
 
-    // Prepare Actor input for booking-scraper
+    // More specific search query
     const input = {
-      search: searchQuery,
-      maxItems: 5,
+      search: `"${hotelName}" ${city}`,
+      maxItems: 3, // Reduced from 5 to speed up
       sortBy: "distance_from_search",
       currency: "ILS",
       language: "en-gb",
@@ -500,101 +488,73 @@ async function scrapeViaApify(
       adults: 2,
       rooms: 1,
       includeReviews: false,
-      proxyConfiguration: {
-        useApifyProxy: true,
-      },
+      proxyConfiguration: { useApifyProxy: true },
     }
 
-    console.log(`[v0] [Apify] Running actor ${ACTOR_ID} with input:`, JSON.stringify(input, null, 2))
+    console.log(`[v0] [Apify] Running actor with search: "${input.search}"`)
 
+    // Shorter timeout - 35 seconds
     const run = await client.actor(ACTOR_ID).call(input, {
-      waitSecs: 45,
-      memory: 4096,
+      waitSecs: 35,
+      memory: 2048,
     })
 
-    console.log(`[v0] [Apify] ✅ Actor finished - status: ${run.status}, dataset: ${run.defaultDatasetId}`)
+    console.log(`[v0] [Apify] Run status: ${run.status}`)
 
-    if (run.status !== "SUCCEEDED") {
-      console.log(`[v0] [Apify] ⚠️ Actor run status is ${run.status}, not SUCCEEDED`)
-    }
-
-    // Fetch results from the Actor's dataset
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
+    console.log(`[v0] [Apify] Got ${items.length} items`)
 
-    console.log(`[v0] [Apify] Got ${items.length} items from dataset`)
-
-    if (items.length === 0) {
-      console.log(`[v0] [Apify] ❌ No hotels found for search: "${searchQuery}"`)
-      return []
-    }
-
-    console.log(`[v0] [Apify] First item structure:`, JSON.stringify(items[0], null, 2).substring(0, 500))
-
-    // Extract prices from all hotels and all rooms
     const results: BookingPriceResult[] = []
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i] as any
-      const hotelName = item.name || item.hotel_name || item.title || "Unknown Hotel"
-      console.log(`[v0] [Apify] Processing item ${i + 1}/${items.length}: ${hotelName}`)
+    for (const item of items) {
+      const itemName = (item.name || item.hotelName || "").toLowerCase()
+      const searchName = hotelName.toLowerCase()
 
-      // Try to extract from rooms array
-      if (Array.isArray(item.rooms) && item.rooms.length > 0) {
-        console.log(`[v0] [Apify]   Found ${item.rooms.length} rooms`)
-
-        for (const room of item.rooms) {
-          const roomPrice = room.price || room.pricePerNight || room.totalPrice || room.displayPrice
-
-          if (roomPrice && typeof roomPrice === "number" && roomPrice > 0) {
-            results.push({
-              price: roomPrice,
-              currency: room.currency || item.currency || "ILS",
-              roomType: room.name || room.roomType || room.type || "Standard Room",
-              available: true,
-              source: "Apify",
-            })
-            console.log(`[v0] [Apify]     ✅ Room "${room.name || "Unknown"}" - ₪${roomPrice}`)
-          }
-        }
+      // Only use exact or close matches
+      if (!itemName.includes(searchName) && !searchName.includes(itemName.split(" ")[0])) {
+        console.log(`[v0] [Apify] Skipping non-matching hotel: ${item.name}`)
+        continue
       }
 
-      // Try multiple fields for price
-      const priceFields = [
-        item.price,
-        item.pricePerNight,
-        item.b_price,
-        item.b_raw_price,
-        item.cheapestPrice,
-        item.minPrice,
-      ]
+      console.log(`[v0] [Apify] Processing matching hotel: ${item.name}`)
 
-      for (const priceValue of priceFields) {
-        if (priceValue && typeof priceValue === "number" && priceValue > 0) {
-          // Check if not duplicate
-          const isDuplicate = results.some((r) => Math.abs(r.price - priceValue) < 10)
-          if (!isDuplicate) {
+      // Extract prices
+      const price = item.price || item.pricePerNight || item.cheapestPrice || item.b_raw_price
+
+      if (price && price > 0) {
+        results.push({
+          price: Number.parseFloat(String(price)),
+          roomType: item.roomType || "Standard Room",
+          currency: "ILS",
+          available: true,
+          hasBreakfast: false,
+          source: "Booking.com",
+        })
+      }
+
+      // Check for room array
+      const rooms = item.rooms || item.roomOptions || []
+      if (Array.isArray(rooms)) {
+        for (const room of rooms) {
+          const roomPrice = room.price || room.pricePerNight
+          if (roomPrice && roomPrice > 0) {
             results.push({
-              price: priceValue,
-              currency: item.currency || "ILS",
-              roomType: item.roomType || "Standard Room",
+              price: Number.parseFloat(String(roomPrice)),
+              roomType: room.name || room.roomName || "Standard Room",
+              currency: "ILS",
               available: true,
-              source: "Apify",
+              hasBreakfast: room.breakfast || false,
+              source: "Booking.com",
             })
-            console.log(`[v0] [Apify]     ✅ Hotel price - ₪${priceValue}`)
           }
-          break // Take first valid price found
         }
       }
     }
 
-    console.log(`[v0] [Apify] ✅ Total extracted ${results.length} prices`)
+    console.log(`[v0] [Apify] Final results: ${results.length} rooms`)
     return results
   } catch (error) {
-    console.error(`[v0] [Apify] ❌ Error:`, error)
-    if (error instanceof Error) {
-      console.error(`[v0] [Apify] Error message: ${error.message}`)
-      console.error(`[v0] [Apify] Error stack:`, error.stack)
-    }
+    console.error("[v0] [Apify] Error:", error)
     return []
   }
 }
@@ -666,104 +626,98 @@ async function scrapeViaRapidAPI(
   }
 }
 
-async function scrapeViaDirectBookingUrl(
+async function scrapeViaDirectUrl(
   bookingUrl: string,
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult[]> {
-  console.log("[v0] [DirectURL] Trying to scrape from URL:", bookingUrl)
+  console.log(`[v0] [DirectURL] Starting with URL: ${bookingUrl}`)
 
-  const apiKey = process.env.APIFY_API_KEY
-  if (!apiKey) {
-    console.log("[v0] [DirectURL] No APIFY_API_KEY found")
+  if (!APIFY_API_KEY) {
+    console.log("[v0] [DirectURL] No API key")
     return []
   }
 
   try {
-    // Extract hotel ID from booking URL
-    const hotelIdMatch = bookingUrl.match(/hotel\/[a-z]{2}\/([^.]+)/)
-    const hotelId = hotelIdMatch ? hotelIdMatch[1] : null
-
-    console.log("[v0] [DirectURL] Extracted hotel ID:", hotelId)
-
-    // Use Apify with the direct URL
     const { ApifyClient } = await import("apify-client")
-    const client = new ApifyClient({ token: apiKey })
+    const client = new ApifyClient({ token: APIFY_API_KEY })
+
+    // Build full URL with dates
+    const urlWithDates = new URL(bookingUrl)
+    urlWithDates.searchParams.set("checkin", checkIn)
+    urlWithDates.searchParams.set("checkout", checkOut)
+    urlWithDates.searchParams.set("selected_currency", "ILS")
+    urlWithDates.searchParams.set("group_adults", "2")
+    urlWithDates.searchParams.set("no_rooms", "1")
 
     const input = {
-      startUrls: [{ url: bookingUrl }],
-      checkIn: checkIn,
-      checkOut: checkOut,
-      rooms: 1,
-      adults: 2,
-      children: 0,
-      currency: "ILS",
-      language: "en-gb",
-      maxItems: 1,
+      startUrls: [{ url: urlWithDates.toString() }],
+      maxRequestsPerStartUrl: 1,
+      proxyConfiguration: { useApifyProxy: true },
     }
 
-    console.log("[v0] [DirectURL] Starting Apify with direct URL...")
+    console.log("[v0] [DirectURL] Running with URL:", urlWithDates.toString())
 
+    // Use shorter timeout - 30 seconds
     const run = await client.actor("dtrungtin/booking-scraper").call(input, {
-      waitSecs: 60,
-      memory: 4096,
+      waitSecs: 30,
+      memory: 2048,
     })
 
-    console.log("[v0] [DirectURL] Run completed, status:", run.status)
+    console.log("[v0] [DirectURL] Run status:", run.status)
 
     if (run.status !== "SUCCEEDED") {
-      console.log("[v0] [DirectURL] Run failed")
-      return []
+      // Try to get partial results
+      console.log("[v0] [DirectURL] Run did not succeed, trying to get partial results...")
     }
 
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
     console.log("[v0] [DirectURL] Got", items.length, "items from dataset")
 
-    const rooms: BookingPriceResult[] = []
+    const results: BookingPriceResult[] = []
 
     for (const item of items) {
-      console.log("[v0] [DirectURL] Processing item:", item.name || item.hotel_name)
+      console.log("[v0] [DirectURL] Processing item:", item.name || item.hotelName || "unknown")
 
-      // Extract rooms from the item
-      const itemRooms = (item as any).rooms || (item as any).roomOptions || []
+      // Extract room prices from the item
+      const rooms = item.rooms || item.roomOptions || []
 
-      if (Array.isArray(itemRooms) && itemRooms.length > 0) {
-        for (const room of itemRooms) {
+      if (Array.isArray(rooms) && rooms.length > 0) {
+        for (const room of rooms) {
           const price = room.price || room.pricePerNight || room.totalPrice
-          const roomName = room.name || room.roomType || room.description || "Standard Room"
-
-          if (price && price > 50 && price < 50000) {
-            rooms.push({
-              price: Math.round(price),
-              roomType: roomName,
+          if (price && price > 0) {
+            results.push({
+              price: Number.parseFloat(String(price)),
+              originalPrice: room.originalPrice || room.strikethroughPrice || undefined,
+              roomType: room.name || room.roomName || room.type || "Standard Room",
+              roomName: room.name || room.roomName,
               currency: "ILS",
               available: true,
-              hasBreakfast: room.breakfast || false,
-              source: "apify_direct",
+              hasBreakfast: room.breakfast || room.includesBreakfast || false,
+              mealPlan: room.mealPlan || (room.breakfast ? "Breakfast included" : undefined),
+              maxOccupancy: room.maxOccupancy || room.persons || undefined,
+              source: "Booking.com",
             })
-            console.log(`[v0] [DirectURL] Found room: ${roomName} - ${price} ILS`)
           }
         }
       }
 
-      // Also check for direct price on item
-      const directPrice =
-        (item as any).price || (item as any).pricePerNight || (item as any).rawPrice || (item as any).minPrice
-      if (directPrice && directPrice > 50 && directPrice < 50000) {
-        rooms.push({
-          price: Math.round(directPrice),
+      // Also check for direct price field
+      const directPrice = item.price || item.pricePerNight || item.cheapestPrice
+      if (directPrice && directPrice > 0 && results.length === 0) {
+        results.push({
+          price: Number.parseFloat(String(directPrice)),
           roomType: "Standard Room",
           currency: "ILS",
           available: true,
           hasBreakfast: false,
-          source: "apify_direct",
+          source: "Booking.com",
         })
-        console.log(`[v0] [DirectURL] Found direct price: ${directPrice} ILS`)
       }
     }
 
-    console.log("[v0] [DirectURL] Total rooms found:", rooms.length)
-    return rooms
+    console.log("[v0] [DirectURL] Extracted", results.length, "room prices")
+    return results
   } catch (error) {
     console.error("[v0] [DirectURL] Error:", error)
     return []
@@ -777,135 +731,78 @@ export async function scrapeBookingPrices(
   checkOut: string,
   bookingUrl?: string,
 ): Promise<BookingScraperResponse> {
-  console.log("[v0] [BookingScraper] Starting scrape for:", hotelName)
-  console.log("[v0] [BookingScraper] Dates:", checkIn, "to", checkOut)
-  console.log("[v0] [BookingScraper] Booking URL:", bookingUrl || "none")
+  console.log(`[v0] ========================================`)
+  console.log(`[v0] [BookingScraper] Starting scrape`)
+  console.log(`[v0] Hotel: ${hotelName}`)
+  console.log(`[v0] Location: ${location}`)
+  console.log(`[v0] Check-in: ${checkIn}`)
+  console.log(`[v0] Check-out: ${checkOut}`)
+  console.log(`[v0] Booking URL: ${bookingUrl || "not provided"}`)
+  console.log(`[v0] ========================================`)
 
-  if (bookingUrl && bookingUrl.includes("booking.com")) {
+  // Method 0: Direct Booking URL (FASTEST & MOST RELIABLE)
+  if (bookingUrl && APIFY_API_KEY) {
     try {
-      console.log("[v0] [BookingScraper] Trying Method -1: Direct Booking URL...")
-      const directResults = await scrapeViaDirectBookingUrl(bookingUrl, checkIn, checkOut)
+      console.log("[v0] [BookingScraper] Trying Method 0: Direct Booking URL...")
+      const directResults = await scrapeViaDirectUrl(bookingUrl, checkIn, checkOut)
       if (directResults.length > 0) {
-        console.log("[v0] [BookingScraper] Method -1 SUCCESS! Found", directResults.length, "rooms")
+        console.log("[v0] [BookingScraper] Method 0 SUCCESS! Found", directResults.length, "rooms")
         return {
           success: true,
           results: directResults,
-          source: "direct_url",
+          source: "Booking.com (Direct URL)",
+          method: "direct-url",
         }
       }
-      console.log("[v0] [BookingScraper] Method -1 returned no results")
-    } catch (error) {
-      console.error("[v0] [BookingScraper] Method -1 failed:", error)
+      console.log("[v0] [BookingScraper] Method 0 returned no results")
+    } catch (e) {
+      console.log("[v0] [BookingScraper] Method 0 failed:", e)
     }
   }
 
-  // Method 0: Apify
-  try {
-    console.log("[v0] [BookingScraper] Trying Method 0: Apify...")
-    const apifyResults = await scrapeViaApify(hotelName, location, checkIn, checkOut)
-    if (apifyResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 0 SUCCESS! Found", apifyResults.length, "rooms")
-      return {
-        success: true,
-        results: apifyResults,
-        source: "apify",
+  // Method 1: Apify Search (fallback - slower)
+  if (APIFY_API_KEY) {
+    try {
+      console.log("[v0] [BookingScraper] Trying Method 1: Apify Search...")
+      const apifyResults = await scrapeViaApify(hotelName, location, checkIn, checkOut)
+      if (apifyResults.length > 0) {
+        console.log("[v0] [BookingScraper] Method 1 SUCCESS! Found", apifyResults.length, "rooms")
+        return {
+          success: true,
+          results: apifyResults,
+          source: "Booking.com (Apify)",
+          method: "apify",
+        }
       }
+      console.log("[v0] [BookingScraper] Method 1 returned no results")
+    } catch (e) {
+      console.log("[v0] [BookingScraper] Method 1 failed:", e)
     }
-    console.log("[v0] [BookingScraper] Method 0 returned no results or no API key")
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Method 0 failed:", error)
   }
 
-  // Method 1: Tavily Search (AI-powered, fastest)
-  try {
-    console.log("[v0] [BookingScraper] Trying Method 1: Tavily...")
-    const tavilyResults = await scrapeViaTavily(hotelName, location, checkIn, checkOut)
-    if (tavilyResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 1 SUCCESS! Found", tavilyResults.length, "rooms")
-      return {
-        success: true,
-        results: tavilyResults,
-        source: "tavily",
+  // Method 2: Tavily
+  if (TAVILY_API_KEY) {
+    try {
+      console.log("[v0] [BookingScraper] Trying Method 2: Tavily...")
+      const tavilyResults = await scrapeViaTavily(hotelName, location, checkIn, checkOut)
+      if (tavilyResults.length > 0) {
+        console.log("[v0] [BookingScraper] Method 2 SUCCESS!")
+        return {
+          success: true,
+          results: tavilyResults,
+          source: "Booking.com (Tavily)",
+          method: "tavily",
+        }
       }
+    } catch (e) {
+      console.log("[v0] [BookingScraper] Method 2 failed:", e)
     }
-    console.log("[v0] [BookingScraper] Method 1 returned no results")
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Method 1 failed:", error)
-  }
-
-  // Method 1.5: RapidAPI
-  try {
-    console.log("[v0] [BookingScraper] Trying Method 1.5: RapidAPI...")
-    const rapidResults = await scrapeViaRapidAPI(hotelName, location, checkIn, checkOut)
-    if (rapidResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 1.5 SUCCESS! Found", rapidResults.length, "rooms")
-      return {
-        success: true,
-        results: rapidResults,
-        source: "rapidapi",
-      }
-    }
-    console.log("[v0] [BookingScraper] Method 1.5 returned no results or no API key")
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Method 1.5 failed:", error)
-  }
-
-  // Method 2: ScraperAPI (bypasses blocks)
-  try {
-    console.log("[v0] [BookingScraper] Trying Method 2: ScraperAPI...")
-    const scraperResults = await scrapeViaScraperAPI(hotelName, location, checkIn, checkOut)
-    if (scraperResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 2 SUCCESS! Found", scraperResults.length, "rooms")
-      return {
-        success: true,
-        results: scraperResults,
-        source: "scraper_api",
-      }
-    }
-    console.log("[v0] [BookingScraper] Method 2 returned no results or no API key")
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Method 2 failed:", error)
-  }
-
-  // Method 3: Direct Booking.com Search API
-  try {
-    console.log("[v0] [BookingScraper] Trying Method 3: Booking Search API...")
-    const searchResults = await scrapeViaBookingSearchAPI(hotelName, location, checkIn, checkOut)
-    if (searchResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 3 SUCCESS! Found", searchResults.length, "rooms")
-      return {
-        success: true,
-        results: searchResults,
-        source: "booking_api",
-      }
-    }
-    console.log("[v0] [BookingScraper] Method 3 returned no results")
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Method 3 failed:", error)
-  }
-
-  // Method 4: Direct HTML fetch (last resort)
-  try {
-    console.log("[v0] [BookingScraper] Trying Method 4: Direct HTML...")
-    const directResults = await scrapeViaDirectHTML(hotelName, location, checkIn, checkOut)
-    if (directResults.length > 0) {
-      console.log("[v0] [BookingScraper] Method 4 SUCCESS! Found", directResults.length, "rooms")
-      return {
-        success: true,
-        results: directResults,
-        source: "direct_html",
-      }
-    }
-    console.log("[v0] [BookingScraper] Method 4 returned no results")
-  } catch (error) {
-    console.error("[v0] [BookingScraper] Method 4 failed:", error)
   }
 
   console.log("[v0] [BookingScraper] All methods failed")
   return {
     success: false,
     results: [],
-    source: "none",
     error: "All scraping methods failed",
   }
 }
