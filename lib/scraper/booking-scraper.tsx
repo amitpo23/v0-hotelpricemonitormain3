@@ -459,9 +459,11 @@ async function scrapeViaApify(
   checkOut: string,
 ): Promise<BookingPriceResult[]> {
   if (!APIFY_API_KEY) {
-    console.log(`[v0] [Apify] No API key configured, skipping`)
+    console.log(`[v0] [Apify] No API key configured (APIFY_API_KEY is empty), skipping`)
     return []
   }
+
+  console.log(`[v0] [Apify] API key found: ${APIFY_API_KEY.substring(0, 8)}...`)
 
   try {
     console.log(`[v0] [Apify] Starting scrape for ${hotelName} in ${city}`)
@@ -475,7 +477,9 @@ async function scrapeViaApify(
 
     const searchQuery = `${hotelName} hotel ${city}`
 
-    // Prepare Actor input for voyager/booking-scraper
+    const ACTOR_ID = "oeiQgfg5fsmIJB7Cn"
+
+    // Prepare Actor input for booking-scraper
     const input = {
       search: searchQuery,
       maxItems: 5,
@@ -492,32 +496,13 @@ async function scrapeViaApify(
       },
     }
 
-    console.log(`[v0] [Apify] Running actor with search: "${searchQuery}", dates: ${checkIn} - ${checkOut}`)
+    console.log(`[v0] [Apify] Running actor ${ACTOR_ID} with search: "${searchQuery}", dates: ${checkIn} - ${checkOut}`)
 
-    const run = await client.actor("voyager/booking-scraper").start(input)
+    const run = await client.actor(ACTOR_ID).call(input, {
+      waitSecs: 45, // Wait up to 45 seconds for results
+    })
 
-    console.log(`[v0] [Apify] Actor started with runId: ${run.id}`)
-
-    // Wait for the actor to finish (max 35 seconds to leave buffer for Vercel)
-    const maxWaitTime = 35000 // 35 seconds
-    const pollInterval = 2000 // Check every 2 seconds
-    const startTime = Date.now()
-
-    let runInfo = await client.run(run.id).get()
-
-    while (runInfo?.status === "RUNNING" || runInfo?.status === "READY") {
-      if (Date.now() - startTime > maxWaitTime) {
-        console.log(`[v0] [Apify] Timeout after ${maxWaitTime / 1000}s, fetching partial results`)
-        break
-      }
-      await new Promise((resolve) => setTimeout(resolve, pollInterval))
-      runInfo = await client.run(run.id).get()
-      console.log(
-        `[v0] [Apify] Actor status: ${runInfo?.status}, elapsed: ${Math.round((Date.now() - startTime) / 1000)}s`,
-      )
-    }
-
-    console.log(`[v0] [Apify] Actor final status: ${runInfo?.status}`)
+    console.log(`[v0] [Apify] Actor finished with status: ${run.status}`)
 
     // Fetch results from the run's dataset
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
@@ -535,11 +520,12 @@ async function scrapeViaApify(
       const hotelNameFound = item.name || item.hotel_name || item.hotelName || "unknown"
       console.log(`[v0] [Apify] Processing hotel: ${hotelNameFound}`)
 
-      if (item.price || item.rawPrice || item.b_raw_price) {
-        console.log(
-          `[v0] [Apify] Hotel price fields: price=${item.price}, rawPrice=${item.rawPrice}, b_raw_price=${item.b_raw_price}`,
-        )
-      }
+      // Log all price-related fields for debugging
+      console.log(`[v0] [Apify] Item keys: ${Object.keys(item).join(", ")}`)
+      if (item.price !== undefined) console.log(`[v0] [Apify] price: ${JSON.stringify(item.price)}`)
+      if (item.rawPrice !== undefined) console.log(`[v0] [Apify] rawPrice: ${item.rawPrice}`)
+      if (item.priceBreakdown !== undefined)
+        console.log(`[v0] [Apify] priceBreakdown: ${JSON.stringify(item.priceBreakdown)}`)
 
       // 1. Try rooms array first (most detailed)
       if (item.rooms && Array.isArray(item.rooms)) {
@@ -608,15 +594,16 @@ async function scrapeViaApify(
         mainPrice = item.priceBreakdown.grossPrice.value
       }
 
-      if (mainPrice && mainPrice > 50 && mainPrice < 50000) {
+      if (mainPrice && mainPrice > 50 && mainPrice < 50000 && rooms.length === 0) {
         rooms.push({
           price: Math.round(mainPrice),
           roomType: item.roomType || item.roomName || "Standard Room",
           currency: item.currency_code || "ILS",
           available: true,
           hasBreakfast: item.hotel_include_breakfast || false,
-          source: "rapidapi",
+          source: "Apify",
         })
+        console.log(`[v0] [Apify] Found main price: ₪${Math.round(mainPrice)}`)
       }
     }
 
