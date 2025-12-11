@@ -376,32 +376,27 @@ export async function POST(request: Request) {
       console.log(`[v0] Saving ${dailyPricesData.length} daily_prices records`)
       console.log(`[v0] Sample daily_price:`, JSON.stringify(dailyPricesData[0]))
 
-      const { error: pricesError } = await supabase.from("daily_prices").upsert(dailyPricesData, {
-        onConflict: "hotel_id,date,room_type_id",
-        ignoreDuplicates: false,
-      })
+      let savedDailyCount = 0
+      for (const record of dailyPricesData) {
+        // Delete existing record if exists
+        await supabase
+          .from("daily_prices")
+          .delete()
+          .eq("hotel_id", record.hotel_id)
+          .eq("date", record.date)
+          .eq("room_type_id", record.room_type_id)
 
-      if (pricesError) {
-        console.error("[v0] Error saving daily prices:", JSON.stringify(pricesError))
+        // Insert new record
+        const { error: singleError } = await supabase.from("daily_prices").insert(record)
 
-        // Try inserting one by one with upsert
-        let savedDailyCount = 0
-        for (const record of dailyPricesData) {
-          const { error: singleError } = await supabase.from("daily_prices").upsert(record, {
-            onConflict: "hotel_id,date,room_type_id",
-            ignoreDuplicates: false,
-          })
-
-          if (singleError) {
-            console.error(`[v0] Single daily_price error:`, JSON.stringify(singleError))
-          } else {
-            savedDailyCount++
-          }
+        if (singleError) {
+          console.error(`[v0] Single daily_price error:`, JSON.stringify(singleError))
+        } else {
+          savedDailyCount++
         }
-        console.log(`[v0] Saved ${savedDailyCount}/${dailyPricesData.length} daily_prices individually`)
-      } else {
-        console.log(`[v0] Successfully saved ${dailyPricesData.length} daily_prices records`)
       }
+
+      console.log(`[v0] Saved ${savedDailyCount}/${dailyPricesData.length} daily_prices individually`)
     }
 
     const increases = results.filter((r) => r.autopilot_action === "increase").length
