@@ -342,10 +342,10 @@ export async function POST(request: Request) {
         hotel_id: hotelId,
         room_type_id: r.room_type_id,
         date: r.date,
-        our_price: r.our_price, // ✅ Correct column name
+        our_price: r.our_price,
         recommended_price: r.recommended_price,
         demand_level: r.demand_level,
-        avg_competitor_price: r.competitor_avg, // ✅ Correct column name
+        avg_competitor_price: r.competitor_avg,
         min_competitor_price: r.competitor_avg ? Math.round(r.competitor_avg * 0.9) : null,
         max_competitor_price: r.competitor_avg ? Math.round(r.competitor_avg * 1.1) : null,
         price_recommendation: r.recommendation,
@@ -357,15 +357,21 @@ export async function POST(request: Request) {
       console.log(`[v0] Saving ${dailyPricesData.length} daily_prices records`)
       console.log(`[v0] Sample daily_price:`, JSON.stringify(dailyPricesData[0]))
 
-      const { error: pricesError } = await supabase.from("daily_prices").insert(dailyPricesData)
+      const { error: pricesError } = await supabase.from("daily_prices").upsert(dailyPricesData, {
+        onConflict: "hotel_id,date,room_type_id",
+        ignoreDuplicates: false,
+      })
 
       if (pricesError) {
         console.error("[v0] Error saving daily prices:", JSON.stringify(pricesError))
 
-        // Try inserting one by one to identify the problematic record
+        // Try inserting one by one with upsert
         let savedDailyCount = 0
         for (const record of dailyPricesData) {
-          const { error: singleError } = await supabase.from("daily_prices").insert(record)
+          const { error: singleError } = await supabase.from("daily_prices").upsert(record, {
+            onConflict: "hotel_id,date,room_type_id",
+            ignoreDuplicates: false,
+          })
 
           if (singleError) {
             console.error(`[v0] Single daily_price error:`, JSON.stringify(singleError))

@@ -473,10 +473,12 @@ async function scrapeViaApify(
       token: APIFY_API_KEY,
     })
 
+    const searchQuery = `${hotelName} hotel ${city}`
+
     // Prepare Actor input for voyager/booking-scraper
     const input = {
-      search: `${hotelName} ${city}`,
-      maxItems: 10,
+      search: searchQuery,
+      maxItems: 5, // Reduced to get faster results
       sortBy: "distance_from_search",
       currency: "ILS",
       language: "en-gb",
@@ -492,33 +494,45 @@ async function scrapeViaApify(
 
     console.log(`[v0] [Apify] Running actor with input:`, input)
 
-    // Run the Actor and wait for it to finish (timeout 120 seconds)
-    const run = await client.actor("voyager/booking-scraper").call(input, {
-      waitSecs: 120,
+    // Using startRun + waitForFinish for better control
+    const run = await client.actor("voyager/booking-scraper").start(input)
+
+    console.log(`[v0] [Apify] Actor started with runId: ${run.id}`)
+
+    // Wait for up to 25 seconds for results
+    const finishedRun = await client.run(run.id).waitForFinish({
+      waitSecs: 25,
     })
 
-    console.log(`[v0] [Apify] Actor run status: ${run.status}`)
+    console.log(`[v0] [Apify] Actor run status: ${finishedRun.status}`)
 
-    if (run.status !== "SUCCEEDED") {
-      console.log(`[v0] [Apify] Run did not succeed: ${run.status}`)
-      return []
+    // Even if not fully succeeded, try to get partial results
+    if (finishedRun.status !== "SUCCEEDED" && finishedRun.status !== "RUNNING") {
+      console.log(`[v0] [Apify] Run status: ${finishedRun.status}`)
     }
 
     // Fetch results from the run's dataset
-    const { items } = await client.dataset(run.defaultDatasetId).listItems()
+    const { items } = await client.dataset(finishedRun.defaultDatasetId).listItems()
 
     console.log(`[v0] [Apify] Got ${items.length} hotel results`)
 
+    if (items.length === 0) {
+      console.log(`[v0] [Apify] No items found, returning empty`)
+      return []
+    }
+
     const rooms: BookingPriceResult[] = []
 
-    for (const item of items) {
+    for (const item of items as any[]) {
       // Check if this is the hotel we're looking for
       const itemName = (item.name || item.hotel_name || "").toLowerCase()
       const searchName = hotelName.toLowerCase()
       const firstWord = searchName.split(" ")[0]
 
-      // Match by first word of hotel name
-      if (!itemName.includes(firstWord) && firstWord.length > 3) {
+      // Match by first word of hotel name (relaxed matching)
+      const matchFound = itemName.includes(firstWord) || itemName.includes(searchName) || firstWord.length <= 3 // Allow short names
+
+      if (!matchFound) {
         console.log(`[v0] [Apify] Skipping ${itemName} - doesn't match ${firstWord}`)
         continue
       }
@@ -526,67 +540,60 @@ async function scrapeViaApify(
       console.log(`[v0] [Apify] Processing hotel: ${item.name}`)
 
       // Extract price from various possible fields
-      let price = null
+      let price: number | null = null
 
-      if (typeof item.price === "number") {
+      // Try multiple price extraction methods
+      if (item.price && typeof item.price === "number") {
         price = item.price
-      } else if (item.minPrice) {
-        price = item.minPrice
-      } else if (item.price_breakdown?.gross_price) {
-        price = item.price_breakdown.gross_price
-      } else if (item.raw_price) {
-        price = Number.parseFloat(item.raw_price)
+      } else if (item.price && typeof item.price === "string") {
+        const match = item.price.match(/[\d,]+/)
+        if (match) price = Number.parseInt(match[0].replace(/,/g, ""))
+      } else if (item.rawPrice) {
+        price = typeof item.rawPrice === "number" ? item.rawPrice : Number.parseInt(item.rawPrice)
+      } else if (item.priceBreakdown?.grossPrice?.value) {
+        price = item.priceBreakdown.grossPrice.value
       }
 
-      if (price && typeof price === "number" && price > 50 && price < 50000) {
-        console.log(`[v0] [Apify] Found price: ${price} ${item.currency || "ILS"}`)
-
-        rooms.push({
-          price: Math.round(price),
-          originalPrice: item.original_price,
-          roomType: item.room_type || item.room_name || item.unit_configuration_label || "Standard Room",
-          currency: item.currency || "ILS",
-          available: item.is_available !== false,
-          hasBreakfast: item.breakfast_included || false,
-          source: "apify",
-        })
-      }
-
-      // Also check rooms array if present
-      if (item.rooms && Array.isArray(item.rooms)) {
-        console.log(`[v0] [Apify] Found ${item.rooms.length} rooms in item`)
-
+      // Try to extract from rooms array
+      if (!price && item.rooms && Array.isArray(item.rooms)) {
         for (const room of item.rooms) {
-          const roomPrice = room.price || room.min_price || room.gross_price
-
-          if (roomPrice && typeof roomPrice === "number" && roomPrice > 50 && roomPrice < 50000) {
-            console.log(`[v0] [Apify] Room price: ${roomPrice}`)
-
-            rooms.push({
-              price: Math.round(roomPrice),
-              roomType: room.name || room.room_type || room.room_name || "Room",
-              currency: room.currency || item.currency || "ILS",
-              available: room.is_available !== false,
-              hasBreakfast: room.breakfast_included || false,
-              source: "apify",
-            })
+          if (room.price) {
+            const roomPrice =
+              typeof room.price === "number" ? room.price : Number.parseInt(String(room.price).replace(/[^\d]/g, ""))
+            if (roomPrice > 0) {
+              rooms.push({
+                price: roomPrice,
+                currency: "ILS",
+                roomType: room.name || room.roomType || "Standard Room",
+                source: "Apify",
+              })
+            }
           }
         }
       }
+
+      // Add main price if found
+      if (price && price > 0) {
+        rooms.push({
+          price: price,
+          currency: "ILS",
+          roomType: item.roomType || item.roomName || "Standard Room",
+          source: "Apify",
+        })
+      }
     }
 
-    // Remove duplicate prices (keep unique prices only)
-    const uniqueRooms = rooms.filter(
-      (room, index, self) => index === self.findIndex((r) => Math.abs(r.price - room.price) < 10),
-    )
-
-    if (uniqueRooms.length > 0) {
-      console.log(`[v0] [Apify] Successfully found ${uniqueRooms.length} unique rooms`)
-      return uniqueRooms
+    // Remove duplicates (similar prices within 10 ILS range)
+    const uniqueRooms: BookingPriceResult[] = []
+    for (const room of rooms) {
+      const isDuplicate = uniqueRooms.some((r) => Math.abs(r.price - room.price) < 10)
+      if (!isDuplicate) {
+        uniqueRooms.push(room)
+      }
     }
 
-    console.log(`[v0] [Apify] No valid rooms found in ${items.length} results`)
-    return []
+    console.log(`[v0] [Apify] Extracted ${uniqueRooms.length} unique room prices`)
+    return uniqueRooms
   } catch (error) {
     console.error(`[v0] [Apify] Error:`, error)
     return []
