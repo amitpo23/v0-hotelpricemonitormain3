@@ -325,7 +325,7 @@ export async function POST(request: Request) {
             scraped_at: new Date().toISOString(),
           })),
           {
-            onConflict: "competitor_id,date,source",
+            onConflict: "competitor_daily_prices_competitor_id_date_source_key",
             ignoreDuplicates: false,
           },
         )
@@ -362,7 +362,7 @@ export async function POST(request: Request) {
       console.log(`[v0] Sample daily_price:`, JSON.stringify(dailyPricesData[0]))
 
       const { error: pricesError } = await supabase.from("daily_prices").upsert(dailyPricesData, {
-        onConflict: "hotel_id,date,room_type_id",
+        onConflict: "daily_prices_hotel_date_room_key",
         ignoreDuplicates: false,
       })
 
@@ -373,7 +373,7 @@ export async function POST(request: Request) {
         let savedDailyCount = 0
         for (const record of dailyPricesData) {
           const { error: singleError } = await supabase.from("daily_prices").upsert(record, {
-            onConflict: "hotel_id,date,room_type_id",
+            onConflict: "daily_prices_hotel_date_room_key",
             ignoreDuplicates: false,
           })
 
