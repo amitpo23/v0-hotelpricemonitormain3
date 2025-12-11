@@ -251,7 +251,9 @@ What specific aspect would you like me to explain in more detail?`
                   )}
                   <div
                     className={`max-w-[80%] p-4 rounded-lg ${
-                      message.role === "user" ? "bg-cyan-500 text-white" : "bg-slate-100 dark:bg-slate-800"
+                      message.role === "user"
+                        ? "bg-cyan-500 text-white"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                     }`}
                   >
                     <div className="whitespace-pre-wrap text-sm">{message.content}</div>
