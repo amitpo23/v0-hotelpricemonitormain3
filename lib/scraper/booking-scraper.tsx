@@ -466,10 +466,17 @@ async function scrapeViaApify(
   try {
     console.log(`[v0] [Apify] Starting scrape for ${hotelName} in ${city}`)
 
-    // Use Apify's Booking.com scraper actor
-    const actorInput = {
+    // Dynamic import to avoid bundling if not needed
+    const { ApifyClient } = await import("apify-client")
+
+    const client = new ApifyClient({
+      token: APIFY_API_KEY,
+    })
+
+    // Prepare Actor input for voyager/booking-scraper
+    const input = {
       search: `${hotelName} ${city}`,
-      maxItems: 5,
+      maxItems: 10,
       sortBy: "distance_from_search",
       currency: "ILS",
       language: "en-gb",
@@ -477,71 +484,30 @@ async function scrapeViaApify(
       checkOut: checkOut,
       adults: 2,
       rooms: 1,
-    }
-
-    // Start the actor run
-    const runResponse = await fetch(
-      `https://api.apify.com/v2/acts/voyager~booking-scraper/runs?token=${APIFY_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(actorInput),
+      includeReviews: false,
+      proxyConfiguration: {
+        useApifyProxy: true,
       },
-    )
+    }
 
-    if (!runResponse.ok) {
-      console.log(`[v0] [Apify] Failed to start actor: ${runResponse.status}`)
+    console.log(`[v0] [Apify] Running actor with input:`, input)
+
+    // Run the Actor and wait for it to finish (timeout 120 seconds)
+    const run = await client.actor("voyager/booking-scraper").call(input, {
+      waitSecs: 120,
+    })
+
+    console.log(`[v0] [Apify] Actor run status: ${run.status}`)
+
+    if (run.status !== "SUCCEEDED") {
+      console.log(`[v0] [Apify] Run did not succeed: ${run.status}`)
       return []
     }
 
-    const runData = await runResponse.json()
-    const runId = runData.data?.id
+    // Fetch results from the run's dataset
+    const { items } = await client.dataset(run.defaultDatasetId).listItems()
 
-    if (!runId) {
-      console.log(`[v0] [Apify] No run ID returned`)
-      return []
-    }
-
-    console.log(`[v0] [Apify] Actor run started: ${runId}`)
-
-    // Wait for the run to complete (max 30 seconds)
-    let status = "RUNNING"
-    let attempts = 0
-    const maxAttempts = 15
-
-    while (status === "RUNNING" && attempts < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      const statusResponse = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_KEY}`)
-
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json()
-        status = statusData.data?.status || "FAILED"
-        console.log(`[v0] [Apify] Run status: ${status} (attempt ${attempts + 1}/${maxAttempts})`)
-      }
-
-      attempts++
-    }
-
-    if (status !== "SUCCEEDED") {
-      console.log(`[v0] [Apify] Run did not succeed: ${status}`)
-      return []
-    }
-
-    // Fetch results from dataset
-    const datasetResponse = await fetch(
-      `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${APIFY_API_KEY}`,
-    )
-
-    if (!datasetResponse.ok) {
-      console.log(`[v0] [Apify] Failed to fetch dataset: ${datasetResponse.status}`)
-      return []
-    }
-
-    const items = await datasetResponse.json()
-    console.log(`[v0] [Apify] Got ${items.length} results`)
+    console.log(`[v0] [Apify] Got ${items.length} hotel results`)
 
     const rooms: BookingPriceResult[] = []
 
@@ -549,21 +515,38 @@ async function scrapeViaApify(
       // Check if this is the hotel we're looking for
       const itemName = (item.name || item.hotel_name || "").toLowerCase()
       const searchName = hotelName.toLowerCase()
+      const firstWord = searchName.split(" ")[0]
 
-      if (!itemName.includes(searchName.split(" ")[0])) {
-        continue // Skip if not matching hotel
+      // Match by first word of hotel name
+      if (!itemName.includes(firstWord) && firstWord.length > 3) {
+        console.log(`[v0] [Apify] Skipping ${itemName} - doesn't match ${firstWord}`)
+        continue
       }
 
-      // Extract price from various fields
-      const price = item.price || item.min_price || item.raw_price
+      console.log(`[v0] [Apify] Processing hotel: ${item.name}`)
+
+      // Extract price from various possible fields
+      let price = null
+
+      if (typeof item.price === "number") {
+        price = item.price
+      } else if (item.minPrice) {
+        price = item.minPrice
+      } else if (item.price_breakdown?.gross_price) {
+        price = item.price_breakdown.gross_price
+      } else if (item.raw_price) {
+        price = Number.parseFloat(item.raw_price)
+      }
 
       if (price && typeof price === "number" && price > 50 && price < 50000) {
+        console.log(`[v0] [Apify] Found price: ${price} ${item.currency || "ILS"}`)
+
         rooms.push({
-          price,
+          price: Math.round(price),
           originalPrice: item.original_price,
-          roomType: item.room_type || item.room_name || "Standard Room",
+          roomType: item.room_type || item.room_name || item.unit_configuration_label || "Standard Room",
           currency: item.currency || "ILS",
-          available: item.availability !== false,
+          available: item.is_available !== false,
           hasBreakfast: item.breakfast_included || false,
           source: "apify",
         })
@@ -571,14 +554,19 @@ async function scrapeViaApify(
 
       // Also check rooms array if present
       if (item.rooms && Array.isArray(item.rooms)) {
+        console.log(`[v0] [Apify] Found ${item.rooms.length} rooms in item`)
+
         for (const room of item.rooms) {
-          const roomPrice = room.price || room.min_price
+          const roomPrice = room.price || room.min_price || room.gross_price
+
           if (roomPrice && typeof roomPrice === "number" && roomPrice > 50 && roomPrice < 50000) {
+            console.log(`[v0] [Apify] Room price: ${roomPrice}`)
+
             rooms.push({
-              price: roomPrice,
-              roomType: room.name || room.room_type || "Room",
-              currency: room.currency || "ILS",
-              available: true,
+              price: Math.round(roomPrice),
+              roomType: room.name || room.room_type || room.room_name || "Room",
+              currency: room.currency || item.currency || "ILS",
+              available: room.is_available !== false,
               hasBreakfast: room.breakfast_included || false,
               source: "apify",
             })
@@ -587,12 +575,17 @@ async function scrapeViaApify(
       }
     }
 
-    if (rooms.length > 0) {
-      console.log(`[v0] [Apify] Found ${rooms.length} rooms`)
-      return rooms
+    // Remove duplicate prices (keep unique prices only)
+    const uniqueRooms = rooms.filter(
+      (room, index, self) => index === self.findIndex((r) => Math.abs(r.price - room.price) < 10),
+    )
+
+    if (uniqueRooms.length > 0) {
+      console.log(`[v0] [Apify] Successfully found ${uniqueRooms.length} unique rooms`)
+      return uniqueRooms
     }
 
-    console.log(`[v0] [Apify] No valid rooms found in results`)
+    console.log(`[v0] [Apify] No valid rooms found in ${items.length} results`)
     return []
   } catch (error) {
     console.error(`[v0] [Apify] Error:`, error)
@@ -804,12 +797,7 @@ export async function scrapeBookingPrice(
   city: string,
   checkIn: string,
   checkOut: string,
-): Promise<number | null> {
-  const response = await scrapeBookingPrices(hotelName, city, checkIn, checkOut)
-  if (response.success && response.results.length > 0) {
-    // Return the lowest price
-    const lowestPrice = Math.min(...response.results.map((r) => r.price))
-    return lowestPrice
-  }
-  return null
+  bookingUrl?: string,
+): Promise<BookingScraperResponse> {
+  return scrapeBookingPrices(hotelName, city, checkIn, checkOut, bookingUrl)
 }

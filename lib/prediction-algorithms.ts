@@ -3,6 +3,10 @@
  * ML-based price prediction and demand forecasting
  */
 
+import { buildPredictionContext, formatContextForPrompt, combinePredictions } from "./rag/prediction-context"
+import { getHotelPricingInsights } from "./llm/perplexity-client"
+import type { SupabaseClient } from "@supabase/supabase-js"
+
 export interface PredictionInput {
   date: string
   dayOfWeek: number
@@ -339,4 +343,56 @@ export function calculateDemandScore(
     competitionScore * weights.competition
 
   return Math.min(1, Math.max(0, score))
+}
+
+/**
+ * Enhanced prediction with RAG+LLM
+ */
+export async function predictPriceWithAI(
+  input: PredictionInput,
+  supabase: SupabaseClient,
+  hotelId: string,
+  enableLLM = true,
+): Promise<PredictionOutput> {
+  // Get base algorithmic prediction
+  const algorithmicPrediction = predictPrice(input)
+
+  // If LLM disabled or no API key, return algorithmic prediction
+  if (!enableLLM || !process.env.PERPLEXITY_API_KEY) {
+    console.log("[Prediction] LLM disabled or API key missing, using algorithmic prediction only")
+    return algorithmicPrediction
+  }
+
+  try {
+    // Build context from historical data
+    const targetDate = new Date(input.date)
+    const context = await buildPredictionContext(supabase, hotelId, targetDate)
+
+    // Get LLM insights
+    const llmInsight = await getHotelPricingInsights({
+      hotelName: context.hotelName,
+      location: context.location,
+      date: input.date,
+      competitorPrices: context.competitorPrices.map((c) => ({
+        name: c.name,
+        price: c.avgPrice,
+      })),
+      currentOccupancy: input.currentOccupancy,
+      historicalContext: formatContextForPrompt(context),
+    })
+
+    // Combine predictions
+    const enhancedPrediction = combinePredictions(algorithmicPrediction, llmInsight)
+
+    console.log("[Prediction] Enhanced with AI insights:", {
+      algorithmic: algorithmicPrediction.recommendedPrice,
+      llm: llmInsight.suggestedPrice,
+      final: enhancedPrediction.recommendedPrice,
+    })
+
+    return enhancedPrediction
+  } catch (error) {
+    console.error("[Prediction] AI enhancement failed, falling back to algorithmic:", error)
+    return algorithmicPrediction
+  }
 }
