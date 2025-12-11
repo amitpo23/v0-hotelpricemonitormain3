@@ -325,7 +325,7 @@ export async function POST(request: Request) {
             scraped_at: new Date().toISOString(),
           })),
           {
-            onConflict: "competitor_id,date,source,room_type",
+            onConflict: "hotel_id,competitor_id,date,source,room_type",
             ignoreDuplicates: false,
           },
         )
