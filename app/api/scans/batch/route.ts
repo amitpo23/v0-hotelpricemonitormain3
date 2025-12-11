@@ -1,47 +1,55 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-
-// Simulated scraping sources
-const BOOKING_SOURCES = [
-  { name: "Booking.com", baseVariation: 0.95 },
-  { name: "Expedia", baseVariation: 1.02 },
-  { name: "Hotels.com", baseVariation: 0.98 },
-  { name: "Agoda", baseVariation: 0.92 },
-  { name: "Trip.com", baseVariation: 1.05 },
-]
+import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 
 async function executeScanForConfig(supabase: any, config: any, hotelData: any) {
   try {
-    console.log(`[v0] Executing scan for hotel: ${hotelData?.name || "unknown"}`)
+    console.log(`[Batch] Executing REAL scan for hotel: ${hotelData?.name || "unknown"}`)
 
     if (!hotelData) {
       return { success: false, error: "Hotel data missing" }
     }
 
-    // Calculate date-based demand multiplier
-    const checkInDate = new Date(config.check_in_date || new Date())
-    const dayOfWeek = checkInDate.getDay()
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6
-    const demandMultiplier = isWeekend ? 1.15 : 1.0
+    // Get competitors for this hotel
+    const { data: competitors } = await supabase
+      .from("hotel_competitors")
+      .select("id, competitor_hotel_name, booking_url")
+      .eq("hotel_id", hotelData.id)
+      .eq("is_active", true)
 
-    // Seasonal multiplier
-    const month = checkInDate.getMonth()
-    const seasonalMultiplier = [6, 7, 8, 12].includes(month) ? 1.2 : 1.0
+    if (!competitors || competitors.length === 0) {
+      return { success: false, error: "No active competitors" }
+    }
 
-    const basePrice = Number(hotelData.base_price) || 150
-    const scrapedPrices = []
+    const scrapedPrices: any[] = []
+    const dateStr = config.check_in_date || new Date().toISOString().split("T")[0]
+    let realScrapeCount = 0
 
-    for (const source of BOOKING_SOURCES) {
-      const randomVariation = 0.9 + Math.random() * 0.2
-      const price = basePrice * source.baseVariation * demandMultiplier * seasonalMultiplier * randomVariation
+    for (const competitor of competitors) {
+      const result = await scrapeCompetitorAllRooms(
+        competitor.id,
+        competitor.competitor_hotel_name,
+        dateStr,
+        competitor.booking_url,
+      )
 
-      scrapedPrices.push({
-        source: source.name,
-        price: Math.round(price * 100) / 100,
-        currency: "USD",
-        availability: Math.random() > 0.1,
-        room_type: config.room_type || "Standard Room",
-      })
+      if (result?.success && result.rooms && result.rooms.length > 0) {
+        realScrapeCount++
+        for (const room of result.rooms) {
+          scrapedPrices.push({
+            source: result.source || "Booking.com",
+            price: room.price,
+            currency: "ILS",
+            availability: room.available !== false,
+            room_type: room.roomType || "Standard Room",
+            competitor_id: competitor.id,
+          })
+        }
+      }
+    }
+
+    if (scrapedPrices.length === 0) {
+      return { success: false, error: "No prices scraped" }
     }
 
     // Create scan record
@@ -57,7 +65,7 @@ async function executeScanForConfig(supabase: any, config: any, hotelData: any) 
       .single()
 
     if (scanError) {
-      console.log(`[v0] Scan record error: ${scanError.message}`)
+      console.log(`[Batch] Scan record error: ${scanError.message}`)
       return { success: false, error: scanError.message }
     }
 
@@ -76,7 +84,7 @@ async function executeScanForConfig(supabase: any, config: any, hotelData: any) 
     const { error: resultsError } = await supabase.from("scan_results").insert(scanResults)
 
     if (resultsError) {
-      console.log(`[v0] Results error: ${resultsError.message}`)
+      console.log(`[Batch] Results error: ${resultsError.message}`)
     }
 
     // Calculate statistics
@@ -88,6 +96,7 @@ async function executeScanForConfig(supabase: any, config: any, hotelData: any) 
       success: true,
       scan_id: scan.id,
       results_count: scrapedPrices.length,
+      real_scrapes: realScrapeCount,
       summary: {
         min_price: minPrice,
         max_price: maxPrice,
@@ -95,7 +104,7 @@ async function executeScanForConfig(supabase: any, config: any, hotelData: any) 
       },
     }
   } catch (error: any) {
-    console.log(`[v0] Scan execution error: ${error.message}`)
+    console.log(`[Batch] Scan execution error: ${error.message}`)
     return { success: false, error: error.message }
   }
 }
@@ -111,7 +120,7 @@ export async function POST() {
       .select(`*, hotels (*)`)
       .eq("is_active", true)
 
-    console.log(`[v0] Found ${activeConfigs?.length || 0} active configs, error: ${configError?.message || "none"}`)
+    console.log(`[Batch] Found ${activeConfigs?.length || 0} active configs, error: ${configError?.message || "none"}`)
 
     if (!activeConfigs || activeConfigs.length === 0) {
       return NextResponse.json({
@@ -139,7 +148,7 @@ export async function POST() {
       results,
     })
   } catch (error: any) {
-    console.error("[v0] Batch scan error:", error)
+    console.error("[Batch] Batch scan error:", error)
     return NextResponse.json(
       {
         error: "Failed to execute batch scan",

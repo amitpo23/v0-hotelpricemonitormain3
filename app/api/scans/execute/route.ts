@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 
 // Simulated scraping sources - in production, these would be real scrapers
 const BOOKING_SOURCES = [
@@ -123,98 +124,90 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: scanError.message }, { status: 500 })
     }
 
-    console.log(`[v0] Starting scan for hotel: ${hotelData.name}`)
+    console.log(`[Scan] Starting REAL scan for hotel: ${hotelData.name}`)
 
     const { data: competitors } = await supabase
       .from("hotel_competitors")
-      .select("id, competitor_hotel_name, display_color")
+      .select("id, competitor_hotel_name, booking_url, display_color")
       .eq("hotel_id", hotelData.id)
       .eq("is_active", true)
 
+    if (!competitors || competitors.length === 0) {
+      console.log("[Scan] No active competitors found")
+      await supabase
+        .from("scans")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          results_count: 0,
+        })
+        .eq("id", scan.id)
+
+      return NextResponse.json({
+        success: true,
+        scan_id: scan.id,
+        results_count: 0,
+        message: "No active competitors to scan",
+      })
+    }
+
     const competitorPrices: any[] = []
     const startDate = new Date()
-    const basePrice = Number(hotelData.base_price) || 150
+    let realScrapeCount = 0
 
-    for (let dayOffset = 0; dayOffset < 180; dayOffset++) {
+    const daysToScan = 7
+
+    for (let dayOffset = 0; dayOffset < daysToScan; dayOffset++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + dayOffset)
       const dateStr = date.toISOString().split("T")[0]
 
-      const dayOfWeek = date.getDay()
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6
-      const month = date.getMonth()
-      const isSeason = [6, 7, 8, 12].includes(month)
+      for (const competitor of competitors) {
+        console.log(`[Scan] Scraping ${competitor.competitor_hotel_name} for ${dateStr}`)
 
-      // Generate prices for each competitor
-      if (competitors) {
-        for (const competitor of competitors) {
-          for (const source of BOOKING_SOURCES) {
-            const randomFactor = 0.85 + Math.random() * 0.3
-            const weekendFactor = isWeekend ? 1.15 : 1.0
-            const seasonFactor = isSeason ? 1.2 : 1.0
-            const price = basePrice * randomFactor * weekendFactor * seasonFactor * source.baseVariation
+        const scrapedResult = await scrapeCompetitorAllRooms(
+          competitor.id,
+          competitor.competitor_hotel_name,
+          dateStr,
+          competitor.booking_url,
+        )
 
+        if (scrapedResult?.success && scrapedResult.rooms && scrapedResult.rooms.length > 0) {
+          realScrapeCount++
+
+          for (const room of scrapedResult.rooms) {
             competitorPrices.push({
               hotel_id: hotelData.id,
               competitor_id: competitor.id,
               date: dateStr,
-              price: Math.round(price * 100) / 100,
-              source: source.name,
-              room_type: "Standard Room",
-              availability: Math.random() > 0.1,
+              price: room.price,
+              source: scrapedResult.source || "Booking.com",
+              room_type: room.roomType || "Standard Room",
+              availability: room.available !== false,
               scraped_at: new Date().toISOString(),
             })
           }
+        } else {
+          console.log(`[Scan] No results for ${competitor.competitor_hotel_name} on ${dateStr}`)
         }
       }
     }
 
-    const { data: oldPrices } = await supabase
-      .from("competitor_daily_prices")
-      .select("competitor_id, date, price")
-      .eq("hotel_id", hotelData.id)
+    console.log(`[Scan] Completed ${realScrapeCount} real scrapes, got ${competitorPrices.length} prices`)
 
-    const oldPriceMap = new Map()
-    oldPrices?.forEach((p) => {
-      oldPriceMap.set(`${p.competitor_id}-${p.date}`, p.price)
-    })
-
-    const priceChanges: any[] = []
-    for (const cp of competitorPrices) {
-      const key = `${cp.competitor_id}-${cp.date}`
-      const oldPrice = oldPriceMap.get(key)
-      if (oldPrice && oldPrice !== cp.price) {
-        priceChanges.push({
-          hotel_id: cp.hotel_id,
-          competitor_id: cp.competitor_id,
-          date: cp.date,
-          old_price: oldPrice,
-          new_price: cp.price,
-          price_change: cp.price - oldPrice,
-          change_percent: ((cp.price - oldPrice) / oldPrice) * 100,
-          source: cp.source,
-          room_type: cp.room_type,
-        })
-      }
-    }
-
-    if (priceChanges.length > 0) {
-      await supabase.from("competitor_price_history").insert(priceChanges)
-      console.log(`[v0] Saved ${priceChanges.length} price changes to history`)
-    }
-
+    // Save to database only if we have real data
     if (competitorPrices.length > 0) {
-      for (let i = 0; i < competitorPrices.length; i += 500) {
-        const batch = competitorPrices.slice(i, i + 500)
+      for (let i = 0; i < competitorPrices.length; i += 100) {
+        const batch = competitorPrices.slice(i, i + 100)
         const { error: upsertError } = await supabase.from("competitor_daily_prices").upsert(batch, {
-          onConflict: "competitor_id,date,source",
+          onConflict: "competitor_id,date,source,room_type",
           ignoreDuplicates: false,
         })
 
         if (upsertError) {
-          console.error("[v0] Error upserting competitor prices:", upsertError)
+          console.error("[Scan] Error upserting competitor prices:", upsertError)
         } else {
-          console.log(`[v0] Upserted ${batch.length} competitor prices (batch ${Math.floor(i / 500) + 1})`)
+          console.log(`[Scan] Saved ${batch.length} real prices (batch ${Math.floor(i / 100) + 1})`)
         }
       }
     }
@@ -230,27 +223,23 @@ export async function POST(request: Request) {
       .eq("id", scan.id)
 
     const avgPrice =
-      competitorPrices.length > 0
-        ? competitorPrices.reduce((sum, r) => sum + r.price, 0) / competitorPrices.length
-        : basePrice
+      competitorPrices.length > 0 ? competitorPrices.reduce((sum, r) => sum + r.price, 0) / competitorPrices.length : 0
 
     return NextResponse.json({
       success: true,
       scan_id: scan.id,
       results_count: competitorPrices.length,
-      price_changes: priceChanges.length,
+      real_scrapes: realScrapeCount,
       summary: {
-        min_price: Math.min(...competitorPrices.map((r) => r.price)),
-        max_price: Math.max(...competitorPrices.map((r) => r.price)),
+        min_price: competitorPrices.length > 0 ? Math.min(...competitorPrices.map((r) => r.price)) : 0,
+        max_price: competitorPrices.length > 0 ? Math.max(...competitorPrices.map((r) => r.price)) : 0,
         avg_price: avgPrice,
-        recommended_price: avgPrice * 0.98,
-        your_price: basePrice,
         competitors_scanned: competitors?.length || 0,
-        days_scanned: 180,
+        days_scanned: daysToScan,
       },
     })
   } catch (error) {
-    console.error("[v0] Scan execution error:", error)
+    console.error("[Scan] Scan execution error:", error)
     return NextResponse.json({ error: "Failed to execute scan" }, { status: 500 })
   }
 }
