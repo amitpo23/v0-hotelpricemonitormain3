@@ -458,12 +458,17 @@ async function scrapeViaApify(
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult[]> {
+  console.log(
+    `[v0] [Apify] Starting scrape - hotelName: "${hotelName}", city: "${city}", checkIn: ${checkIn}, checkOut: ${checkOut}`,
+  )
+  console.log(`[v0] [Apify] APIFY_API_KEY exists: ${!!APIFY_API_KEY}, length: ${APIFY_API_KEY?.length || 0}`)
+
   if (!APIFY_API_KEY) {
-    console.log(`[v0] [Apify] No API key configured (APIFY_API_KEY is empty), skipping`)
+    console.log(`[v0] [Apify] ❌ No API key configured (APIFY_API_KEY is empty), skipping`)
     return []
   }
 
-  console.log(`[v0] [Apify] API key found: ${APIFY_API_KEY.substring(0, 8)}...`)
+  console.log(`[v0] [Apify] ✅ API key found: ${APIFY_API_KEY.substring(0, 8)}...`)
 
   try {
     console.log(`[v0] [Apify] Starting scrape for ${hotelName} in ${city}`)
@@ -496,45 +501,42 @@ async function scrapeViaApify(
       },
     }
 
-    console.log(`[v0] [Apify] Running actor ${ACTOR_ID} with search: "${searchQuery}", dates: ${checkIn} - ${checkOut}`)
+    console.log(`[v0] [Apify] Running actor ${ACTOR_ID} with input:`, JSON.stringify(input, null, 2))
 
     const run = await client.actor(ACTOR_ID).call(input, {
-      waitSecs: 45, // Wait up to 45 seconds for results
-      memory: 4096, // Increase memory for faster execution
+      waitSecs: 45,
+      memory: 4096,
     })
 
-    console.log(`[v0] [Apify] Actor finished with status: ${run.status}, dataset: ${run.defaultDatasetId}`)
+    console.log(`[v0] [Apify] ✅ Actor finished - status: ${run.status}, dataset: ${run.defaultDatasetId}`)
+
+    if (run.status !== "SUCCEEDED") {
+      console.log(`[v0] [Apify] ⚠️ Actor run status is ${run.status}, not SUCCEEDED`)
+    }
 
     // Fetch results from the Actor's dataset
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
 
-    console.log(`[v0] [Apify] Got ${items.length} results from dataset`)
+    console.log(`[v0] [Apify] Got ${items.length} items from dataset`)
 
     if (items.length === 0) {
-      console.log(`[v0] [Apify] No hotels found for search: "${searchQuery}"`)
+      console.log(`[v0] [Apify] ❌ No hotels found for search: "${searchQuery}"`)
       return []
     }
+
+    console.log(`[v0] [Apify] First item structure:`, JSON.stringify(items[0], null, 2).substring(0, 500))
 
     // Extract prices from all hotels and all rooms
     const results: BookingPriceResult[] = []
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i] as any
-      console.log(`[v0] [Apify] Processing item ${i + 1}:`, item.name || item.hotel_name || "Unknown")
-
-      // Try multiple fields for price
-      const priceFields = [
-        item.price,
-        item.pricePerNight,
-        item.b_price,
-        item.b_raw_price,
-        item.cheapestPrice,
-        item.minPrice,
-      ]
+      const hotelName = item.name || item.hotel_name || item.title || "Unknown Hotel"
+      console.log(`[v0] [Apify] Processing item ${i + 1}/${items.length}: ${hotelName}`)
 
       // Try to extract from rooms array
       if (Array.isArray(item.rooms) && item.rooms.length > 0) {
-        console.log(`[v0] [Apify]   Found ${item.rooms.length} rooms in item ${i + 1}`)
+        console.log(`[v0] [Apify]   Found ${item.rooms.length} rooms`)
 
         for (const room of item.rooms) {
           const roomPrice = room.price || room.pricePerNight || room.totalPrice || room.displayPrice
@@ -547,50 +549,48 @@ async function scrapeViaApify(
               available: true,
               source: "Apify",
             })
-            console.log(`[v0] [Apify]   ✅ Room: ${room.name || "Unknown"} - ₪${roomPrice}`)
+            console.log(`[v0] [Apify]     ✅ Room "${room.name || "Unknown"}" - ₪${roomPrice}`)
           }
         }
       }
 
-      // If no rooms array, try to get price from item directly
-      if (results.length === 0) {
-        for (const priceField of priceFields) {
-          if (priceField && typeof priceField === "number" && priceField > 0) {
+      // Try multiple fields for price
+      const priceFields = [
+        item.price,
+        item.pricePerNight,
+        item.b_price,
+        item.b_raw_price,
+        item.cheapestPrice,
+        item.minPrice,
+      ]
+
+      for (const priceValue of priceFields) {
+        if (priceValue && typeof priceValue === "number" && priceValue > 0) {
+          // Check if not duplicate
+          const isDuplicate = results.some((r) => Math.abs(r.price - priceValue) < 10)
+          if (!isDuplicate) {
             results.push({
-              price: priceField,
+              price: priceValue,
               currency: item.currency || "ILS",
               roomType: item.roomType || "Standard Room",
               available: true,
               source: "Apify",
             })
-            console.log(`[v0] [Apify]   ✅ Price found: ₪${priceField}`)
-            break
+            console.log(`[v0] [Apify]     ✅ Hotel price - ₪${priceValue}`)
           }
+          break // Take first valid price found
         }
       }
     }
 
-    const validResults = results.filter((r) => r.price > 50 && r.price < 50000)
-    const uniqueResults = validResults.filter(
-      (result, index, self) => index === self.findIndex((r) => Math.abs(r.price - result.price) < 10),
-    )
-
-    console.log(
-      `[v0] [Apify] Extracted ${results.length} prices, ${validResults.length} valid, ${uniqueResults.length} unique`,
-    )
-
-    if (uniqueResults.length === 0) {
-      console.log(`[v0] [Apify] ⚠️ No valid prices extracted from ${items.length} items`)
-    } else {
-      console.log(`[v0] [Apify] ✅ Returning ${uniqueResults.length} room prices`)
-      uniqueResults.forEach((r, i) => {
-        console.log(`[v0] [Apify]   ${i + 1}. ${r.roomType}: ₪${r.price}`)
-      })
-    }
-
-    return uniqueResults
+    console.log(`[v0] [Apify] ✅ Total extracted ${results.length} prices`)
+    return results
   } catch (error) {
-    console.error("[v0] [Apify] Error:", error)
+    console.error(`[v0] [Apify] ❌ Error:`, error)
+    if (error instanceof Error) {
+      console.error(`[v0] [Apify] Error message: ${error.message}`)
+      console.error(`[v0] [Apify] Error stack:`, error.stack)
+    }
     return []
   }
 }
