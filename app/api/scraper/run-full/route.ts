@@ -410,11 +410,13 @@ export async function POST(request: Request) {
       })
       .eq("id", scanRecord.id)
 
-return NextResponse.json({       success: true
+    return NextResponse.json({
+            success: true,
       scanId: scanRecord.id,
       message: `Scanned! ${increases} increases, ${decreases} decreases`,
       daysScanned: scanDays,
       timedOut,
+  
       stats: {
         realScrapes: successfulScrapes,
         failedScrapes: failedScrapes,
