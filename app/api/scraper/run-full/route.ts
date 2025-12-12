@@ -216,8 +216,7 @@ export async function POST(request: Request) {
           break
         }
 
-        if (!competitor.booking_url && !competitor.competitor_hotel_name) {
-          console.log(`[v0] Skipping competitor - no booking_url or name: ${competitor.id}`)
+      if (!competitor.booking_url && !competitor.competitor_url && !competitor.competitor_hotel_name) {          console.log(`[v0] Skipping competitor - no booking_url or name: ${competitor.id}`)
           continue
         }
 
