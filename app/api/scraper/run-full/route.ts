@@ -3,7 +3,8 @@ import { NextResponse } from "next/server"
 import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 
 const SCAN_DAYS = 30
-const TIMEOUT_MS = 50000 // 50 seconds timeout to avoid Vercel function timeout
+const TIMEOUT_MS = 270000 // 270 seconds = 4.5 minutes timeout for chunked scanningconst maxExecutionTime = TIMEOUT_MS
+const CHUNK_SIZE = 5 // Scan 5 days at a time to avoid timeout
 const maxExecutionTime = TIMEOUT_MS
 
 function getDemandLevel(date: Date): { level: string; multiplier: number } {
