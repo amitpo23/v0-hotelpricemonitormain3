@@ -139,7 +139,7 @@ export async function POST(request: Request) {
           error_message: "No active competitors configured",
         })
         .eq("id", scanRecord.id)
-      return NextResponse.json({ error: "No active competitors found" }, { status: 400 })
+      return NextResponse.json({ error: "No active competitors found" }, { status: 400 }
     }
 
     console.log(`[v0] Scanning ${competitors.length} competitors for ${scanDays} days`)
@@ -406,7 +406,7 @@ export async function POST(request: Request) {
       .from("scans")
       .update({
         status: timedOut ? "partial" : "completed",
-        completed_at: new Date().toISOString(),
+        completed_at: new Date().toISOString()
       })
       .eq("id", scanRecord.id)
 
