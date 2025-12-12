@@ -410,7 +410,7 @@ export async function POST(request: Request) {
       })
       .eq("id", scanRecord.id)
 
-      success: true,
+      success: true
       scanId: scanRecord.id,
       message: `Scanned! ${increases} increases, ${decreases} decreases`,
       daysScanned: scanDays,
