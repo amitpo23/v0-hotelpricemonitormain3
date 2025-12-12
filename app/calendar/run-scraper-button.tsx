@@ -41,6 +41,78 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
   const [selectedDays, setSelectedDays] = useState(30)
   const router = useRouter()
 
+
+    // Run multiple scans in batches for large day counts
+  const runBatchScraper = async (totalDays: number) => {
+    const BATCH_SIZE = 5 // Scan 5 days at a time
+    const batches = Math.ceil(totalDays / BATCH_SIZE)
+    
+    setIsRunning(true)
+    setResult(null)
+    setError(null)
+    
+    let allResults: any[] = []
+    let totalStats = {
+      realScrapes: 0,
+      failedScrapes: 0,
+      totalRoomsFound: 0,
+      competitorPricesSaved: 0,
+      dailyPricesSaved: 0,
+      increaseRecommendations: 0,
+      decreaseRecommendations: 0
+    }
+    
+    try {
+      for (let i = 0; i < batches; i++) {
+        const startDayOffset = i * BATCH_SIZE
+        const daysToScan = Math.min(BATCH_SIZE, totalDays - startDayOffset)
+        
+        console.log(`[v0] Running batch ${i + 1}/${batches}: days ${startDayOffset}-${startDayOffset + daysToScan - 1}`)
+        
+        const response = await fetch("/api/scraper/run-full", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hotelId,
+            roomTypeId,
+            autoDetectRoomTypes: true,
+            daysToScan,
+            startDayOffset
+          }),
+        })
+        
+        const data = await response.json()
+        
+        if (response.ok && data.stats) {
+          allResults.push(data)
+          totalStats.realScrapes += data.stats.realScrapes || 0
+          totalStats.failedScrapes += data.stats.failedScrapes || 0
+          totalStats.totalRoomsFound += data.stats.totalRoomsFound || 0
+          totalStats.competitorPricesSaved += data.stats.competitorPricesSaved || 0
+          totalStats.dailyPricesSaved += data.stats.dailyPricesSaved || 0
+          totalStats.increaseRecommendations += data.stats.increaseRecommendations || 0
+          totalStats.decreaseRecommendations += data.stats.decreaseRecommendations || 0
+          
+          console.log(`[v0] Batch ${i + 1} complete. Progress: ${totalStats.competitorPricesSaved} prices saved`)
+        } else {
+          console.error(`[v0] Batch ${i + 1} failed:`, data.error || data.message)
+        }
+      }
+      
+      setResult({
+        success: true,
+        message: `Completed ${batches} batches for ${totalDays} days`,
+        stats: totalStats
+      })
+      router.refresh()
+    } catch (err: any) {
+      console.error("[v0] Batch scraper error:", err)
+      setError(err.message || "Failed to run batch scraper")
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
   const runScraper = async (daysToScan: number) => {
     setIsRunning(true)
     setResult(null)
@@ -89,8 +161,7 @@ export function RunScraperButton({ hotelId, hotelName, roomTypeId }: RunScraperB
       <div className="flex items-center gap-4">
         <div className="flex">
           <Button
-            onClick={() => runScraper(selectedDays)}
-            disabled={isRunning}
+            onClick={() => selectedDays >= 10 ? runBatchScraper(selectedDays) : runScraper(selectedDays)}            disabled={isRunning}
             className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 rounded-r-none"
           >
             {isRunning ? (
