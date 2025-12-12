@@ -416,6 +416,7 @@ export async function POST(request: Request) {
       message: `Scanned! ${increases} increases, ${decreases} decreases`,
       daysScanned: scanDays,
       timedOut,
+    
   
       stats: {
         realScrapes: successfulScrapes,
