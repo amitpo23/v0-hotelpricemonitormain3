@@ -407,11 +407,9 @@ export async function POST(request: Request) {
       .update({
         status: timedOut ? "partial" : "completed",
         completed_at: new Date().toISOString(),
-        results_count: competitorPriceResults.length,
       })
       .eq("id", scanRecord.id)
 
-    return NextResponse.json({
       success: true,
       scanId: scanRecord.id,
       message: `Scanned! ${increases} increases, ${decreases} decreases`,
