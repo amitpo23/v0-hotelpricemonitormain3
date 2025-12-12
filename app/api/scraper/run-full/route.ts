@@ -61,8 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    const { hotelId, roomTypeId, useRealScraping = true, daysToScan, startDayOffset = 0 } = requestBody
-
+    const { hotelId, roomTypeId, daysToScan, startDayOffset = 0 } = requestBody
     if (!hotelId) {
       return NextResponse.json({ error: "hotelId is required" }, { status: 400 })
     }
@@ -173,16 +172,6 @@ export async function POST(request: Request) {
       meal_plan: string | null
       max_occupancy: number | null
       raw_data: any | null
-    }> = []
-
-    const priceHistoryRecords: Array<{
-      competitor_id: string
-      date: string
-      old_price: number | null
-      new_price: number
-      price_change: number
-      change_percent: number
-      source: string
     }> = []
 
     let successfulScrapes = 0
@@ -323,7 +312,7 @@ export async function POST(request: Request) {
       for (let i = 0; i < competitorPriceResults.length; i += batchSize) {
         const batch = competitorPriceResults.slice(i, i + batchSize)
 
-        const { data, error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
+        const { error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
           batch.map((r) => ({
             hotel_id: r.hotel_id,
             competitor_id: r.competitor_id,
