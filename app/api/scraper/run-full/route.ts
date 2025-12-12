@@ -3,9 +3,8 @@ import { NextResponse } from "next/server"
 import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 
 const SCAN_DAYS = 30
-const TIMEOUT_MS = 50000 // 50 seconds timeout to avoid Vercel function timeout
+const TIMEOUT_MS = 600000 // 10 minutes timeout - removed timeout checks in loops
 const maxExecutionTime = TIMEOUT_MS
-
 function getDemandLevel(date: Date): { level: string; multiplier: number } {
   const dayOfWeek = date.getDay()
   const month = date.getMonth()
@@ -191,11 +190,11 @@ export async function POST(request: Request) {
     let timedOut = false
 
     for (let dayIndex = 0; dayIndex < scanDays; dayIndex++) {
-      if (Date.now() - startTime.getTime() > maxExecutionTime) {
-        timedOut = true
-        console.log(`[v0] Timeout reached after ${dayIndex} days`)
-        break
-      }
+      // if (Date.now() - startTime.getTime() > maxExecutionTime) {
+        // timedOut = true
+        // console.log(`[v0] Timeout reached after ${dayIndex} days`)
+        // break
+      // }
 
       if (dayIndex > 0 && dayIndex % 5 === 0) {
         console.log(`[v0] Progress: ${dayIndex}/${scanDays} days. Rooms found: ${totalRoomsFound}`)
@@ -211,10 +210,10 @@ export async function POST(request: Request) {
       const competitorPrices: number[] = []
 
       for (const competitor of competitors || []) {
-        if (Date.now() - startTime.getTime() > maxExecutionTime) {
-          timedOut = true
-          break
-        }
+        // if (Date.now() - startTime.getTime() > maxExecutionTime) {
+          // timedOut = true
+          // break
+        // }
 
       if (!competitor.booking_url && !competitor.competitor_url && !competitor.competitor_hotel_name) {          console.log(`[v0] Skipping competitor - no booking_url or name: ${competitor.id}`)
           continue
