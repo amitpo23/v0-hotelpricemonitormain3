@@ -22,15 +22,22 @@ async function executeScanForConfig(supabase: any, config: any, hotelData: any) 
     }
 
     const scrapedPrices: any[] = []
-    const dateStr = config.check_in_date || new Date().toISOString().split("T")[0]
+    const checkIn = config.check_in_date || new Date().toISOString().split("T")[0]
+    const checkInDate = new Date(checkIn)
+    checkInDate.setDate(checkInDate.getDate() + 1)
+    const checkOut = checkInDate.toISOString().split("T")[0]
     let realScrapeCount = 0
 
     for (const competitor of competitors) {
       const result = await scrapeCompetitorAllRooms(
-        competitor.id,
-        competitor.competitor_hotel_name,
-        dateStr,
-        competitor.booking_url,
+        {
+          id: competitor.id,
+          competitor_hotel_name: competitor.competitor_hotel_name,
+          booking_url: competitor.booking_url,
+          city: hotelData.city || "Tel Aviv",
+        },
+        checkIn,
+        checkOut,
       )
 
       if (result?.success && result.rooms && result.rooms.length > 0) {

@@ -2,9 +2,8 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 
-const SCAN_DAYS = 3
-const TIMEOUT_MS = 600000 // 600 seconds = 10 minutes timeout
-const CHUNK_SIZE = 3 // Scan 5 days at a time to avoid timeout 
+const SCAN_DAYS = 30
+const TIMEOUT_MS = 50000 // 50 seconds timeout to avoid Vercel function timeout
 const maxExecutionTime = TIMEOUT_MS
 
 function getDemandLevel(date: Date): { level: string; multiplier: number } {
@@ -62,7 +61,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    const { hotelId, roomTypeId, daysToScan, startDayOffset = 0 } = requestBody
+    const { hotelId, roomTypeId, useRealScraping = true, daysToScan, startDayOffset = 0 } = requestBody
+
     if (!hotelId) {
       return NextResponse.json({ error: "hotelId is required" }, { status: 400 })
     }
@@ -175,6 +175,16 @@ export async function POST(request: Request) {
       raw_data: any | null
     }> = []
 
+    const priceHistoryRecords: Array<{
+      competitor_id: string
+      date: string
+      old_price: number | null
+      new_price: number
+      price_change: number
+      change_percent: number
+      source: string
+    }> = []
+
     let successfulScrapes = 0
     let failedScrapes = 0
     let totalRoomsFound = 0
@@ -252,35 +262,6 @@ export async function POST(request: Request) {
                 raw_data: room.rawData || null,
               })
             }
-
-                          // Save competitor prices immediately to avoid data loss on timeout
-              if (competitorPriceResults.length > 0) {
-                const recentBatch = competitorPriceResults.slice(-scrapedResult.rooms.length)
-                const { error: immediateError } = await supabase.from("competitor_daily_prices").upsert(
-                  recentBatch.map((r) => ({
-                    hotel_id: r.hotel_id,
-                    competitor_id: r.competitor_id,
-                    date: r.date,
-                    price: r.price,
-                    source: r.source,
-                    room_type: r.room_type,
-                    room_name: r.room_name,
-                    availability: r.availability,
-                    original_price: r.original_price,
-                    meal_plan: r.meal_plan,
-                    max_occupancy: r.max_occupancy,
-                    raw_data: r.raw_data,
-                    scraped_at: new Date().toISOString(),
-                  })),
-                  {
-                    onConflict: "hotel_id,competitor_id,date,source,room_type",
-                    ignoreDuplicates: false,
-                  },
-                )
-                if (!immediateError) {
-                  console.log(`[v0] ✅ Saved ${recentBatch.length} prices for ${competitor.competitor_hotel_name}`)
-                }
-              }
           } else {
             failedScrapes++
             console.log(`[v0] FAILED: ${competitor.competitor_hotel_name} for ${dateStr}`)
@@ -342,7 +323,7 @@ export async function POST(request: Request) {
       for (let i = 0; i < competitorPriceResults.length; i += batchSize) {
         const batch = competitorPriceResults.slice(i, i + batchSize)
 
-        const { error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
+        const { data, error: competitorError } = await supabase.from("competitor_daily_prices").upsert(
           batch.map((r) => ({
             hotel_id: r.hotel_id,
             competitor_id: r.competitor_id,
@@ -425,18 +406,17 @@ export async function POST(request: Request) {
       .from("scans")
       .update({
         status: timedOut ? "partial" : "completed",
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
+        results_count: competitorPriceResults.length,
       })
       .eq("id", scanRecord.id)
 
     return NextResponse.json({
-            success: true,
+      success: true,
       scanId: scanRecord.id,
       message: `Scanned! ${increases} increases, ${decreases} decreases`,
       daysScanned: scanDays,
       timedOut,
-    
-  
       stats: {
         realScrapes: successfulScrapes,
         failedScrapes: failedScrapes,
@@ -450,5 +430,5 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[v0] Scraper error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-      }
   }
+}
