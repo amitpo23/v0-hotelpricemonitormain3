@@ -402,19 +402,14 @@ export async function POST(request: Request) {
     const increases = results.filter((r) => r.autopilot_action === "increase").length
     const decreases = results.filter((r) => r.autopilot_action === "decrease").length
 
-    const { error: scanUpdateError } = await supabase      .from("scans")
+    await supabase
+      .from("scans")
       .update({
         status: timedOut ? "partial" : "completed",
         completed_at: new Date().toISOString(),
         results_count: competitorPriceResults.length,
       })
       .eq("id", scanRecord.id)
-
-        if (scanUpdateError) {
-                console.error("[v0] Error updating scan status:", JSON.stringify(scanUpdateError));
-              } else {
-                console.log("[v0] Scan status updated to completed");
-              }
 
     return NextResponse.json({
       success: true,
