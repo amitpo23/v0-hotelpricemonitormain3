@@ -228,8 +228,7 @@ export async function POST(request: Request) {
             {
               id: competitor.id,
               competitor_hotel_name: competitor.competitor_hotel_name || competitor.name,
-              booking_url: competitor.booking_url,
-              city: hotel.city || "Tel Aviv",
+            booking_url: competitor.booking_url || competitor.competitor_url,              city: hotel.city || "Tel Aviv",
             },
             dateStr,
             checkOutDate,
