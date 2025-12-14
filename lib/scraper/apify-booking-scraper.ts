@@ -60,7 +60,7 @@ export async function scrapeBookingWithApify(
     console.log("[v0] Running Apify actor with input:", input)
 
     // Run the Booking.com scraper actor
-    const run = await client.actor("oeiQgfg5fsmIJB7Cn").call(input, {
+    const run = await client.actor("ibuACIW3tmVDVMxct").call(input, {
       waitForFinish: 120, // Wait up to 2 minutes
     })
 
