@@ -474,7 +474,7 @@ async function scrapeViaApify(
     const { ApifyClient } = await import("apify-client")
     const client = new ApifyClient({ token: APIFY_API_KEY })
 
-    const ACTOR_ID = "oeiQgfg5fsmIJB7Cn"
+    const ACTOR_ID = "ibuACIW3tmVDVMxct"
 
     // More specific search query
     const input = {
