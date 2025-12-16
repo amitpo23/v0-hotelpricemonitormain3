@@ -226,11 +226,9 @@ export async function POST(request: Request) {
         try {
           const scrapedResult = await scrapeCompetitorAllRooms(
             {
-              id: competitor.id,
-              competitor_hotel_name: competitor.competitor_hotel_name || competitor.name,
-              booking_url: competitor.booking_url,
-              city: hotel.city || "Tel Aviv",
-            },
+          ...competitor,
+          city: hotel.city || "Tel Aviv",
+        },,
             dateStr,
             checkOutDate,
           )
