@@ -228,7 +228,7 @@ export async function POST(request: Request) {
             {
           ...competitor,
           city: hotel.city || "Tel Aviv",
-        },,
+        },
             dateStr,
             checkOutDate,
           )
