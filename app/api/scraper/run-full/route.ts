@@ -354,6 +354,38 @@ export async function POST(request: Request) {
       }
 
       console.log(`[v0] TOTAL SAVED to competitor_daily_prices: ${savedCount} records`)
+
+      console.log(`[v0] Saving ${competitorPriceResults.length} records to scan_results`)
+
+      const scanResultsData = competitorPriceResults.map((r) => ({
+        scan_id: scanRecord.id,
+        hotel_id: r.hotel_id,
+        competitor_name: null, // Will be populated from metadata
+        source: r.source,
+        price: r.price,
+        room_type: r.room_type,
+        availability: r.availability,
+        scraped_at: new Date().toISOString(),
+        metadata: {
+          check_in: r.date,
+          competitor_id: r.competitor_id,
+          competitor_name: competitors?.find((c) => c.id === r.competitor_id)?.competitor_hotel_name || null,
+          room_name: r.room_name,
+          original_price: r.original_price,
+          meal_plan: r.meal_plan,
+          max_occupancy: r.max_occupancy,
+        },
+      }))
+
+      const { data: scanResultsInserted, error: scanResultsError } = await supabase
+        .from("scan_results")
+        .insert(scanResultsData)
+
+      if (scanResultsError) {
+        console.error(`[v0] scan_results error:`, JSON.stringify(scanResultsError))
+      } else {
+        console.log(`[v0] Saved ${scanResultsData.length} records to scan_results`)
+      }
     }
 
     if (results.length > 0) {
