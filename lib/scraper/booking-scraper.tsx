@@ -740,27 +740,25 @@ export async function scrapeBookingPrices(
   console.log(`[v0] Booking URL: ${bookingUrl || "not provided"}`)
   console.log(`[v0] ========================================`)
 
-  // Method 0: Tavily (PRIMARY METHOD - FASTEST)
-  if (TAVILY_API_KEY) {
+  if (APIFY_API_KEY) {
     try {
-      console.log("[v0] [BookingScraper] Trying Method 0: Tavily (PRIMARY)...")
-      const tavilyResults = await scrapeViaTavily(hotelName, location, checkIn, checkOut)
-      if (tavilyResults.length > 0) {
-        console.log("[v0] [BookingScraper] Method 0 (Tavily) SUCCESS! Found", tavilyResults.length, "rooms")
+      console.log("[v0] [BookingScraper] Trying Method 0: Apify Search (PRIMARY)...")
+      const apifyResults = await scrapeViaApify(hotelName, location, checkIn, checkOut)
+      if (apifyResults.length > 0) {
+        console.log("[v0] [BookingScraper] Method 0 (Apify) SUCCESS! Found", apifyResults.length, "rooms")
         return {
           success: true,
-          results: tavilyResults,
-          source: "Booking.com (Tavily)",
-          method: "tavily",
+          results: apifyResults,
+          source: "Booking.com (Apify)",
+          method: "apify",
         }
       }
-      console.log("[v0] [BookingScraper] Method 0 (Tavily) returned no results")
+      console.log("[v0] [BookingScraper] Method 0 (Apify) returned no results")
     } catch (e) {
-      console.log("[v0] [BookingScraper] Method 0 (Tavily) failed:", e)
+      console.log("[v0] [BookingScraper] Method 0 (Apify) failed:", e)
     }
   }
 
-  // Method 1: Direct Booking URL (fallback)
   if (bookingUrl && APIFY_API_KEY) {
     try {
       console.log("[v0] [BookingScraper] Trying Method 1: Direct Booking URL...")
@@ -780,23 +778,22 @@ export async function scrapeBookingPrices(
     }
   }
 
-  // Method 2: Apify Search (last resort)
-  if (APIFY_API_KEY) {
+  if (TAVILY_API_KEY) {
     try {
-      console.log("[v0] [BookingScraper] Trying Method 2: Apify Search...")
-      const apifyResults = await scrapeViaApify(hotelName, location, checkIn, checkOut)
-      if (apifyResults.length > 0) {
-        console.log("[v0] [BookingScraper] Method 2 SUCCESS! Found", apifyResults.length, "rooms")
+      console.log("[v0] [BookingScraper] Trying Method 2: Tavily (last resort)...")
+      const tavilyResults = await scrapeViaTavily(hotelName, location, checkIn, checkOut)
+      if (tavilyResults.length > 0) {
+        console.log("[v0] [BookingScraper] Method 2 (Tavily) SUCCESS! Found", tavilyResults.length, "rooms")
         return {
           success: true,
-          results: apifyResults,
-          source: "Booking.com (Apify)",
-          method: "apify",
+          results: tavilyResults,
+          source: "Booking.com (Tavily)",
+          method: "tavily",
         }
       }
-      console.log("[v0] [BookingScraper] Method 2 returned no results")
+      console.log("[v0] [BookingScraper] Method 2 (Tavily) returned no results")
     } catch (e) {
-      console.log("[v0] [BookingScraper] Method 2 failed:", e)
+      console.log("[v0] [BookingScraper] Method 2 (Tavily) failed:", e)
     }
   }
 
