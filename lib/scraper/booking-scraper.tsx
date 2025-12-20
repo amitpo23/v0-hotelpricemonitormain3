@@ -740,31 +740,12 @@ export async function scrapeBookingPrices(
   console.log(`[v0] Booking URL: ${bookingUrl || "not provided"}`)
   console.log(`[v0] ========================================`)
 
-  if (APIFY_API_KEY) {
-    try {
-      console.log("[v0] [BookingScraper] Trying Method 0: Apify Search (PRIMARY)...")
-      const apifyResults = await scrapeViaApify(hotelName, location, checkIn, checkOut)
-      if (apifyResults.length > 0) {
-        console.log("[v0] [BookingScraper] Method 0 (Apify) SUCCESS! Found", apifyResults.length, "rooms")
-        return {
-          success: true,
-          results: apifyResults,
-          source: "Booking.com (Apify)",
-          method: "apify",
-        }
-      }
-      console.log("[v0] [BookingScraper] Method 0 (Apify) returned no results")
-    } catch (e) {
-      console.log("[v0] [BookingScraper] Method 0 (Apify) failed:", e)
-    }
-  }
-
   if (bookingUrl && APIFY_API_KEY) {
     try {
-      console.log("[v0] [BookingScraper] Trying Method 1: Direct Booking URL...")
+      console.log("[v0] [BookingScraper] Trying Method 0: Direct Booking URL (PRIMARY)...")
       const directResults = await scrapeViaDirectUrl(bookingUrl, checkIn, checkOut)
       if (directResults.length > 0) {
-        console.log("[v0] [BookingScraper] Method 1 SUCCESS! Found", directResults.length, "rooms")
+        console.log("[v0] [BookingScraper] Method 0 (Direct URL) SUCCESS! Found", directResults.length, "rooms")
         return {
           success: true,
           results: directResults,
@@ -772,9 +753,28 @@ export async function scrapeBookingPrices(
           method: "direct-url",
         }
       }
-      console.log("[v0] [BookingScraper] Method 1 returned no results")
+      console.log("[v0] [BookingScraper] Method 0 (Direct URL) returned no results")
     } catch (e) {
-      console.log("[v0] [BookingScraper] Method 1 failed:", e)
+      console.log("[v0] [BookingScraper] Method 0 (Direct URL) failed:", e)
+    }
+  }
+
+  if (APIFY_API_KEY) {
+    try {
+      console.log("[v0] [BookingScraper] Trying Method 1: Apify Search (fallback)...")
+      const apifyResults = await scrapeViaApify(hotelName, location, checkIn, checkOut)
+      if (apifyResults.length > 0) {
+        console.log("[v0] [BookingScraper] Method 1 (Apify) SUCCESS! Found", apifyResults.length, "rooms")
+        return {
+          success: true,
+          results: apifyResults,
+          source: "Booking.com (Apify)",
+          method: "apify",
+        }
+      }
+      console.log("[v0] [BookingScraper] Method 1 (Apify) returned no results")
+    } catch (e) {
+      console.log("[v0] [BookingScraper] Method 1 (Apify) failed:", e)
     }
   }
 
