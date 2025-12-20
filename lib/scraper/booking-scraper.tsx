@@ -818,17 +818,6 @@ export async function scrapeBookingViaHtml(
   return null
 }
 
-export async function scrapeBookingPrice(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-  bookingUrl?: string,
-): Promise<BookingScraperResponse> {
-  return scrapeBookingPrices(hotelName, city, checkIn, checkOut, bookingUrl)
-}
-
-
 // Enhanced scraper with retry mechanism for multiple competitors
 export async function scrapeMultipleCompetitorsWithRetry(
   competitors: Array<{
@@ -839,76 +828,78 @@ export async function scrapeMultipleCompetitorsWithRetry(
   }>,
   checkIn: string,
   checkOut: string,
-  maxRetries: number = 3
+  maxRetries = 3,
 ): Promise<Array<any>> {
   const allResults: Array<any> = []
-  const failedCompetitors: Array<{competitor: any, retries: number, lastError?: string}> = []
-  
+  const failedCompetitors: Array<{ competitor: any; retries: number; lastError?: string }> = []
+
   console.log(`[v0] [MultiScraper] Starting scan for ${competitors.length} competitors`)
   console.log(`[v0] [MultiScraper] Date range: ${checkIn} to ${checkOut}`)
-  
+
   // First attempt for all competitors
   for (const competitor of competitors) {
     console.log(`[v0] [MultiScraper] Competitor: ${competitor.name}, Attempt: 1/${maxRetries}`)
-    
+
     try {
       const result = await scrapeBookingPrices(
         competitor.name,
         competitor.location,
         checkIn,
         checkOut,
-        competitor.booking_url || undefined
+        competitor.booking_url || undefined,
       )
-      
+
       if (result.success && result.results.length > 0) {
         console.log(`[v0] [MultiScraper] ✓ ${competitor.name}: ${result.results.length} results`)
         allResults.push(...result.results)
       } else {
         console.log(`[v0] [MultiScraper] ✗ ${competitor.name}: No results, adding to retry queue`)
-        failedCompetitors.push({competitor, retries: 1, lastError: result.error})
+        failedCompetitors.push({ competitor, retries: 1, lastError: result.error })
       }
     } catch (error: any) {
       console.error(`[v0] [MultiScraper] ✗ ${competitor.name}: Exception:`, error.message)
-      failedCompetitors.push({competitor, retries: 1, lastError: error.message})
+      failedCompetitors.push({ competitor, retries: 1, lastError: error.message })
     }
   }
-  
+
   // Retry failed competitors
   let retryRound = 2
   while (failedCompetitors.length > 0 && retryRound <= maxRetries) {
     console.log(`[v0] [MultiScraper] Retry round ${retryRound}/${maxRetries}: ${failedCompetitors.length} competitors`)
-    
+
     const toRetry = [...failedCompetitors]
     failedCompetitors.length = 0 // Clear array
-    
+
     for (const failed of toRetry) {
       console.log(`[v0] [MultiScraper] Retry ${failed.competitor.name}, Attempt: ${retryRound}/${maxRetries}`)
-      
+
       try {
         const result = await scrapeBookingPrices(
           failed.competitor.name,
           failed.competitor.location,
           checkIn,
           checkOut,
-          failed.competitor.booking_url || undefined
+          failed.competitor.booking_url || undefined,
         )
-        
+
         if (result.success && result.results.length > 0) {
-          console.log(`[v0] [MultiScraper] ✓ ${failed.competitor.name}: ${result.results.length} results (retry success)`)
+          console.log(
+            `[v0] [MultiScraper] ✓ ${failed.competitor.name}: ${result.results.length} results (retry success)`,
+          )
           allResults.push(...result.results)
         } else {
           console.log(`[v0] [MultiScraper] ✗ ${failed.competitor.name}: Still no results`)
-          failedCompetitors.push({...failed, retries: retryRound, lastError: result.error})
+          failedCompetitors.push({ ...failed, retries: retryRound, lastError: result.error })
         }
       } catch (error: any) {
         console.error(`[v0] [MultiScraper] ✗ ${failed.competitor.name}: Exception:`, error.message)
-        failedCompetitors.push({...failed, retries: retryRound, lastError: error.message})
+        failedCompetitors.push({ ...failed, retries: retryRound, lastError: error.message })
       }
     }
-    
+
     retryRound++
   }
-  
+
   // Final summary
   const successCount = competitors.length - failedCompetitors.length
   console.log(`[v0] [MultiScraper] ========== SCAN COMPLETE ==========`)
@@ -916,13 +907,15 @@ export async function scrapeMultipleCompetitorsWithRetry(
   console.log(`[v0] [MultiScraper] Successful: ${successCount}`)
   console.log(`[v0] [MultiScraper] Failed: ${failedCompetitors.length}`)
   console.log(`[v0] [MultiScraper] Total results: ${allResults.length}`)
-  
+
   if (failedCompetitors.length > 0) {
     console.log(`[v0] [MultiScraper] Failed competitors after ${maxRetries} attempts:`)
-    failedCompetitors.forEach(f => {
-      console.log(`[v0] [MultiScraper]   - ${f.competitor.name}: ${f.lastError || 'Unknown error'}`)
+    failedCompetitors.forEach((f) => {
+      console.log(`[v0] [MultiScraper]   - ${f.competitor.name}: ${f.lastError || "Unknown error"}`)
     })
   }
-  
+
   return allResults
 }
+
+export { scrapeBookingPrices as scrapeBookingPrice }

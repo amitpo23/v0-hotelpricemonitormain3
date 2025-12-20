@@ -51,6 +51,8 @@ export async function POST(request: Request) {
   const startTime = new Date()
   console.log("[v0] Booking.com Scraper started at:", startTime.toISOString())
 
+  let scanRecord: any = null
+
   try {
     const supabase = await createClient()
 
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Hotel not found" }, { status: 404 })
     }
 
-    const { data: scanRecord, error: scanError } = await supabase
+    const { data: scanRecordData, error: scanError } = await supabase
       .from("scans")
       .insert({
         config_id: null,
@@ -86,9 +88,11 @@ export async function POST(request: Request) {
       .select()
       .single()
 
-    if (scanError || !scanRecord) {
+    if (scanError || !scanRecordData) {
       return NextResponse.json({ error: "Failed to create scan record" }, { status: 500 })
     }
+
+    scanRecord = scanRecordData
 
     let { data: hotelRoomTypes } = await supabase
       .from("hotel_room_types")
@@ -440,6 +444,29 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("[v0] Scraper error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+
+    if (scanRecord?.id) {
+      try {
+        const supabase = await createClient()
+        await supabase
+          .from("scans")
+          .update({
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            error_message: error instanceof Error ? error.message : "Unknown error occurred",
+          })
+          .eq("id", scanRecord.id)
+        console.log("[v0] Updated scan status to failed")
+      } catch (updateError) {
+        console.error("[v0] Failed to update scan status:", updateError)
+      }
+    }
+
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Internal server error",
+      },
+      { status: 500 },
+    )
   }
 }

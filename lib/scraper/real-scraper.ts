@@ -1,4 +1,8 @@
-import { scrapeBookingPrice, type BookingPriceResult, type BookingScraperResponse } from "./booking-scraper"
+import {
+  scrapeBookingPrices as scrapeBookingPrice,
+  type BookingPriceResult,
+  type BookingScraperResponse,
+} from "./booking-scraper"
 
 export interface CompetitorPriceResult {
   competitorId: string

@@ -72,6 +72,8 @@ async function fetchMarketData(city: string, date: string) {
 export async function POST(request: Request) {
   const supabase = await createClient()
 
+  let scan: any = null
+
   try {
     const body = await request.json()
     const { config_id, hotel_id } = body
@@ -103,7 +105,7 @@ export async function POST(request: Request) {
     }
 
     // Create scan record
-    const { data: scan, error: scanError } = await supabase
+    const { data: scanData, error: scanError } = await supabase
       .from("scans")
       .insert({
         config_id: config_id || null,
@@ -116,6 +118,8 @@ export async function POST(request: Request) {
     if (scanError) {
       return NextResponse.json({ error: scanError.message }, { status: 500 })
     }
+
+    scan = scanData
 
     console.log(`[Scan] Starting REAL scan for hotel: ${hotelData.name}`)
 
@@ -233,6 +237,28 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("[Scan] Scan execution error:", error)
-    return NextResponse.json({ error: "Failed to execute scan" }, { status: 500 })
+
+    if (scan?.id) {
+      try {
+        await supabase
+          .from("scans")
+          .update({
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            error_message: error instanceof Error ? error.message : "Unknown error occurred",
+          })
+          .eq("id", scan.id)
+        console.log("[Scan] Updated scan status to failed")
+      } catch (updateError) {
+        console.error("[Scan] Failed to update scan status:", updateError)
+      }
+    }
+
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Failed to execute scan",
+      },
+      { status: 500 },
+    )
   }
 }
