@@ -35,16 +35,14 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
   })
 
   // Get competitor average for each date
-  const competitorByDate: Record<string, { booking: number[]; expedia: number[] }> = {}
+  const competitorByDate: Record<string, { booking: number[] }> = {}
   competitorPrices?.forEach((cp) => {
     const dateStr = cp.date
     if (!competitorByDate[dateStr]) {
-      competitorByDate[dateStr] = { booking: [], expedia: [] }
+      competitorByDate[dateStr] = { booking: [] }
     }
     if (cp.source?.toLowerCase().includes("booking")) {
       competitorByDate[dateStr].booking.push(Number(cp.price))
-    } else if (cp.source?.toLowerCase().includes("expedia")) {
-      competitorByDate[dateStr].expedia.push(Number(cp.price))
     }
   })
 
@@ -52,9 +50,6 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
     const compData = competitorByDate[p.prediction_date]
     const bookingAvg = compData?.booking.length
       ? Math.round(compData.booking.reduce((a, b) => a + b, 0) / compData.booking.length)
-      : null
-    const expediaAvg = compData?.expedia.length
-      ? Math.round(compData.expedia.reduce((a, b) => a + b, 0) / compData.expedia.length)
       : null
 
     return {
@@ -65,7 +60,6 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
       confidence: Math.round((p.confidence_score || 0) * 100),
       occupancy: p.factors?.occupancy_rate || 0,
       bookingAvg,
-      expediaAvg,
     }
   })
 
@@ -223,7 +217,6 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
                   const labels: Record<string, string> = {
                     price: "מחיר מומלץ",
                     bookingAvg: "ממוצע Booking",
-                    expediaAvg: "ממוצע Expedia",
                     occupancy: "תפוסה",
                   }
                   if (name === "occupancy") return [`${value}%`, labels[name]]
@@ -249,15 +242,6 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
                 strokeDasharray="5 5"
                 dot={false}
               />
-              <Line
-                type="monotone"
-                dataKey="expediaAvg"
-                name="ממוצע Expedia"
-                stroke="#eab308"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={false}
-              />
               <Bar dataKey="occupancy" name="תפוסה %" fill="#22c55e" fillOpacity={0.2} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -266,7 +250,7 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
 
       {/* Stats Summary */}
       {chartData.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t">
           <div className="text-center">
             <div className="text-sm text-muted-foreground">מחיר ממוצע מומלץ</div>
             <div className="text-xl font-bold text-purple-500">
@@ -280,16 +264,6 @@ export function PredictionChart({ predictions, competitorPrices = [] }: Predicti
               {Math.round(
                 chartData.filter((d) => d.bookingAvg).reduce((sum, d) => sum + (d.bookingAvg || 0), 0) /
                   (chartData.filter((d) => d.bookingAvg).length || 1),
-              )}
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-sm text-muted-foreground">ממוצע Expedia</div>
-            <div className="text-xl font-bold text-yellow-500">
-              ₪
-              {Math.round(
-                chartData.filter((d) => d.expediaAvg).reduce((sum, d) => sum + (d.expediaAvg || 0), 0) /
-                  (chartData.filter((d) => d.expediaAvg).length || 1),
               )}
             </div>
           </div>

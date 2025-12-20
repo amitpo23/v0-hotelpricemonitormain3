@@ -3,14 +3,7 @@ import { NextResponse } from "next/server"
 import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 
 // Simulated scraping sources - in production, these would be real scrapers
-const BOOKING_SOURCES = [
-  { name: "Booking.com", baseVariation: 0.95 },
-  { name: "Expedia", baseVariation: 1.02 },
-  { name: "Hotels.com", baseVariation: 0.98 },
-  { name: "Agoda", baseVariation: 0.92 },
-  { name: "Trip.com", baseVariation: 1.05 },
-  { name: "Direct Website", baseVariation: 1.0 },
-]
+const BOOKING_SOURCES = [{ name: "Booking.com", baseVariation: 0.95 }]
 
 // Scrape competitor prices from various sources
 async function scrapeCompetitorPrices(

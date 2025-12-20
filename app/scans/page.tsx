@@ -17,10 +17,7 @@ import Link from "next/link"
 import { RunScanButton } from "./run-scan-button"
 import { BatchScanButton } from "./batch-scan-button"
 
-const DATA_SOURCES = [
-  { name: "Booking.com", color: "#003580" },
-  { name: "Expedia", color: "#FFCC00" },
-]
+const DATA_SOURCES = [{ name: "Booking.com", color: "#003580" }]
 
 export default async function ScansPage() {
   const supabase = await createClient()
@@ -39,7 +36,7 @@ export default async function ScansPage() {
   const { data: recentResults } = await supabase
     .from("scan_results")
     .select("*")
-    .in("source", ["Booking.com", "Expedia"])
+    .eq("source", "Booking.com")
     .order("scraped_at", { ascending: false })
     .limit(20)
 
@@ -58,7 +55,7 @@ export default async function ScansPage() {
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
             Price Radar
           </h1>
-          <p className="text-muted-foreground">Real-time competitor price monitoring from Booking.com & Expedia</p>
+          <p className="text-muted-foreground">Real-time competitor price monitoring from Booking.com</p>
         </div>
         <div className="flex gap-3">
           <BatchScanButton />
@@ -112,12 +109,11 @@ export default async function ScansPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Data Sources</p>
-                <p className="text-3xl font-bold text-orange-400">2</p>
+                <p className="text-sm text-muted-foreground">Data Source</p>
+                <p className="text-3xl font-bold text-orange-400">1</p>
               </div>
               <div className="flex flex-col gap-1">
                 <Badge className="bg-[#003580] text-white text-xs">Booking</Badge>
-                <Badge className="bg-[#FFCC00] text-black text-xs">Expedia</Badge>
               </div>
             </div>
           </CardContent>
@@ -162,11 +158,6 @@ export default async function ScansPage() {
                       {comp.booking_url && (
                         <Badge variant="outline" className="text-[10px] px-1 py-0">
                           B
-                        </Badge>
-                      )}
-                      {comp.expedia_url && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0">
-                          E
                         </Badge>
                       )}
                     </div>
@@ -243,7 +234,7 @@ export default async function ScansPage() {
           <Card>
             <CardHeader>
               <CardTitle>Latest Price Data</CardTitle>
-              <CardDescription>Recent prices from Booking.com & Expedia</CardDescription>
+              <CardDescription>Recent prices from Booking.com</CardDescription>
             </CardHeader>
             <CardContent>
               {!recentResults || recentResults.length === 0 ? (
@@ -266,13 +257,7 @@ export default async function ScansPage() {
                       {recentResults.slice(0, 10).map((result: any, idx: number) => (
                         <tr key={result.id || idx} className="border-b border-border/50">
                           <td className="py-2 px-3">
-                            <Badge
-                              className={
-                                result.source === "Booking.com" ? "bg-[#003580] text-white" : "bg-[#FFCC00] text-black"
-                              }
-                            >
-                              {result.source === "Booking.com" ? "Booking" : "Expedia"}
-                            </Badge>
+                            <Badge className="bg-[#003580] text-white">Booking</Badge>
                           </td>
                           <td className="py-2 px-3">
                             <span className="text-cyan-400 font-mono font-bold">
@@ -365,10 +350,10 @@ export default async function ScansPage() {
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                        style={{ backgroundColor: source.color, color: source.name === "Expedia" ? "#000" : "#fff" }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                        style={{ backgroundColor: source.color }}
                       >
-                        {source.name[0]}
+                        B
                       </div>
                       <span className="font-medium">{source.name}</span>
                     </div>
