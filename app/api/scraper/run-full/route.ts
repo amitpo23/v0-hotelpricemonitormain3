@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
+import { scrapeMultipleCompetitorsWithRetry } from "@/lib/scraper/real-scraper"
 
 const SCAN_DAYS = 30
 const TIMEOUT_MS = 50000 // 50 seconds timeout to avoid Vercel function timeout
@@ -210,68 +210,47 @@ export async function POST(request: Request) {
       const demandInfo = getDemandLevel(scanDate)
       const competitorPrices: number[] = []
 
-      for (const competitor of competitors || []) {
-        if (Date.now() - startTime.getTime() > maxExecutionTime) {
-          timedOut = true
-          break
-        }
+      const scrapedResults = await scrapeMultipleCompetitorsWithRetry(
+        (competitors || []).map((c) => ({
+          id: c.id,
+          competitor_hotel_name: c.competitor_hotel_name || c.name,
+          booking_url: c.booking_url,
+          city: hotel.city || "Tel Aviv",
+        })),
+        dateStr,
+        checkOutDate,
+        3, // maxRetries
+      )
 
-        if (!competitor.booking_url && !competitor.competitor_hotel_name) {
-          console.log(`[v0] Skipping competitor - no booking_url or name: ${competitor.id}`)
-          continue
-        }
+      // Process all results
+      for (const scrapedResult of scrapedResults) {
+        if (scrapedResult.success && scrapedResult.rooms.length > 0) {
+          successfulScrapes++
+          totalRoomsFound += scrapedResult.rooms.length
+          console.log(`[v0] SUCCESS: ${scrapedResult.competitorName} - ${scrapedResult.rooms.length} room types`)
 
-        console.log(`[v0] Starting scrape for: ${competitor.competitor_hotel_name || competitor.name}`)
+          for (const room of scrapedResult.rooms) {
+            competitorPrices.push(room.price)
 
-        try {
-          const scrapedResult = await scrapeCompetitorAllRooms(
-            {
-              id: competitor.id,
-              competitor_hotel_name: competitor.competitor_hotel_name || competitor.name,
-              booking_url: competitor.booking_url,
-              city: hotel.city || "Tel Aviv",
-            },
-            dateStr,
-            checkOutDate,
-          )
-
-          console.log(
-            `[v0] Scrape result for ${competitor.competitor_hotel_name}: success=${scrapedResult.success}, rooms=${scrapedResult.rooms.length}`,
-          )
-
-          if (scrapedResult.success && scrapedResult.rooms.length > 0) {
-            successfulScrapes++
-            totalRoomsFound += scrapedResult.rooms.length
-            console.log(`[v0] SUCCESS: ${competitor.competitor_hotel_name} - ${scrapedResult.rooms.length} room types`)
-
-            for (const room of scrapedResult.rooms) {
-              competitorPrices.push(room.price)
-
-              competitorPriceResults.push({
-                hotel_id: hotelId,
-                competitor_id: competitor.id,
-                date: dateStr,
-                price: room.price,
-                source: "Booking.com",
-                room_type: room.roomType,
-                room_name: room.roomName || room.roomType,
-                availability: true,
-                original_price: room.originalPrice || null,
-                meal_plan: room.mealPlan || null,
-                max_occupancy: room.maxOccupancy || null,
-                raw_data: room.rawData || null,
-              })
-            }
-          } else {
-            failedScrapes++
-            console.log(`[v0] FAILED: ${competitor.competitor_hotel_name} for ${dateStr}`)
+            competitorPriceResults.push({
+              hotel_id: hotelId,
+              competitor_id: scrapedResult.competitorId,
+              date: dateStr,
+              price: room.price,
+              source: "Booking.com",
+              room_type: room.roomType,
+              room_name: room.roomName || room.roomType,
+              availability: true,
+              original_price: room.originalPrice || null,
+              meal_plan: room.mealPlan || null,
+              max_occupancy: room.maxOccupancy || null,
+              raw_data: room.rawData || null,
+            })
           }
-        } catch (error) {
+        } else {
           failedScrapes++
-          console.error(`[v0] Scrape error for ${competitor.competitor_hotel_name}:`, error)
+          console.log(`[v0] FAILED: ${scrapedResult.competitorName} for ${dateStr} - ${scrapedResult.errorMessage}`)
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 300))
       }
 
       for (const roomType of hotelRoomTypes || []) {
