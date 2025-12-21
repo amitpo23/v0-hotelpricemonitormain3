@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-rds-data": "latest",
+        "apify-client": "^2.9.3",
     "@cloudflare/workers-types": "latest",
     "@electric-sql/pglite": "latest",
     "@libsql/client": "latest",
