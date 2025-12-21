@@ -367,14 +367,9 @@ export function CalendarGrid({
               const occupancyPercent = Math.round((occupancy / totalRooms) * 100)
 
               const bookingPrices = dayCompetitorPrices.filter((p) => p.source === "Booking.com")
-              const expediaPrices = dayCompetitorPrices.filter((p) => p.source === "Expedia")
               const bookingAvg =
                 bookingPrices.length > 0
                   ? Math.round(bookingPrices.reduce((sum, p) => sum + (p.price || 0), 0) / bookingPrices.length)
-                  : null
-              const expediaAvg =
-                expediaPrices.length > 0
-                  ? Math.round(expediaPrices.reduce((sum, p) => sum + (p.price || 0), 0) / expediaPrices.length)
                   : null
 
               return (
@@ -437,12 +432,6 @@ export function CalendarGrid({
                             <span className="text-blue-400 font-medium">₪{bookingAvg}</span>
                           </div>
                         )}
-                        {expediaAvg && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-yellow-400 text-[8px]">E:</span>
-                            <span className="text-yellow-400 font-medium">₪{expediaAvg}</span>
-                          </div>
-                        )}
                         {priceData.recommended_price && priceData.autopilot_action !== "maintain" && (
                           <div className="flex items-center justify-between pt-0.5 border-t border-border/50">
                             {getRecommendationIcon(priceData)}
@@ -458,12 +447,6 @@ export function CalendarGrid({
                           <div className="flex items-center justify-between">
                             <span className="text-blue-400 text-[8px]">B:</span>
                             <span className="text-blue-400 font-medium">₪{bookingAvg}</span>
-                          </div>
-                        )}
-                        {expediaAvg && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-yellow-400 text-[8px]">E:</span>
-                            <span className="text-yellow-400 font-medium">₪{expediaAvg}</span>
                           </div>
                         )}
                       </div>
@@ -630,19 +613,11 @@ export function CalendarGrid({
                   {/* Market Average - Split to separate averages per platform */}
                   {(() => {
                     const bookingPrices = selectedDay.competitorPrices.filter((p: any) => p.source === "Booking.com")
-                    const expediaPrices = selectedDay.competitorPrices.filter((p: any) => p.source === "Expedia")
                     const bookingAvg =
                       bookingPrices.length > 0
                         ? Math.round(
                             bookingPrices.reduce((sum: number, p: any) => sum + Number(p.price || 0), 0) /
                               bookingPrices.length,
-                          )
-                        : null
-                    const expediaAvg =
-                      expediaPrices.length > 0
-                        ? Math.round(
-                            expediaPrices.reduce((sum: number, p: any) => sum + Number(p.price || 0), 0) /
-                              expediaPrices.length,
                           )
                         : null
 
@@ -656,16 +631,6 @@ export function CalendarGrid({
                               <span className="text-xs text-muted-foreground">({bookingPrices.length} hotels)</span>
                             </div>
                             <div className="text-blue-400 font-bold">₪{bookingAvg.toLocaleString()}</div>
-                          </div>
-                        )}
-                        {expediaAvg && (
-                          <div className="flex justify-between items-center p-2 bg-yellow-500/10 rounded text-sm border-l-[3px] border-yellow-500">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                              <span className="font-medium text-yellow-400">Expedia Average</span>
-                              <span className="text-xs text-muted-foreground">({expediaPrices.length} hotels)</span>
-                            </div>
-                            <div className="text-yellow-400 font-bold">₪{expediaAvg.toLocaleString()}</div>
                           </div>
                         )}
                       </div>

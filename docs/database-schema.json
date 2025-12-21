@@ -1,0 +1,460 @@
+{
+  "database": "Hotel Price Monitor",
+  "tables": {
+    "hotels": {
+      "description": "מלונות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "name": { "type": "text", "nullable": false },
+        "location": { "type": "text", "nullable": true },
+        "base_price": { "type": "numeric", "nullable": true },
+        "total_rooms": { "type": "integer", "nullable": true, "default": 50 },
+        "competitor_urls": { "type": "text[]", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "hotel_room_types": {
+      "description": "סוגי חדרים במלון",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "name": { "type": "text", "nullable": false },
+        "description": { "type": "text", "nullable": true },
+        "base_price": { "type": "numeric", "nullable": true },
+        "booking_url": { "type": "text", "nullable": true },
+        "expedia_url": { "type": "text", "nullable": true },
+        "agoda_url": { "type": "text", "nullable": true },
+        "hotels_com_url": { "type": "text", "nullable": true },
+        "display_color": { "type": "text", "nullable": true, "default": "#06b6d4" },
+        "is_active": { "type": "boolean", "nullable": true, "default": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "hotel_competitors": {
+      "description": "מתחרים של המלון",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "competitor_hotel_name": { "type": "text", "nullable": false },
+        "competitor_url": { "type": "text", "nullable": true },
+        "booking_url": { "type": "text", "nullable": true },
+        "expedia_url": { "type": "text", "nullable": true },
+        "star_rating": { "type": "integer", "nullable": true },
+        "notes": { "type": "text", "nullable": true },
+        "is_active": { "type": "boolean", "nullable": true, "default": true },
+        "display_color": { "type": "text", "nullable": true, "default": "#f97316" },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "competitor_room_types": {
+      "description": "סוגי חדרים של מתחרים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "competitor_id": { "type": "uuid", "nullable": true, "references": "hotel_competitors.id" },
+        "name": { "type": "text", "nullable": false },
+        "booking_url": { "type": "text", "nullable": true },
+        "expedia_url": { "type": "text", "nullable": true },
+        "agoda_url": { "type": "text", "nullable": true },
+        "hotels_com_url": { "type": "text", "nullable": true },
+        "display_color": { "type": "text", "nullable": true, "default": "#f97316" },
+        "is_active": { "type": "boolean", "nullable": true, "default": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "daily_prices": {
+      "description": "מחירים יומיים שלנו",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "date": { "type": "date", "nullable": false },
+        "room_type_id": { "type": "uuid", "nullable": true, "references": "hotel_room_types.id" },
+        "our_price": { "type": "numeric", "nullable": true },
+        "recommended_price": { "type": "numeric", "nullable": true },
+        "min_competitor_price": { "type": "numeric", "nullable": true },
+        "max_competitor_price": { "type": "numeric", "nullable": true },
+        "avg_competitor_price": { "type": "numeric", "nullable": true },
+        "demand_level": { "type": "text", "nullable": true },
+        "occupancy_forecast": { "type": "numeric", "nullable": true },
+        "price_recommendation": { "type": "text", "nullable": true },
+        "autopilot_action": { "type": "text", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      },
+      "unique_constraints": ["hotel_id,date,room_type_id"]
+    },
+    "competitor_daily_prices": {
+      "description": "מחירי מתחרים יומיים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "competitor_id": { "type": "uuid", "nullable": true, "references": "hotel_competitors.id" },
+        "date": { "type": "date", "nullable": false },
+        "price": { "type": "numeric", "nullable": true },
+        "source": { "type": "text", "nullable": true },
+        "room_type": { "type": "text", "nullable": true },
+        "room_type_id": { "type": "uuid", "nullable": true },
+        "room_name": { "type": "text", "nullable": true },
+        "meal_plan": { "type": "text", "nullable": true },
+        "max_occupancy": { "type": "integer", "nullable": true },
+        "original_price": { "type": "numeric", "nullable": true },
+        "raw_data": { "type": "jsonb", "nullable": true },
+        "availability": { "type": "boolean", "nullable": true, "default": true },
+        "scraped_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      },
+      "unique_constraints": ["competitor_id,date,source,room_type"]
+    },
+    "competitor_data": {
+      "description": "נתוני מתחרים כלליים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "competitor_name": { "type": "text", "nullable": false },
+        "competitor_url": { "type": "text", "nullable": true },
+        "price": { "type": "numeric", "nullable": false },
+        "availability": { "type": "boolean", "nullable": true, "default": true },
+        "rating": { "type": "numeric", "nullable": true },
+        "review_count": { "type": "integer", "nullable": true },
+        "room_type": { "type": "text", "nullable": true },
+        "scraped_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "metadata": { "type": "jsonb", "nullable": true }
+      }
+    },
+    "competitor_price_history": {
+      "description": "היסטוריית מחירי מתחרים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true },
+        "competitor_id": { "type": "uuid", "nullable": true },
+        "date": { "type": "date", "nullable": false },
+        "old_price": { "type": "numeric", "nullable": true },
+        "new_price": { "type": "numeric", "nullable": true },
+        "price_change": { "type": "numeric", "nullable": true },
+        "change_percent": { "type": "numeric", "nullable": true },
+        "source": { "type": "text", "nullable": true },
+        "room_type": { "type": "text", "nullable": true },
+        "recorded_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "price_predictions": {
+      "description": "חיזויי מחירים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "prediction_date": { "type": "date", "nullable": false },
+        "predicted_price": { "type": "numeric", "nullable": false },
+        "base_price": { "type": "numeric", "nullable": true, "default": 0 },
+        "predicted_demand": { "type": "text", "nullable": true },
+        "confidence_score": { "type": "numeric", "nullable": true },
+        "recommendation": { "type": "text", "nullable": true, "default": "" },
+        "recommendation_type": { "type": "text", "nullable": true },
+        "factors": { "type": "jsonb", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "monthly_forecasts": {
+      "description": "תחזיות חודשיות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "year": { "type": "integer", "nullable": false },
+        "month": { "type": "integer", "nullable": false },
+        "room_type_id": { "type": "uuid", "nullable": true },
+        "predicted_revenue": { "type": "numeric", "nullable": true },
+        "predicted_occupancy": { "type": "numeric", "nullable": true },
+        "predicted_adr": { "type": "numeric", "nullable": true },
+        "predicted_revpar": { "type": "numeric", "nullable": true },
+        "predicted_room_nights": { "type": "integer", "nullable": true },
+        "budget_revenue": { "type": "numeric", "nullable": true },
+        "budget_occupancy": { "type": "numeric", "nullable": true },
+        "budget_variance_percent": { "type": "numeric", "nullable": true },
+        "on_track_for_budget": { "type": "boolean", "nullable": true, "default": false },
+        "market_avg_occupancy": { "type": "numeric", "nullable": true },
+        "market_avg_adr": { "type": "numeric", "nullable": true },
+        "competitor_avg_price": { "type": "numeric", "nullable": true },
+        "factors": { "type": "jsonb", "nullable": true },
+        "confidence_score": { "type": "numeric", "nullable": true, "default": 0.75 },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "revenue_budgets": {
+      "description": "תקציבי הכנסות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "year": { "type": "integer", "nullable": false },
+        "month": { "type": "integer", "nullable": false },
+        "target_revenue": { "type": "numeric", "nullable": false },
+        "target_occupancy": { "type": "numeric", "nullable": true },
+        "target_adr": { "type": "numeric", "nullable": true },
+        "target_revpar": { "type": "numeric", "nullable": true },
+        "notes": { "type": "text", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "bookings": {
+      "description": "הזמנות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "check_in_date": { "type": "date", "nullable": false },
+        "check_out_date": { "type": "date", "nullable": false },
+        "room_type": { "type": "text", "nullable": true },
+        "room_count": { "type": "integer", "nullable": true, "default": 1 },
+        "total_price": { "type": "numeric", "nullable": true },
+        "nightly_rate": { "type": "numeric", "nullable": true },
+        "guest_name": { "type": "text", "nullable": true },
+        "booking_source": { "type": "text", "nullable": true },
+        "status": { "type": "text", "nullable": true, "default": "confirmed" },
+        "booking_date": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "autopilot_rules": {
+      "description": "כללי אוטופיילוט",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "name": { "type": "text", "nullable": false },
+        "is_active": { "type": "boolean", "nullable": true, "default": true },
+        "trigger_type": { "type": "text", "nullable": false },
+        "trigger_value": { "type": "jsonb", "nullable": false },
+        "action_type": { "type": "text", "nullable": false },
+        "action_value": { "type": "jsonb", "nullable": false },
+        "min_price": { "type": "numeric", "nullable": true },
+        "max_price": { "type": "numeric", "nullable": true },
+        "max_daily_changes": { "type": "integer", "nullable": true, "default": 3 },
+        "target_revenue": { "type": "numeric", "nullable": true },
+        "target_occupancy": { "type": "numeric", "nullable": true },
+        "priority": { "type": "integer", "nullable": true, "default": 1 },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "autopilot_logs": {
+      "description": "לוגים של אוטופיילוט",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "rule_id": { "type": "uuid", "nullable": true, "references": "autopilot_rules.id" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "action_taken": { "type": "text", "nullable": false },
+        "old_price": { "type": "numeric", "nullable": true },
+        "new_price": { "type": "numeric", "nullable": true },
+        "trigger_data": { "type": "jsonb", "nullable": true },
+        "executed_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "profiles": {
+      "description": "פרופילי משתמשים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "references": "auth.users.id" },
+        "email": { "type": "text", "nullable": true },
+        "full_name": { "type": "text", "nullable": true },
+        "role": { "type": "text", "nullable": true, "default": "user" },
+        "hotel_ids": { "type": "uuid[]", "nullable": true },
+        "is_approved": { "type": "boolean", "nullable": true, "default": false },
+        "is_admin": { "type": "boolean", "nullable": true, "default": false },
+        "approved_by": { "type": "uuid", "nullable": true },
+        "approved_at": { "type": "timestamptz", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "scans": {
+      "description": "סריקות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "config_id": { "type": "uuid", "nullable": true, "references": "scan_configs.id" },
+        "status": { "type": "text", "nullable": true, "default": "pending" },
+        "started_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "completed_at": { "type": "timestamptz", "nullable": true },
+        "error_message": { "type": "text", "nullable": true }
+      }
+    },
+    "scan_configs": {
+      "description": "הגדרות סריקה",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "check_in_date": { "type": "date", "nullable": false },
+        "check_out_date": { "type": "date", "nullable": false },
+        "room_type": { "type": "text", "nullable": true },
+        "guests": { "type": "integer", "nullable": true, "default": 2 },
+        "frequency": { "type": "text", "nullable": true, "default": "daily" },
+        "is_active": { "type": "boolean", "nullable": true, "default": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "scan_results": {
+      "description": "תוצאות סריקה",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "scan_id": { "type": "uuid", "nullable": true, "references": "scans.id" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "source": { "type": "text", "nullable": false },
+        "price": { "type": "numeric", "nullable": false },
+        "currency": { "type": "text", "nullable": true, "default": "USD" },
+        "availability": { "type": "boolean", "nullable": true, "default": true },
+        "room_type": { "type": "text", "nullable": true },
+        "scraped_at": { "type": "timestamptz", "nullable": true, "default": "now()" },
+        "metadata": { "type": "jsonb", "nullable": true }
+      }
+    },
+    "demand_factors": {
+      "description": "גורמי ביקוש",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "region": { "type": "text", "nullable": false },
+        "date": { "type": "date", "nullable": false },
+        "factor_type": { "type": "text", "nullable": false },
+        "factor_name": { "type": "text", "nullable": false },
+        "impact_score": { "type": "numeric", "nullable": true },
+        "description": { "type": "text", "nullable": true },
+        "source_url": { "type": "text", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "market_trends": {
+      "description": "מגמות שוק",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "trend_date": { "type": "date", "nullable": false },
+        "trend_type": { "type": "text", "nullable": false },
+        "trend_value": { "type": "numeric", "nullable": true },
+        "percentage_change": { "type": "numeric", "nullable": true },
+        "description": { "type": "text", "nullable": true },
+        "detected_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "regional_market_data": {
+      "description": "נתוני שוק אזוריים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "region": { "type": "text", "nullable": false },
+        "city": { "type": "text", "nullable": false },
+        "date": { "type": "date", "nullable": false },
+        "avg_hotel_price": { "type": "numeric", "nullable": true },
+        "avg_occupancy_rate": { "type": "numeric", "nullable": true },
+        "total_hotels_tracked": { "type": "integer", "nullable": true },
+        "demand_level": { "type": "text", "nullable": true },
+        "events": { "type": "jsonb", "nullable": true },
+        "weather_impact": { "type": "text", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "pricing_alerts": {
+      "description": "התראות מחירים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "alert_type": { "type": "text", "nullable": false },
+        "message": { "type": "text", "nullable": false },
+        "severity": { "type": "text", "nullable": true, "default": "info" },
+        "is_read": { "type": "boolean", "nullable": true, "default": false },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "price_recommendations": {
+      "description": "המלצות מחירים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "recommended_price": { "type": "numeric", "nullable": false },
+        "confidence_score": { "type": "numeric", "nullable": true },
+        "reasoning": { "type": "text", "nullable": true },
+        "market_average": { "type": "numeric", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "price_optimization_history": {
+      "description": "היסטוריית אופטימיזציית מחירים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true },
+        "date": { "type": "date", "nullable": false },
+        "original_price": { "type": "numeric", "nullable": true },
+        "optimized_price": { "type": "numeric", "nullable": true },
+        "optimization_reason": { "type": "text", "nullable": true },
+        "factors_considered": { "type": "jsonb", "nullable": true },
+        "actual_bookings": { "type": "integer", "nullable": true },
+        "expected_bookings": { "type": "integer", "nullable": true },
+        "performance_score": { "type": "numeric", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "revenue_tracking": {
+      "description": "מעקב הכנסות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "date": { "type": "date", "nullable": false },
+        "revenue": { "type": "numeric", "nullable": true, "default": 0 },
+        "bookings": { "type": "integer", "nullable": true, "default": 0 },
+        "average_price": { "type": "numeric", "nullable": true },
+        "occupancy_rate": { "type": "numeric", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "historical_performance": {
+      "description": "ביצועים היסטוריים",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true },
+        "period_start": { "type": "date", "nullable": false },
+        "period_end": { "type": "date", "nullable": false },
+        "total_revenue": { "type": "numeric", "nullable": true },
+        "total_bookings": { "type": "integer", "nullable": true },
+        "avg_daily_rate": { "type": "numeric", "nullable": true },
+        "revpar": { "type": "numeric", "nullable": true },
+        "occupancy_rate": { "type": "numeric", "nullable": true },
+        "market_share": { "type": "numeric", "nullable": true },
+        "competitor_rank": { "type": "integer", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "forecast_updates": {
+      "description": "עדכוני תחזיות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true },
+        "forecast_date": { "type": "date", "nullable": false },
+        "update_type": { "type": "text", "nullable": false },
+        "previous_prediction": { "type": "jsonb", "nullable": true },
+        "new_prediction": { "type": "jsonb", "nullable": true },
+        "change_reason": { "type": "text", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    },
+    "hotel_user_access": {
+      "description": "הרשאות משתמשים למלונות",
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+        "hotel_id": { "type": "uuid", "nullable": true, "references": "hotels.id" },
+        "user_email": { "type": "text", "nullable": false },
+        "user_id": { "type": "uuid", "nullable": true },
+        "role": { "type": "text", "nullable": true, "default": "viewer" },
+        "is_approved": { "type": "boolean", "nullable": true, "default": false },
+        "approved_by": { "type": "uuid", "nullable": true },
+        "approved_at": { "type": "timestamptz", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": true, "default": "now()" }
+      }
+    }
+  },
+  "relationships": {
+    "hotels -> hotel_room_types": "one-to-many",
+    "hotels -> hotel_competitors": "one-to-many",
+    "hotels -> daily_prices": "one-to-many",
+    "hotels -> bookings": "one-to-many",
+    "hotels -> autopilot_rules": "one-to-many",
+    "hotel_competitors -> competitor_daily_prices": "one-to-many",
+    "hotel_competitors -> competitor_room_types": "one-to-many",
+    "hotel_room_types -> daily_prices": "one-to-many",
+    "autopilot_rules -> autopilot_logs": "one-to-many",
+    "scans -> scan_results": "one-to-many",
+    "scan_configs -> scans": "one-to-many"
+  }
+}

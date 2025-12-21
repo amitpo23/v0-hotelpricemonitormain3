@@ -1,4 +1,8 @@
-import { scrapeBookingPrice, type BookingPriceResult, type BookingScraperResponse } from "./booking-scraper"
+import {
+  scrapeBookingPrices as scrapeBookingPrice,
+  type BookingPriceResult,
+  type BookingScraperResponse,
+} from "./booking-scraper"
 
 export interface CompetitorPriceResult {
   competitorId: string
@@ -21,6 +25,95 @@ export interface CompetitorMultiRoomResult {
   success: boolean
   source: string
   errorMessage?: string
+}
+
+export async function scrapeCompetitorAllRoomsWithRetry(
+  competitor: {
+    id: string
+    competitor_hotel_name: string
+    booking_url?: string | null
+    city?: string
+  },
+  checkIn: string,
+  checkOut: string,
+  maxRetries = 3,
+): Promise<CompetitorMultiRoomResult> {
+  let lastError: string | undefined
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`[v0] [RealScraper] Attempt ${attempt}/${maxRetries} for ${competitor.competitor_hotel_name}`)
+
+    const result = await scrapeCompetitorAllRooms(competitor, checkIn, checkOut)
+
+    if (result.success && result.rooms.length > 0) {
+      console.log(`[v0] [RealScraper] SUCCESS on attempt ${attempt}`)
+      return result
+    }
+
+    lastError = result.errorMessage
+
+    // Don't retry if it's the last attempt
+    if (attempt < maxRetries) {
+      // Exponential backoff: 2s, 4s, 8s
+      const delayMs = Math.pow(2, attempt) * 1000
+      console.log(`[v0] [RealScraper] Retrying after ${delayMs}ms...`)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+
+  console.log(`[v0] [RealScraper] All ${maxRetries} attempts failed for ${competitor.competitor_hotel_name}`)
+  return {
+    competitorId: competitor.id,
+    competitorName: competitor.competitor_hotel_name,
+    date: checkIn,
+    rooms: [],
+    scrapedAt: new Date().toISOString(),
+    success: false,
+    source: "retry_failed",
+    errorMessage: `Failed after ${maxRetries} attempts: ${lastError}`,
+  }
+}
+
+export async function scrapeMultipleCompetitorsWithRetry(
+  competitors: Array<{
+    id: string
+    competitor_hotel_name: string
+    booking_url?: string | null
+    city?: string
+  }>,
+  checkIn: string,
+  checkOut: string,
+  maxRetries = 3,
+): Promise<CompetitorMultiRoomResult[]> {
+  console.log(`[v0] [RealScraper] ========================================`)
+  console.log(`[v0] [RealScraper] Batch scraping ${competitors.length} competitors`)
+  console.log(`[v0] [RealScraper] Date: ${checkIn} to ${checkOut}`)
+  console.log(`[v0] [RealScraper] Max retries per competitor: ${maxRetries}`)
+
+  const results: CompetitorMultiRoomResult[] = []
+  let successCount = 0
+  let failCount = 0
+
+  for (const competitor of competitors) {
+    const result = await scrapeCompetitorAllRoomsWithRetry(competitor, checkIn, checkOut, maxRetries)
+
+    results.push(result)
+
+    if (result.success) {
+      successCount++
+    } else {
+      failCount++
+    }
+
+    // Small delay between competitors to avoid rate limiting
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+
+  console.log(`[v0] [RealScraper] ========================================`)
+  console.log(`[v0] [RealScraper] Batch complete: ${successCount} success, ${failCount} failed`)
+  console.log(`[v0] [RealScraper] ========================================`)
+
+  return results
 }
 
 export async function scrapeCompetitorAllRooms(

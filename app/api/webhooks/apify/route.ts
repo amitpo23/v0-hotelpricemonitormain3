@@ -10,16 +10,21 @@ export async function POST(request: Request) {
     console.log("[v0] Apify webhook received")
 
     const body = await request.json()
-    const { defaultDatasetId, actorRunId } = body
+    const { defaultDatasetId, actorRunId, status } = body
 
-    console.log("[v0] Apify webhook data:", { defaultDatasetId, actorRunId })
+    console.log("[v0] Apify webhook data:", { defaultDatasetId, actorRunId, status })
+
+    // Skip non-successful runs
+    if (status && status !== "SUCCEEDED") {
+      return NextResponse.json({ message: "Skipping non-successful run", status }, { status: 200 })
+    }
 
     if (!defaultDatasetId) {
       return NextResponse.json({ error: "Missing defaultDatasetId" }, { status: 400 })
     }
 
     // Get Apify API token from environment
-    const apifyToken = process.env.APIFY_API_TOKEN
+    const apifyToken = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN
 
     if (!apifyToken) {
       console.error("[v0] Missing APIFY_API_TOKEN environment variable")
@@ -113,4 +118,9 @@ export async function POST(request: Request) {
     console.error("[v0] Apify webhook error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+// Allow GET for health check
+export async function GET() {
+  return NextResponse.json({ status: "ok", endpoint: "/api/webhooks/apify" })
 }

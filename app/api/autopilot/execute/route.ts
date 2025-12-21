@@ -22,59 +22,85 @@ export async function POST() {
     const hotel = rule.hotels
     if (!hotel) continue
 
-    // Get latest scan results for this hotel's competitors
-    const { data: competitorPrices } = await supabase
-      .from("scan_results")
-      .select("*")
+    // Get REAL competitor prices from scraper
+    const { data: competitors } = await supabase
+      .from("hotel_competitors")
+      .select("id")
       .eq("hotel_id", hotel.id)
-      .order("scraped_at", { ascending: false })
-      .limit(10)
+      .eq("is_active", true)
+
+    const competitorIds = competitors?.map((c) => c.id) || []
+
+    const today = new Date().toISOString().split("T")[0]
+    const { data: competitorPrices } = await supabase
+      .from("competitor_daily_prices")
+      .select("price")
+      .in("competitor_id", competitorIds)
+      .eq("date", today)
 
     const avgCompetitorPrice =
       competitorPrices && competitorPrices.length > 0
         ? competitorPrices.reduce((sum: number, r: any) => sum + Number(r.price), 0) / competitorPrices.length
         : null
 
+    // Skip if no real competitor data
+    if (!avgCompetitorPrice) {
+      continue
+    }
+
     let shouldExecute = false
     let newPrice = hotel.base_price
     let actionDescription = ""
 
-    // Check trigger conditions
+    // Check trigger conditions using REAL data only
     switch (rule.trigger_type) {
       case "competitor_undercut":
         const threshold = rule.trigger_value?.percentage || 10
-        if (avgCompetitorPrice && hotel.base_price) {
+        if (hotel.base_price) {
           const priceDiff = ((hotel.base_price - avgCompetitorPrice) / hotel.base_price) * 100
           if (priceDiff > threshold) {
             shouldExecute = true
-            actionDescription = `Competitors are ${priceDiff.toFixed(1)}% cheaper`
+            actionDescription = `Competitors are ${priceDiff.toFixed(1)}% cheaper (avg: ₪${avgCompetitorPrice.toFixed(0)})`
           }
         }
         break
 
       case "occupancy_threshold":
-        // Would need real occupancy data - simulating for now
-        const occupancy = Math.random() * 100
+        // Get real occupancy from bookings
+        const { data: bookings } = await supabase
+          .from("bookings")
+          .select("id")
+          .eq("hotel_id", hotel.id)
+          .eq("check_in_date", today)
+          .eq("status", "confirmed")
+
+        const bookedRooms = bookings?.length || 0
+        const totalRooms = hotel.total_rooms || 50
+        const occupancy = (bookedRooms / totalRooms) * 100
+
         const minOccupancy = rule.trigger_value?.min_occupancy || 50
         if (occupancy < minOccupancy) {
           shouldExecute = true
-          actionDescription = `Occupancy at ${occupancy.toFixed(0)}%, below threshold`
+          actionDescription = `Real occupancy at ${occupancy.toFixed(0)}% (${bookedRooms}/${totalRooms} rooms)`
         }
         break
 
       case "demand_spike":
-        // Check for recent demand trends
-        const { data: trends } = await supabase
-          .from("market_trends")
-          .select("*")
-          .eq("hotel_id", hotel.id)
-          .eq("trend_type", "demand_spike")
-          .gte("detected_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-          .limit(1)
+        // Check for real demand trends from competitor prices
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+        const { data: weekPrices } = await supabase
+          .from("competitor_daily_prices")
+          .select("price, date")
+          .in("competitor_id", competitorIds)
+          .gte("date", weekAgo)
+          .lte("date", today)
 
-        if (trends && trends.length > 0) {
-          shouldExecute = true
-          actionDescription = "Demand spike detected in market"
+        if (weekPrices && weekPrices.length > 0) {
+          const avgWeekPrice = weekPrices.reduce((sum, p) => sum + p.price, 0) / weekPrices.length
+          if (avgCompetitorPrice > avgWeekPrice * 1.15) {
+            shouldExecute = true
+            actionDescription = `Demand spike: prices up ${((avgCompetitorPrice / avgWeekPrice - 1) * 100).toFixed(0)}% from last week`
+          }
         }
         break
     }
@@ -118,25 +144,23 @@ export async function POST() {
         break
 
       case "match_competitor":
-        if (avgCompetitorPrice) {
-          newPrice = avgCompetitorPrice
-          if (rule.min_price && newPrice < rule.min_price) newPrice = rule.min_price
-          if (rule.max_price && newPrice > rule.max_price) newPrice = rule.max_price
+        newPrice = avgCompetitorPrice
+        if (rule.min_price && newPrice < rule.min_price) newPrice = rule.min_price
+        if (rule.max_price && newPrice > rule.max_price) newPrice = rule.max_price
 
-          await supabase
-            .from("hotels")
-            .update({ base_price: Math.round(newPrice), updated_at: new Date().toISOString() })
-            .eq("id", hotel.id)
+        await supabase
+          .from("hotels")
+          .update({ base_price: Math.round(newPrice), updated_at: new Date().toISOString() })
+          .eq("id", hotel.id)
 
-          executionLogs.push({
-            rule_id: rule.id,
-            hotel_id: hotel.id,
-            action_taken: `${rule.name}: Matched competitor price`,
-            old_price: hotel.base_price,
-            new_price: Math.round(newPrice),
-            trigger_data: { avg_competitor: avgCompetitorPrice },
-          })
-        }
+        executionLogs.push({
+          rule_id: rule.id,
+          hotel_id: hotel.id,
+          action_taken: `${rule.name}: Matched competitor price`,
+          old_price: hotel.base_price,
+          new_price: Math.round(newPrice),
+          trigger_data: { avg_competitor: avgCompetitorPrice },
+        })
         break
     }
   }

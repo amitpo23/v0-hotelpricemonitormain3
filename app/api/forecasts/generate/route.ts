@@ -1,21 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-const SEASONALITY = {
-  1: { occupancy: 0.55, multiplier: 0.85 },
-  2: { occupancy: 0.6, multiplier: 0.9 },
-  3: { occupancy: 0.7, multiplier: 1.05 },
-  4: { occupancy: 0.75, multiplier: 1.15 },
-  5: { occupancy: 0.72, multiplier: 1.1 },
-  6: { occupancy: 0.8, multiplier: 1.25 },
-  7: { occupancy: 0.85, multiplier: 1.35 },
-  8: { occupancy: 0.88, multiplier: 1.4 },
-  9: { occupancy: 0.75, multiplier: 1.15 },
-  10: { occupancy: 0.7, multiplier: 1.05 },
-  11: { occupancy: 0.6, multiplier: 0.9 },
-  12: { occupancy: 0.65, multiplier: 0.95 },
-}
-
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -35,72 +20,98 @@ export async function POST(request: Request) {
       .eq("hotel_id", hotelId)
       .eq("year", year)
 
-    // Get competitor prices
+    // Get competitors
+    const { data: competitors } = await supabase
+      .from("hotel_competitors")
+      .select("id")
+      .eq("hotel_id", hotelId)
+      .eq("is_active", true)
+
+    const competitorIds = competitors?.map((c) => c.id) || []
+
+    // Get REAL competitor prices for the year
     const { data: competitorPrices } = await supabase
-      .from("competitor_prices")
-      .select("*, competitors(name)")
-      .eq("competitors.hotel_id", hotelId)
-      .gte("scan_date", `${year}-01-01`)
-      .lte("scan_date", `${year}-12-31`)
+      .from("competitor_daily_prices")
+      .select("price, date, room_type")
+      .in("competitor_id", competitorIds)
+      .gte("date", `${year}-01-01`)
+      .lte("date", `${year}-12-31`)
 
     const totalRooms = hotel.total_rooms || 50
     const basePrice = hotel.base_price || 150
     const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
-    // Generate forecasts for each month
+    // Generate forecasts for each month based on REAL data
     const forecasts = []
     for (let month = 1; month <= 12; month++) {
-      const season = SEASONALITY[month as keyof typeof SEASONALITY]
       const days = daysInMonth[month - 1]
 
-      const budget = budgets?.find((b) => b.month === month)
-      const budgetRevenue = budget?.target_revenue || totalRooms * basePrice * days * 0.7
+      // Get real competitor prices for this month
+      const monthPrices =
+        competitorPrices?.filter((p) => {
+          const date = new Date(p.date)
+          return date.getMonth() + 1 === month
+        }) || []
 
-      const predictedOccupancy = season.occupancy * 100
-      const predictedADR = basePrice * season.multiplier
-      const predictedRoomNights = Math.round(totalRooms * days * season.occupancy)
+      // Skip months with no real data
+      if (monthPrices.length === 0) {
+        continue
+      }
+
+      // Calculate real competitor average
+      const competitorAvg = monthPrices.reduce((sum, p) => sum + p.price, 0) / monthPrices.length
+
+      // Get budget for this month
+      const budget = budgets?.find((b) => b.month === month)
+      const budgetRevenue = budget?.target_revenue || 0
+      const budgetOccupancy = budget?.target_occupancy || 0
+
+      // Calculate predictions based on real market data
+      // Use competitor pricing as indicator of market conditions
+      const priceRatio = competitorAvg / basePrice
+      const predictedOccupancy = Math.min(95, Math.max(40, 70 * priceRatio))
+      const predictedADR = competitorAvg * 0.98 // Slightly below competitors
+      const predictedRoomNights = Math.round(totalRooms * days * (predictedOccupancy / 100))
       const predictedRevenue = predictedRoomNights * predictedADR
       const predictedRevPAR = predictedRevenue / (totalRooms * days)
 
-      const variance = ((predictedRevenue - budgetRevenue) / budgetRevenue) * 100
-      const onTrack = predictedRevenue >= budgetRevenue * 0.95
-
-      // Calculate competitor average
-      const monthPrices = competitorPrices?.filter((p) => {
-        const date = new Date(p.scan_date)
-        return date.getMonth() + 1 === month
-      })
-      const competitorAvg = monthPrices?.length
-        ? monthPrices.reduce((sum, p) => sum + p.price, 0) / monthPrices.length
-        : basePrice * season.multiplier * 0.95
+      // Calculate variance only if budget exists
+      const variance = budgetRevenue > 0 ? ((predictedRevenue - budgetRevenue) / budgetRevenue) * 100 : 0
+      const onTrack = budgetRevenue === 0 || predictedRevenue >= budgetRevenue * 0.95
 
       forecasts.push({
         hotel_id: hotelId,
         year,
         month,
-        predicted_revenue: predictedRevenue,
-        predicted_occupancy: predictedOccupancy,
-        predicted_adr: predictedADR,
-        predicted_revpar: predictedRevPAR,
+        predicted_revenue: Math.round(predictedRevenue),
+        predicted_occupancy: Math.round(predictedOccupancy),
+        predicted_adr: Math.round(predictedADR),
+        predicted_revpar: Math.round(predictedRevPAR),
         predicted_room_nights: predictedRoomNights,
         budget_revenue: budgetRevenue,
-        budget_occupancy: budget?.target_occupancy || 70,
-        budget_variance_percent: variance,
+        budget_occupancy: budgetOccupancy,
+        budget_variance_percent: Math.round(variance * 10) / 10,
         on_track_for_budget: onTrack,
-        market_avg_occupancy: season.occupancy * 100 - 5 + Math.random() * 10,
-        competitor_avg_price: competitorAvg,
+        market_avg_occupancy: Math.round(predictedOccupancy),
+        competitor_avg_price: Math.round(competitorAvg),
         factors: {
-          seasonality: season.multiplier > 1 ? "high" : "low",
-          market_trend: "stable",
+          data_points: monthPrices.length,
           events: getMonthEvents(month),
         },
-        confidence_score: 0.75 + Math.random() * 0.15,
+        confidence_score: Math.min(0.95, 0.5 + (monthPrices.length / 100) * 0.5),
+      })
+    }
+
+    if (forecasts.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: "No competitor data available. Run the scraper first to collect real market prices.",
       })
     }
 
     // Upsert forecasts
     const { error } = await supabase.from("monthly_forecasts").upsert(forecasts, {
-      onConflict: "hotel_id,year,month,room_type_id",
+      onConflict: "hotel_id,year,month",
       ignoreDuplicates: false,
     })
 
@@ -109,16 +120,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Log the update
-    await supabase.from("forecast_updates").insert({
-      hotel_id: hotelId,
-      forecast_date: new Date().toISOString().split("T")[0],
-      update_type: "manual",
-      new_prediction: { year, months: 12 },
-      change_reason: "Manual forecast generation",
+    return NextResponse.json({
+      success: true,
+      forecasts: forecasts.length,
+      message: `Generated ${forecasts.length} monthly forecasts from real competitor data`,
     })
-
-    return NextResponse.json({ success: true, forecasts: forecasts.length })
   } catch (error) {
     console.error("Forecast generation error:", error)
     return NextResponse.json({ error: "Failed to generate forecasts" }, { status: 500 })

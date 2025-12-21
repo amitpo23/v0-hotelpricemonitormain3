@@ -7,6 +7,8 @@ import { createAuditLog, getClientIP, getUserAgent } from "@/lib/audit-log"
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+const ADMIN_EMAIL = "amitporat1981@gmail.com"
+
 export async function POST(request: Request) {
   try {
     // Validate environment variables
@@ -27,7 +29,10 @@ export async function POST(request: Request) {
     }
 
     // Get user from access token
-    const { data: { user: currentUser }, error: authError } = await authSupabase.auth.getUser(authToken.value)
+    const {
+      data: { user: currentUser },
+      error: authError,
+    } = await authSupabase.auth.getUser(authToken.value)
 
     if (authError || !currentUser) {
       console.log("[v0] Approve user - Invalid auth token")
@@ -36,7 +41,7 @@ export async function POST(request: Request) {
 
     const { data: currentProfile } = await supabase
       .from("profiles")
-      .select("is_admin, role")
+      .select("id, email, is_admin")
       .eq("id", currentUser.id)
       .single()
 
@@ -62,7 +67,6 @@ export async function POST(request: Request) {
 
     console.log("[v0] Approve user - Approving userId:", userId.substring(0, 8) + "...")
 
-    // Approve the user
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -73,8 +77,14 @@ export async function POST(request: Request) {
       .eq("id", userId)
 
     if (error) {
-      console.error("[v0] Error approving user:", error)
+      console.error("[v0] Error approving user in profiles:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Try to confirm email via RPC if available
+    const { error: rpcError } = await supabase.rpc("confirm_user_email", { user_id: userId })
+    if (rpcError) {
+      console.log("[v0] RPC not available, email confirmation may need manual update")
     }
 
     // Create audit log

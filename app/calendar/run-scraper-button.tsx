@@ -14,10 +14,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 
-const DATA_SOURCES = [
-  { name: "Booking.com", color: "#003580" },
-  { name: "Expedia", color: "#FFCC00" },
-]
+const DATA_SOURCES = [{ name: "Booking.com", color: "#003580" }]
 
 const SCAN_PERIODS = [
   { label: "7 Days", days: 7 },
