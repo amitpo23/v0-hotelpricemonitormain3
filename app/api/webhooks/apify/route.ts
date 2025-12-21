@@ -6,7 +6,7 @@ export async function POST(request: Request) {
     const payload = await request.json()
     console.log('Apify webhook received:', payload)
 
-    const { defaultDatasetId, status, actorRunId } = payload
+    const { datasetId, status, actorRunId } = payload
 
     // Skip non-successful runs
     if (status !== 'SUCCEEDED') {
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       throw new Error('APIFY_TOKEN not configured')
     }
 
-    const datasetUrl = `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${APIFY_TOKEN}`
+    const datasetUrl = `https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}`
     console.log('Fetching from Apify dataset...')
     
     const response = await fetch(datasetUrl)
