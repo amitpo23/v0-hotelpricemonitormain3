@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { scrapeMultipleCompetitorsWithRetry } from "@/lib/scraper/real-scraper"
 
 const SCAN_DAYS = 30
 const TIMEOUT_MS = 50000 // 50 seconds timeout to avoid Vercel function timeout
@@ -194,98 +193,104 @@ export async function POST(request: Request) {
     let totalRoomsFound = 0
     let timedOut = false
 
-    for (let dayIndex = 0; dayIndex < scanDays; dayIndex++) {
+    const activeCompetitors = competitors.filter((c) => c.is_active)
+
+    console.log(`[v0] Starting scrape for ${activeCompetitors.length} active competitors over ${scanDays} days`)
+
+    const datesToScan = []
+    for (let i = dayOffset; i < dayOffset + scanDays; i++) {
+      const date = new Date()
+      date.setDate(date.getDate() + i)
+      datesToScan.push(date)
+    }
+
+    console.log(
+      `[v0] Will scan ${datesToScan.length} dates from ${datesToScan[0].toISOString().split("T")[0]} to ${datesToScan[datesToScan.length - 1].toISOString().split("T")[0]}`,
+    )
+
+    const { scrapeMultipleCompetitorsWithRetry } = await import("@/lib/scraper/real-scraper")
+
+    const scrapedData: Array<{
+      competitorId: string
+      competitorName: string
+      checkInDate: string
+      checkOutDate: string
+      success: boolean
+      rooms: any[]
+      method: string
+      error?: string
+    }> = []
+
+    for (const date of datesToScan) {
       if (Date.now() - startTime.getTime() > maxExecutionTime) {
         timedOut = true
-        console.log(`[v0] Timeout reached after ${dayIndex} days`)
+        console.log(`[v0] Timeout reached at date ${date.toISOString().split("T")[0]}`)
         break
       }
 
-      if (dayIndex > 0 && dayIndex % 5 === 0) {
-        console.log(`[v0] Progress: ${dayIndex}/${scanDays} days. Rooms found: ${totalRoomsFound}`)
-      }
+      const checkInStr = date.toISOString().split("T")[0]
+      const checkOutDate = new Date(date)
+      checkOutDate.setDate(checkOutDate.getDate() + 1)
+      const checkOutStr = checkOutDate.toISOString().split("T")[0]
 
-      const scanDate = new Date(today)
-      scanDate.setDate(scanDate.getDate() + dayOffset + dayIndex)
-      const dateStr = scanDate.toISOString().split("T")[0]
-      const dayOfWeek = scanDate.getDay()
-      const checkOutDate = new Date(scanDate.getTime() + 86400000).toISOString().split("T")[0]
+      console.log(`[v0] Scraping date: ${checkInStr}`)
 
-      const demandInfo = getDemandLevel(scanDate)
-      const competitorPrices: number[] = []
-
-      const scrapedResults = await scrapeMultipleCompetitorsWithRetry(
-        (competitors || []).map((c) => ({
-          id: c.id,
-          competitor_hotel_name: c.competitor_hotel_name || c.name,
-          booking_url: c.booking_url,
-          city: hotel.city || "Tel Aviv",
-        })),
-        dateStr,
-        checkOutDate,
+      const dateResults = await scrapeMultipleCompetitorsWithRetry(
+        activeCompetitors,
+        checkInStr,
+        checkOutStr,
         3, // maxRetries
       )
 
-      // Process all results
-      for (const scrapedResult of scrapedResults) {
-        if (scrapedResult.success && scrapedResult.rooms.length > 0) {
-          successfulScrapes++
-          totalRoomsFound += scrapedResult.rooms.length
-          console.log(`[v0] SUCCESS: ${scrapedResult.competitorName} - ${scrapedResult.rooms.length} room types`)
+      for (const result of dateResults) {
+        scrapedData.push({
+          competitorId: result.competitorId,
+          competitorName: result.competitorName,
+          checkInDate: checkInStr,
+          checkOutDate: checkOutStr,
+          success: result.success,
+          rooms: result.rooms,
+          method: result.source,
+          error: result.errorMessage,
+        })
+      }
+    }
 
-          for (const room of scrapedResult.rooms) {
-            competitorPrices.push(room.price)
+    console.log(`[v0] Processing ${scrapedData.length} scrape results`)
 
-            competitorPriceResults.push({
-              hotel_id: hotelId,
-              competitor_id: scrapedResult.competitorId,
-              date: dateStr,
-              price: room.price,
-              source: "Booking.com",
-              room_type: room.roomType,
-              room_name: room.roomName || room.roomType,
-              availability: true,
-              original_price: room.originalPrice || null,
-              meal_plan: room.mealPlan || null,
-              max_occupancy: room.maxOccupancy || null,
-              raw_data: room.rawData || null,
-            })
-          }
-        } else {
-          failedScrapes++
-          console.log(`[v0] FAILED: ${scrapedResult.competitorName} for ${dateStr} - ${scrapedResult.errorMessage}`)
-        }
+    for (const competitorResult of scrapedData) {
+      if (Date.now() - startTime.getTime() > maxExecutionTime) {
+        timedOut = true
+        console.log(`[v0] Timeout reached after processing competitor ${competitorResult.competitorName}`)
+        break
       }
 
-      for (const roomType of hotelRoomTypes || []) {
-        if (roomTypeId && roomType.id !== roomTypeId) continue
+      if (competitorResult.success && competitorResult.rooms.length > 0) {
+        successfulScrapes++
+        totalRoomsFound += competitorResult.rooms.length
+        console.log(`[v0] SUCCESS: ${competitorResult.competitorName} - ${competitorResult.rooms.length} room types`)
 
-        const ourPrice = Math.round(roomType.base_price * demandInfo.multiplier)
-        const {
-          price: recommendedPrice,
-          recommendation,
-          action,
-        } = calculateRecommendedPrice(ourPrice, competitorPrices, demandInfo.level)
-
-        results.push({
-          date: dateStr,
-          day_of_week: dayOfWeek,
-          demand_level: demandInfo.level,
-          our_price: ourPrice,
-          competitor_avg:
-            competitorPrices.length > 0
-              ? Math.round(competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length)
-              : null,
-          price_difference:
-            competitorPrices.length > 0
-              ? ourPrice - Math.round(competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length)
-              : null,
-          recommendation,
-          recommended_price: recommendedPrice,
-          autopilot_action: action,
-          data_sources: competitorPrices.length > 0 ? ["Booking.com"] : [],
-          room_type_id: roomType.id,
-        })
+        for (const room of competitorResult.rooms) {
+          competitorPriceResults.push({
+            hotel_id: hotelId,
+            competitor_id: competitorResult.competitorId,
+            date: competitorResult.checkInDate,
+            price: room.price,
+            source: room.source || "Booking.com",
+            room_type: room.roomType,
+            room_name: room.roomName || room.roomType,
+            availability: room.available,
+            original_price: room.originalPrice || null,
+            meal_plan: room.mealPlan || null,
+            max_occupancy: room.maxOccupancy || null,
+            raw_data: room.rawData || null,
+          })
+        }
+      } else {
+        failedScrapes++
+        console.log(
+          `[v0] FAILED: ${competitorResult.competitorName} for ${competitorResult.checkInDate} - ${competitorResult.error}`,
+        )
       }
     }
 
@@ -338,36 +343,68 @@ export async function POST(request: Request) {
 
       console.log(`[v0] TOTAL SAVED to competitor_daily_prices: ${savedCount} records`)
 
-      console.log(`[v0] Saving ${competitorPriceResults.length} records to scan_results`)
+      console.log(`[v0] ========== SCAN_RESULTS DEBUG ==========`)
+      console.log(`[v0] scrapedData length: ${scrapedData.length}`)
+      if (scrapedData.length > 0) {
+        console.log(`[v0] scrapedData sample:`, JSON.stringify(scrapedData[0], null, 2))
+      }
 
-      const scanResultsData = competitorPriceResults.map((r) => ({
-        scan_id: scanRecord.id,
-        hotel_id: r.hotel_id,
-        competitor_name: null, // Will be populated from metadata
-        source: r.source,
-        price: r.price,
-        room_type: r.room_type,
-        availability: r.availability,
-        scraped_at: new Date().toISOString(),
-        metadata: {
-          check_in: r.date,
-          competitor_id: r.competitor_id,
-          competitor_name: competitors?.find((c) => c.id === r.competitor_id)?.competitor_hotel_name || null,
-          room_name: r.room_name,
-          original_price: r.original_price,
-          meal_plan: r.meal_plan,
-          max_occupancy: r.max_occupancy,
-        },
-      }))
+      console.log(`[v0] Saving to scan_results from ${scrapedData.length} scrape results`)
 
-      const { data: scanResultsInserted, error: scanResultsError } = await supabase
-        .from("scan_results")
-        .insert(scanResultsData)
+      const scanResultsData = []
+      for (const competitorResult of scrapedData) {
+        console.log(
+          `[v0] Processing competitor: ${competitorResult.competitorName}, success: ${competitorResult.success}, rooms: ${competitorResult.rooms?.length || 0}`,
+        )
 
-      if (scanResultsError) {
-        console.error(`[v0] scan_results error:`, JSON.stringify(scanResultsError))
+        if (!competitorResult.success || !competitorResult.rooms || competitorResult.rooms.length === 0) {
+          console.log(`[v0] Skipping ${competitorResult.competitorName} - no successful data`)
+          continue // Skip failed scrapes
+        }
+
+        for (const room of competitorResult.rooms) {
+          scanResultsData.push({
+            scan_id: scanRecord.id,
+            hotel_id: hotel.id,
+            competitor_name: competitorResult.competitorName,
+            source: room.source || "Booking.com",
+            price: room.price.toString(),
+            room_type: room.roomType,
+            availability: room.available,
+            scraped_at: new Date().toISOString(),
+            metadata: {
+              check_in: competitorResult.checkInDate,
+              check_out: competitorResult.checkOutDate,
+              competitor_id: competitorResult.competitorId,
+              competitor_name: competitorResult.competitorName,
+              room_name: room.roomName || room.roomType,
+              original_price: room.originalPrice || room.price,
+              meal_plan: room.mealPlan || (room.hasBreakfast ? "Breakfast included" : null),
+              max_occupancy: room.maxOccupancy || null,
+              method: competitorResult.method,
+              currency: room.currency || "ILS",
+            },
+          })
+        }
+      }
+
+      console.log(`[v0] Prepared ${scanResultsData.length} scan_results records to save`)
+      if (scanResultsData.length > 0) {
+        console.log(`[v0] Sample scan_results record:`, JSON.stringify(scanResultsData[0], null, 2))
+      }
+
+      if (scanResultsData.length > 0) {
+        const { data: scanResultsInserted, error: scanResultsError } = await supabase
+          .from("scan_results")
+          .insert(scanResultsData)
+
+        if (scanResultsError) {
+          console.error(`[v0] scan_results error:`, JSON.stringify(scanResultsError))
+        } else {
+          console.log(`[v0] SUCCESS: Saved ${scanResultsData.length} records to scan_results`)
+        }
       } else {
-        console.log(`[v0] Saved ${scanResultsData.length} records to scan_results`)
+        console.log(`[v0] WARNING: No successful scrapes to save to scan_results`)
       }
     }
 
