@@ -274,7 +274,7 @@ export async function POST(request: Request) {
           competitorPriceResults.push({
             hotel_id: hotelId,
             competitor_id: competitorResult.competitorId,
-            date: competitorResult.checkInDate,
+            date: competitorResult.date,
             price: room.price,
             source: room.source || "Booking.com",
             room_type: room.roomType,
@@ -289,7 +289,7 @@ export async function POST(request: Request) {
       } else {
         failedScrapes++
         console.log(
-          `[v0] FAILED: ${competitorResult.competitorName} for ${competitorResult.checkInDate} - ${competitorResult.error}`,
+          `[v0] FAILED: ${competitorResult.competitorName} for ${competitorResult.date} - ${competitorResult.error}`,
         )
       }
     }
@@ -362,6 +362,9 @@ export async function POST(request: Request) {
           continue // Skip failed scrapes
         }
 
+        const checkInDate = competitorResult.date
+        const checkOutDate = new Date(new Date(checkInDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+
         for (const room of competitorResult.rooms) {
           scanResultsData.push({
             scan_id: scanRecord.id,
@@ -373,15 +376,15 @@ export async function POST(request: Request) {
             availability: room.available,
             scraped_at: new Date().toISOString(),
             metadata: {
-              check_in: competitorResult.checkInDate,
-              check_out: competitorResult.checkOutDate,
+              check_in: checkInDate,
+              check_out: checkOutDate,
               competitor_id: competitorResult.competitorId,
               competitor_name: competitorResult.competitorName,
               room_name: room.roomName || room.roomType,
               original_price: room.originalPrice || room.price,
               meal_plan: room.mealPlan || (room.hasBreakfast ? "Breakfast included" : null),
               max_occupancy: room.maxOccupancy || null,
-              method: competitorResult.method,
+              method: competitorResult.source,
               currency: room.currency || "ILS",
             },
           })
