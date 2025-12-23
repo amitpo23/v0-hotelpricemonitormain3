@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
+import { scrapeWithNewApifyActor } from "@/lib/scraper/apify-scraper-integration"
 
 // Simulated scraping sources - in production, these would be real scrapers
 const BOOKING_SOURCES = [{ name: "Booking.com", baseVariation: 0.95 }]
