@@ -159,6 +159,20 @@ export async function POST(request: Request) {
       date.setDate(date.getDate() + dayOffset)
       const dateStr = date.toISOString().split("T")[0]
 
+            // NEW: Use Apify actor to scrape all competitors at once
+            const scrapedPrices = await scrapeWithNewApifyActor(
+                      hotelData.id,
+                      dateStr,
+                      competitors
+                    )
+
+            if (scrapedPrices && scrapedPrices.length > 0) {
+                      realScrapeCount += scrapedPrices.length
+                      competitorPrices.push(...scrapedPrices)
+                    }
+
+            // OLD CODE - TO BE REMOVED:
+            /*
       for (const competitor of competitors) {
         console.log(`[Scan] Scraping ${competitor.competitor_hotel_name} for ${dateStr}`)
 
@@ -188,6 +202,7 @@ export async function POST(request: Request) {
           console.log(`[Scan] No results for ${competitor.competitor_hotel_name} on ${dateStr}`)
         }
       }
+            */
     }
 
     console.log(`[Scan] Completed ${realScrapeCount} real scrapes, got ${competitorPrices.length} prices`)
