@@ -213,11 +213,11 @@ export async function POST(request: Request) {
     const scrapedData: Array<{
       competitorId: string
       competitorName: string
-      checkInDate: string
-      checkOutDate: string
+      date: string
+      checkOut: string
       success: boolean
       rooms: any[]
-      method: string
+      source: string
       error?: string
     }> = []
 
@@ -246,11 +246,11 @@ export async function POST(request: Request) {
         scrapedData.push({
           competitorId: result.competitorId,
           competitorName: result.competitorName,
-          checkInDate: checkInStr,
-          checkOutDate: checkOutStr,
+          date: result.date,
+          checkOut: checkOutStr,
           success: result.success,
           rooms: result.rooms,
-          method: result.source,
+          source: result.source,
           error: result.errorMessage,
         })
       }
@@ -363,7 +363,7 @@ export async function POST(request: Request) {
         }
 
         const checkInDate = competitorResult.date
-        const checkOutDate = new Date(new Date(checkInDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+        const checkOutDate = competitorResult.checkOut
 
         for (const room of competitorResult.rooms) {
           scanResultsData.push({

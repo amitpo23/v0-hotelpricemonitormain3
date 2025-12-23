@@ -463,12 +463,16 @@ async function scrapeViaApify(
   checkIn: string,
   checkOut: string,
 ): Promise<BookingPriceResult[]> {
-  console.log(`[v0] [Apify] Starting search for "${hotelName}" in ${city}`)
-
   if (!APIFY_API_KEY) {
     console.log(`[v0] [Apify] No API key configured`)
     throw new Error("Apify API key not configured")
   }
+
+  const keyPreview =
+    APIFY_API_KEY.length > 8
+      ? `${APIFY_API_KEY.substring(0, 4)}...${APIFY_API_KEY.substring(APIFY_API_KEY.length - 4)}`
+      : `${APIFY_API_KEY.substring(0, 2)}...`
+  console.log(`[v0] [Apify] Using API key: ${keyPreview} (length: ${APIFY_API_KEY.length})`)
 
   try {
     const { ApifyClient } = await import("apify-client")
@@ -478,90 +482,101 @@ async function scrapeViaApify(
 
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr)
-      return date.toISOString().split("T")[0]
+      const formatted = date.toISOString().split("T")[0]
+      console.log(`[v0] [Apify]   formatDate: "${dateStr}" -> "${formatted}"`)
+      return formatted
     }
 
     const formattedCheckIn = formatDate(checkIn)
     const formattedCheckOut = formatDate(checkOut)
 
-    console.log(`[v0] [Apify] Dates: ${formattedCheckIn} to ${formattedCheckOut}`)
+    console.log(`[v0] [Apify] Final formatted dates:`)
+    console.log(`[v0] [Apify]   checkin: "${formattedCheckIn}"`)
+    console.log(`[v0] [Apify]   checkout: "${formattedCheckOut}"`)
 
-    // More specific search query
     const input = {
       search: `"${hotelName}" ${city}`,
-      maxItems: 3,
+      maxItems: 5,
       sortBy: "distance_from_search",
       currency: "ILS",
       language: "en-gb",
-      checkIn: formattedCheckIn,
-      checkOut: formattedCheckOut,
+      checkin: formattedCheckIn, // lowercase!
+      checkout: formattedCheckOut, // lowercase!
       adults: 2,
       rooms: 1,
       includeReviews: false,
       proxyConfiguration: { useApifyProxy: true },
     }
 
-    console.log(`[v0] [Apify] Running actor with input:`, JSON.stringify(input, null, 2))
+    console.log(`[v0] [Apify] Final Apify input object:`)
+    console.log(JSON.stringify(input, null, 2))
 
-    // Shorter timeout - 35 seconds
     const run = await client.actor(ACTOR_ID).call(input, {
-      waitSecs: 35,
+      waitSecs: 45,
       memory: 2048,
     })
 
     console.log(`[v0] [Apify] Run status: ${run.status}`)
 
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
-    console.log(`[v0] [Apify] Got ${items.length} items`)
+    console.log(`[v0] [Apify] Got ${items.length} items from dataset`)
+
+    if (items.length > 0) {
+      console.log(`[v0] [Apify] First item structure:`, JSON.stringify(items[0], null, 2))
+    }
 
     const results: BookingPriceResult[] = []
 
     for (const item of items) {
-      const itemName = (item.name || item.hotelName || "").toLowerCase()
-      const searchName = hotelName.toLowerCase()
+      console.log(`[v0] [Apify] Processing hotel: ${item.name || "Unknown"}`)
+      console.log(`[v0] [Apify] Item keys:`, Object.keys(item))
+      console.log(`[v0] [Apify] Price field:`, item.price)
+      console.log(`[v0] [Apify] Currency field:`, item.currency)
 
-      // Only use exact or close matches
-      if (!itemName.includes(searchName) && !searchName.includes(itemName.split(" ")[0])) {
-        console.log(`[v0] [Apify] Skipping non-matching hotel: ${item.name}`)
-        continue
-      }
+      const price =
+        item.price || item.pricePerNight || item.cheapestPrice || item.minPrice || item.totalPrice || item.b_raw_price
 
-      console.log(`[v0] [Apify] Processing matching hotel: ${item.name}`)
-
-      // Extract prices
-      const price = item.price || item.pricePerNight || item.cheapestPrice || item.b_raw_price
-
-      if (price && price > 0) {
+      if (price !== null && price !== undefined && Number(price) > 0) {
         results.push({
           price: Number.parseFloat(String(price)),
-          roomType: item.roomType || "Standard Room",
-          currency: "ILS",
+          roomType: item.roomType || item.name || "Standard Room",
+          currency: item.currency || "ILS",
           available: true,
-          hasBreakfast: false,
+          hasBreakfast: item.hasBreakfast || false,
           source: "Booking.com",
         })
+        console.log(`[v0] [Apify] Added room with price: ${price}`)
+      } else {
+        console.log(`[v0] [Apify] No valid price found for ${item.name}`)
       }
 
-      // Check for room array
       const rooms = item.rooms || item.roomOptions || []
-      if (Array.isArray(rooms)) {
+      if (Array.isArray(rooms) && rooms.length > 0) {
+        console.log(`[v0] [Apify] Found ${rooms.length} rooms in item.rooms`)
         for (const room of rooms) {
-          const roomPrice = room.price || room.pricePerNight
-          if (roomPrice && roomPrice > 0) {
+          const roomPrice = room.price || room.pricePerNight || room.totalPrice
+          if (roomPrice !== null && roomPrice !== undefined && Number(roomPrice) > 0) {
             results.push({
               price: Number.parseFloat(String(roomPrice)),
-              roomType: room.name || room.roomName || "Standard Room",
-              currency: "ILS",
+              roomType: room.name || room.roomName || room.type || "Standard Room",
+              currency: room.currency || item.currency || "ILS",
               available: true,
-              hasBreakfast: room.breakfast || false,
+              hasBreakfast: room.breakfast || room.hasBreakfast || false,
               source: "Booking.com",
             })
+            console.log(`[v0] [Apify] Added room from rooms array: ${room.name} - ${roomPrice}`)
           }
         }
       }
     }
 
-    console.log(`[v0] [Apify] Final results: ${results.length} rooms`)
+    console.log(`[v0] [Apify] Final results: ${results.length} rooms found`)
+
+    if (items.length > 0 && results.length === 0) {
+      console.warn(`[v0] [Apify] WARNING: Got ${items.length} hotels but extracted 0 prices!`)
+      console.warn(`[v0] [Apify] Sample item:`, JSON.stringify(items[0], null, 2))
+    }
+
     return results
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -595,7 +610,6 @@ async function scrapeViaRapidAPI(
   try {
     console.log(`[v0] [RapidAPI] Starting scrape for ${hotelName}`)
 
-    // Use Booking.com API on RapidAPI
     const searchUrl = `https://booking-com.p.rapidapi.com/v1/hotels/search?checkin_date=${checkIn}&checkout_date=${checkOut}&dest_type=city&units=metric&order_by=popularity&adults_number=2&room_number=1&dest_id=-781545&filter_by_currency=ILS&locale=en-gb&page_number=0&include_adjacency=true`
 
     const response = await fetch(searchUrl, {
@@ -660,7 +674,6 @@ async function scrapeViaDirectUrl(
   }
 
   try {
-    // Add check-in/check-out dates to URL
     const url = new URL(bookingUrl)
     url.searchParams.set("checkin", checkIn)
     url.searchParams.set("checkout", checkOut)
@@ -736,7 +749,6 @@ export async function scrapeBookingPrices(
       const errorMsg = error instanceof Error ? error.message : String(error)
       console.log(`[v0] [BookingScraper] ❌ Apify failed: ${errorMsg}`)
 
-      // Only continue to fallback if not an auth error
       if (!errorMsg.includes("401") && !errorMsg.includes("authentication")) {
         // Non-auth error, continue to next method
       }
@@ -752,7 +764,7 @@ export async function scrapeBookingPrices(
       const directResults = await scrapeViaDirectUrl(bookingUrl, checkIn, checkOut)
 
       if (directResults.length > 0) {
-        console.log(`[v0] [BookingScraper] ✅ SUCCESS via Direct URL: ${directResults.length} rooms`)
+        console.log(`[v0] [BookingScraper] ✓ ${hotelName}: ${directResults.length} results`)
         return {
           success: true,
           results: directResults,
@@ -807,7 +819,6 @@ export async function scrapeBookingViaHtml(
   return null
 }
 
-// Enhanced scraper with retry mechanism for multiple competitors
 export async function scrapeMultipleCompetitorsWithRetry(
   competitors: Array<{
     id: string
@@ -825,7 +836,6 @@ export async function scrapeMultipleCompetitorsWithRetry(
   console.log(`[v0] [MultiScraper] Starting scan for ${competitors.length} competitors`)
   console.log(`[v0] [MultiScraper] Date range: ${checkIn} to ${checkOut}`)
 
-  // First attempt for all competitors
   for (const competitor of competitors) {
     console.log(`[v0] [MultiScraper] Competitor: ${competitor.name}, Attempt: 1/${maxRetries}`)
 
@@ -851,7 +861,6 @@ export async function scrapeMultipleCompetitorsWithRetry(
     }
   }
 
-  // Retry failed competitors
   let retryRound = 2
   while (failedCompetitors.length > 0 && retryRound <= maxRetries) {
     console.log(`[v0] [MultiScraper] Retry round ${retryRound}/${maxRetries}: ${failedCompetitors.length} competitors`)
@@ -889,7 +898,6 @@ export async function scrapeMultipleCompetitorsWithRetry(
     retryRound++
   }
 
-  // Final summary
   const successCount = competitors.length - failedCompetitors.length
   console.log(`[v0] [MultiScraper] ========== SCAN COMPLETE ==========`)
   console.log(`[v0] [MultiScraper] Total competitors: ${competitors.length}`)
