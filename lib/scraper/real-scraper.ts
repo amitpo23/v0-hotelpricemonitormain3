@@ -43,19 +43,28 @@ export async function scrapeCompetitorAllRoomsWithRetry(
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(`[v0] [RealScraper] Attempt ${attempt}/${maxRetries} for ${competitor.competitor_hotel_name}`)
 
-    const result = await scrapeCompetitorAllRooms(competitor, checkIn, checkOut)
+    const scrapePromise = scrapeCompetitorAllRooms(competitor, checkIn, checkOut)
+    const timeoutPromise = new Promise<CompetitorMultiRoomResult>((_, reject) =>
+      setTimeout(() => reject(new Error("Scrape timeout")), 10000),
+    )
 
-    if (result.success && result.rooms.length > 0) {
-      console.log(`[v0] [RealScraper] SUCCESS on attempt ${attempt}`)
-      return result
+    try {
+      const result = await Promise.race([scrapePromise, timeoutPromise])
+
+      if (result.success && result.rooms.length > 0) {
+        console.log(`[v0] [RealScraper] SUCCESS on attempt ${attempt}`)
+        return result
+      }
+
+      lastError = result.errorMessage
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "timeout"
+      console.log(`[v0] [RealScraper] Attempt ${attempt} failed: ${lastError}`)
     }
-
-    lastError = result.errorMessage
 
     // Don't retry if it's the last attempt
     if (attempt < maxRetries) {
-      // Exponential backoff: 2s, 4s, 8s
-      const delayMs = Math.pow(2, attempt) * 1000
+      const delayMs = attempt * 1000 // Linear: 1s, 2s instead of exponential
       console.log(`[v0] [RealScraper] Retrying after ${delayMs}ms...`)
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }

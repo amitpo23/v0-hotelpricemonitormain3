@@ -208,7 +208,7 @@ export async function POST(request: Request) {
       `[v0] Will scan ${datesToScan.length} dates from ${datesToScan[0].toISOString().split("T")[0]} to ${datesToScan[datesToScan.length - 1].toISOString().split("T")[0]}`,
     )
 
-    const { scrapeMultipleCompetitorsWithRetry } = await import("@/lib/scraper/real-scraper")
+    const { scrapeCompetitorAllRoomsWithRetry } = await import("@/lib/scraper/real-scraper")
 
     const scrapedData: Array<{
       competitorId: string
@@ -222,9 +222,13 @@ export async function POST(request: Request) {
     }> = []
 
     for (const date of datesToScan) {
-      if (Date.now() - startTime.getTime() > maxExecutionTime) {
+      const timeElapsed = Date.now() - startTime.getTime()
+      const timeRemaining = maxExecutionTime - timeElapsed
+
+      if (timeRemaining < 10000) {
+        // Need at least 10 seconds remaining
         timedOut = true
-        console.log(`[v0] Timeout reached at date ${date.toISOString().split("T")[0]}`)
+        console.log(`[v0] Timeout approaching at date ${date.toISOString().split("T")[0]}, stopping scan`)
         break
       }
 
@@ -233,27 +237,63 @@ export async function POST(request: Request) {
       checkOutDate.setDate(checkOutDate.getDate() + 1)
       const checkOutStr = checkOutDate.toISOString().split("T")[0]
 
-      console.log(`[v0] Scraping date: ${checkInStr}`)
+      console.log(`[v0] Scraping date: ${checkInStr} for ${activeCompetitors.length} competitors`)
 
-      const dateResults = await scrapeMultipleCompetitorsWithRetry(
-        activeCompetitors,
-        checkInStr,
-        checkOutStr,
-        3, // maxRetries
+      const competitorPromises = activeCompetitors.map((competitor) =>
+        scrapeCompetitorAllRoomsWithRetry(
+          competitor,
+          checkInStr,
+          checkOutStr,
+          2, // Reduced retries from 3 to 2 to save time
+        ),
       )
 
-      for (const result of dateResults) {
-        scrapedData.push({
-          competitorId: result.competitorId,
-          competitorName: result.competitorName,
-          date: result.date,
-          checkOut: checkOutStr,
-          success: result.success,
-          rooms: result.rooms,
-          source: result.source,
-          error: result.errorMessage,
-        })
+      const dateTimeout = Math.min(30000, timeRemaining - 5000) // 30 seconds max per date, or remaining time
+      const dateResults = await Promise.race([
+        Promise.allSettled(competitorPromises),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Date batch timeout")), dateTimeout)),
+      ]).catch((error) => {
+        console.log(`[v0] Date ${checkInStr} timed out after ${dateTimeout}ms`)
+        return competitorPromises.map(() => ({
+          status: "rejected" as const,
+          reason: "timeout",
+        }))
+      })
+
+      for (let i = 0; i < dateResults.length; i++) {
+        const result = dateResults[i]
+        const competitor = activeCompetitors[i]
+
+        if (result.status === "fulfilled") {
+          const competitorResult = result.value
+          scrapedData.push({
+            competitorId: competitorResult.competitorId,
+            competitorName: competitorResult.competitorName,
+            date: competitorResult.date,
+            checkOut: checkOutStr,
+            success: competitorResult.success,
+            rooms: competitorResult.rooms,
+            source: competitorResult.source,
+            error: competitorResult.errorMessage,
+          })
+        } else {
+          console.log(`[v0] Competitor ${competitor.competitor_hotel_name} failed: ${result.reason}`)
+          scrapedData.push({
+            competitorId: competitor.id,
+            competitorName: competitor.competitor_hotel_name,
+            date: checkInStr,
+            checkOut: checkOutStr,
+            success: false,
+            rooms: [],
+            source: "error",
+            error: result.reason?.toString() || "Promise rejected",
+          })
+        }
       }
+
+      console.log(
+        `[v0] Completed ${checkInStr}: ${dateResults.filter((r) => r.status === "fulfilled").length}/${activeCompetitors.length} successful`,
+      )
     }
 
     console.log(`[v0] Processing ${scrapedData.length} scrape results`)
@@ -433,7 +473,6 @@ export async function POST(request: Request) {
 
       let savedDailyCount = 0
       for (const record of dailyPricesData) {
-        // Delete existing record if exists
         await supabase
           .from("daily_prices")
           .delete()
@@ -441,7 +480,6 @@ export async function POST(request: Request) {
           .eq("date", record.date)
           .eq("room_type_id", record.room_type_id)
 
-        // Insert new record
         const { error: singleError } = await supabase.from("daily_prices").insert(record)
 
         if (singleError) {
