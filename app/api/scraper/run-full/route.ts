@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-const SCAN_DAYS = 7
-const TIMEOUT_MS = 150000 // 50 seconds timeout to avoid Vercel function timeout
+const SCAN_DAYS = 45 // Scan 45 days forwar
+const TIMEOUT_MS = 180000 // 3 minutes timeout to avoid Vercel function timeout
 const maxExecutionTime = TIMEOUT_MS
 
 function getDemandLevel(date: Date): { level: string; multiplier: number } {
@@ -292,7 +292,7 @@ export async function POST(request: Request) {
       }
 
       console.log(
-        `[v0] Completed ${checkInStr}: ${dateResults.filter((r: any) => r.status === "fulfilled").length}/${activeCompetitors.length} successful`,
+        `[v0] Completed ${checkInStr}: ${scrapedData.filter((r: any) => r.status === "fulfilled").length}/${activeCompetitors.length} successful`,
       )
     }
 
