@@ -20,7 +20,7 @@ export interface ScrapeResult {
 
 /**
  * Scrapes hotel and competitor prices using the new Apify Actor
- * Actor ID: 5Y3TFbOR1R7awejDB
+ * Actor ID: poetic_ant/v0-hotelpricemonitormain3
  */
 export async function scrapeWithNewApifyActor(
   hotelData: HotelData,
@@ -51,7 +51,7 @@ export async function scrapeWithNewApifyActor(
     console.log(`[ApifyIntegration] Running actor for ${competitors.length} competitors`)
 
     // Call the new actor
-    const run = await client.actor("5Y3TFbOR1R7awejDB").call(
+    const run = await client.actor("poetic_ant/v0-hotelpricemonitormain3").call(
       {
         hotelId: hotelData.id,
         hotelUrl: hotelData.booking_url || "",
