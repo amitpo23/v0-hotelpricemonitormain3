@@ -292,7 +292,7 @@ export async function POST(request: Request) {
       }
 
       console.log(
-        `[v0] Completed ${checkInStr}: ${scrapedData.filter((r: any) => r.status === "fulfilled").length}/${activeCompetitors.length} successful`,
+        `[v0] Completed ${checkInStr}: ${scrapedData.filter((r) => r.success).length}/${activeCompetitors.length} successful`,
       )
     }
 
