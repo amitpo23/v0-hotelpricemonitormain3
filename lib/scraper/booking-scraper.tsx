@@ -19,7 +19,8 @@ export interface BookingScraperResponse {
   success: boolean
   results: BookingPriceResult[]
   source: string
-  error?: string
+  error?: stringbooking-scraper.tsx
+
   method?: string
 }
 
@@ -462,6 +463,7 @@ async function scrapeViaApify(
   city: string,
   checkIn: string,
   checkOut: string,
+    bookingUrl?: string,
 ): Promise<BookingPriceResult[]> {
   if (!APIFY_API_KEY) {
     console.log(`[v0] [Apify] No API key configured`)
@@ -495,7 +497,7 @@ async function scrapeViaApify(
     console.log(`[v0] [Apify]   checkout: "${formattedCheckOut}"`)
 
     const input = {
-    search: `${hotelName} ${city}`,      maxItems: 5,
+    search: bookingUrl || `${hotelName} ${city}`,      maxItems: 5,
       sortBy: "distance_from_search",
       currency: "ILS",
       language: "en-gb",
@@ -733,7 +735,7 @@ export async function scrapeBookingPrices(
   if (APIFY_API_KEY) {
     try {
       console.log(`[v0] [BookingScraper] Method 0: Apify Search (PRIMARY)`)
-      const apifyResults = await scrapeViaApify(hotelName, city, checkIn, checkOut)
+      const apifyResults = await scrapeViaApify(hotelName, city, checkIn, checkOut, bookingUrl)
 
       if (apifyResults.length > 0) {
         console.log(`[v0] [BookingScraper] ✅ SUCCESS via Apify: ${apifyResults.length} rooms`)
