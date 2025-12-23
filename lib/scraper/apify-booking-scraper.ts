@@ -13,8 +13,7 @@ interface ApifyBookingResult {
 }
 
 interface ScrapeOptions {
-  search: string
-  checkIn: string
+  bookingUrl: string  checkIn: string
   checkOut: string
   adults?: number
   children?: number
@@ -45,7 +44,7 @@ export async function scrapeBookingWithApify(
 
     // Prepare Actor input
     const input = {
-      search: options.search,
+    startUrls: [{ url: options.bookingUrl }],
       checkIn: options.checkIn,
       checkOut: options.checkOut,
       adults: options.adults || 2,
