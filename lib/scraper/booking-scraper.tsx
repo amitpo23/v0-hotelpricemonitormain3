@@ -495,8 +495,7 @@ async function scrapeViaApify(
     console.log(`[v0] [Apify]   checkout: "${formattedCheckOut}"`)
 
     const input = {
-      search: `"${hotelName}" ${city}`,
-      maxItems: 5,
+    search: `${hotelName} ${city}`,      maxItems: 5,
       sortBy: "distance_from_search",
       currency: "ILS",
       language: "en-gb",
