@@ -513,37 +513,41 @@ async function scrapeViaApify(
 
     console.log(`[v0] [Apify] Calling actor ${ACTOR_ID}...`)
     const run = await client.actor(ACTOR_ID).call(input, {
-      waitSecs: 300, // Wait up to 5 minutes
       memory: 2048,
     })
 
-    console.log(`[v0] [Apify] Run completed with status: ${run.status}`)
-    console.log(`[v0] [Apify] Run ID: ${run.id}`)
-    console.log(`[v0] [Apify] Dataset ID: ${run.defaultDatasetId}`)
+    console.log(`[v0] [Apify] Actor started, run ID: ${run.id}`)
+    console.log(`[v0] [Apify] Waiting for actor to finish (timeout: 300 seconds)...`)
+    
+    // Wait for the run to finish (up to 5 minutes)
+    const finishedRun = await client.run(run.id).waitForFinish({ waitSecs: 300 })
+
+    console.log(`[v0] [Apify] Run completed with status: ${finishedRun.status}`)
+    console.log(`[v0] [Apify] Dataset ID: ${finishedRun.defaultDatasetId}`)
     console.log(`[v0] [Apify] Run details:`, JSON.stringify({
-      status: run.status,
-      exitCode: run.exitCode,
-      statusMessage: run.statusMessage,
-      runTimeSecs: run.runTimeSecs,
-      metamorph: run.metamorph,
+      status: finishedRun.status,
+      exitCode: finishedRun.exitCode,
+      statusMessage: finishedRun.statusMessage,
+      runTimeSecs: finishedRun.runTimeSecs,
+      metamorph: finishedRun.metamorph,
     }, null, 2))
 
     console.log(`[v0] [Apify] Fetching results from dataset...`)
-    const { items } = await client.dataset(run.defaultDatasetId).listItems()
+    const { items } = await client.dataset(finishedRun.defaultDatasetId).listItems()
     console.log(`[v0] [Apify] Got ${items.length} items from dataset`)
     
     if (items.length === 0) {
       console.warn(`[v0] [Apify] ⚠️ No items returned from actor!`)
-      console.warn(`[v0] [Apify] Actor status was: ${run.status}`)
+      console.warn(`[v0] [Apify] Actor status was: ${finishedRun.status}`)
       console.warn(`[v0] [Apify] This might mean:`)
       console.warn(`[v0] [Apify]   - URL is not a valid hotel page`)
       console.warn(`[v0] [Apify]   - Booking.com blocked the request`)
       console.warn(`[v0] [Apify]   - Actor timeout or crash`)
       console.warn(`[v0] [Apify]   - No hotels matched the search`)
       
-      if (run.status !== 'SUCCEEDED') {
-        console.error(`[v0] [Apify] ❌ Actor failed with status: ${run.status}`)
-        throw new Error(`Apify actor failed with status: ${run.status}`)
+      if (finishedRun.status !== 'SUCCEEDED') {
+        console.error(`[v0] [Apify] ❌ Actor failed with status: ${finishedRun.status}`)
+        throw new Error(`Apify actor failed with status: ${finishedRun.status}`)
       }
     }
 
