@@ -513,7 +513,7 @@ async function scrapeViaApify(
 
     console.log(`[v0] [Apify] Calling actor ${ACTOR_ID}...`)
     const run = await client.actor(ACTOR_ID).call(input, {
-      waitForFinish: 300, // Wait up to 5 minutes
+      waitSecs: 300, // Wait up to 5 minutes
       memory: 2048,
     })
 
