@@ -127,7 +127,13 @@ Your project is live at:
 
 1. Push your changes to GitHub
 2. Vercel will automatically deploy
-3. Make sure to add environment variables in Vercel dashboard:
+3. **⚠️ IMPORTANT**: Add environment variables in Vercel dashboard
+   - Go to: **Settings → Environment Variables**
+   - Add `APIFY_API_KEY` and all other variables from `.env.example`
+   - **Select all environments**: Production, Preview, Development
+   - **Redeploy** after adding variables
+
+📖 **Detailed Vercel Setup Guide**: See [docs/VERCEL_ENV_SETUP.md](docs/VERCEL_ENV_SETUP.md)
    - Settings → Environment Variables
    - Add all variables from `.env.local`
 

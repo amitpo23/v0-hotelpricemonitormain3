@@ -2,6 +2,24 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { scrapeWithNewApifyActor } from "@/lib/scraper/apify-scraper-integration"
 
+// Validate required environment variables
+function validateEnvironment() {
+  const missing = []
+  
+  if (!process.env.APIFY_API_KEY) missing.push("APIFY_API_KEY")
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL")
+  if (!process.env.SUPABASE_SERVICE_KEY) missing.push("SUPABASE_SERVICE_KEY")
+  
+  if (missing.length > 0) {
+    return {
+      valid: false,
+      error: `Missing required environment variables: ${missing.join(", ")}. Please configure them in Vercel/Railway settings.`
+    }
+  }
+  
+  return { valid: true }
+}
+
 // Simulated scraping sources - in production, these would be real scrapers
 const BOOKING_SOURCES = [{ name: "Booking.com", baseVariation: 0.95 }]
 
@@ -70,6 +88,16 @@ async function fetchMarketData(city: string, date: string) {
 }
 
 export async function POST(request: Request) {
+  // Validate environment variables first
+  const envCheck = validateEnvironment()
+  if (!envCheck.valid) {
+    console.error("[Scan] Environment validation failed:", envCheck.error)
+    return NextResponse.json({ 
+      error: envCheck.error,
+      hint: "Check Vercel/Railway environment variables settings and redeploy"
+    }, { status: 500 })
+  }
+
   const supabase = await createClient()
 
   let scan: any = null

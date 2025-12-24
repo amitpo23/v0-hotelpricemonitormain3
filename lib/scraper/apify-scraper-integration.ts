@@ -32,15 +32,16 @@ export async function scrapeWithNewApifyActor(
     const apiKey = process.env.APIFY_API_KEY
 
     if (!apiKey) {
-      console.error("[ApifyIntegration] Missing APIFY_API_KEY")
+      console.error("[ApifyIntegration] Missing APIFY_API_KEY environment variable")
+      console.error("[ApifyIntegration] Available env vars:", Object.keys(process.env).filter(k => k.includes('APIFY') || k.includes('SUPABASE')))
       return {
         success: false,
         scrapedCount: 0,
-        error: "Missing APIFY_API_KEY environment variable",
+        error: "Missing APIFY_API_KEY environment variable. Please add it to your Vercel/Railway environment variables.",
       }
     }
 
-    console.log(`[ApifyIntegration] Initializing Apify client`)
+    console.log(`[ApifyIntegration] Initializing Apify client with key: ${apiKey.substring(0, 10)}...`)
     const client = new ApifyClient({ token: apiKey })
 
     // Prepare competitor URLs
