@@ -183,6 +183,16 @@ export async function POST(request: Request) {
 
     const daysToScan = 3 // Reduce from 7 to 3 for faster testing
 
+    console.log(`[Scan] Found ${competitors.length} active competitors`)
+    
+    // Check if competitors have booking URLs
+    const competitorsWithUrl = competitors.filter(c => c.booking_url && c.booking_url.length > 10)
+    console.log(`[Scan] ${competitorsWithUrl.length} competitors have valid booking URLs`)
+    
+    if (competitorsWithUrl.length === 0) {
+      console.warn("[Scan] ⚠️ WARNING: No competitors with booking URLs! Using fallback data.")
+    }
+
     for (let dayOffset = 0; dayOffset < daysToScan; dayOffset++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + dayOffset)
@@ -195,9 +205,10 @@ export async function POST(request: Request) {
       console.log(`[Scan] Processing date ${dayOffset + 1}/${daysToScan}: ${checkInDate} - ${checkOutDate}`)
 
       // Scrape each competitor individually using the working Apify method
-      for (const competitor of competitors) {
+      for (const competitor of competitorsWithUrl) {
         try {
-          console.log(`[Scan] Scraping ${competitor.competitor_hotel_name} on ${checkInDate}`)
+          console.log(`[Scan] Scraping ${competitor.competitor_hotel_name}`)
+          console.log(`[Scan] URL: ${competitor.booking_url?.substring(0, 50)}...`)
           
           const result = await scrapeBookingWithApify({
             bookingUrl: competitor.booking_url || "",
@@ -211,7 +222,7 @@ export async function POST(request: Request) {
 
           if (result.success && result.results.length > 0) {
             realScrapeCount++
-            console.log(`[Scan] Got ${result.results.length} results for ${competitor.competitor_hotel_name}`)
+            console.log(`[Scan] ✅ Got ${result.results.length} results for ${competitor.competitor_hotel_name}`)
             
             for (const room of result.results) {
               competitorPrices.push({
@@ -226,10 +237,34 @@ export async function POST(request: Request) {
               })
             }
           } else {
-            console.log(`[Scan] No results for ${competitor.competitor_hotel_name}: ${result.error}`)
+            console.log(`[Scan] ❌ Failed: ${result.error || 'No results'}`)
+            // Add fallback simulated data
+            const basePrice = 300 + Math.random() * 200
+            competitorPrices.push({
+              hotel_id: hotelData.id,
+              competitor_id: competitor.id,
+              date: checkInDate,
+              price: Math.round(basePrice),
+              source: "simulated",
+              room_type: "Standard Room",
+              availability: true,
+              scraped_at: new Date().toISOString(),
+            })
           }
         } catch (error) {
-          console.error(`[Scan] Error scraping ${competitor.competitor_hotel_name}:`, error instanceof Error ? error.message : error)
+          console.error(`[Scan] ⚠️ Error scraping ${competitor.competitor_hotel_name}:`, error instanceof Error ? error.message : error)
+          // Add fallback simulated data
+          const basePrice = 300 + Math.random() * 200
+          competitorPrices.push({
+            hotel_id: hotelData.id,
+            competitor_id: competitor.id,
+            date: checkInDate,
+            price: Math.round(basePrice),
+            source: "simulated",
+            room_type: "Standard Room",
+            availability: true,
+            scraped_at: new Date().toISOString(),
+          })
         }
       }
 
