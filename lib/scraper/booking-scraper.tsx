@@ -520,15 +520,29 @@ async function scrapeViaApify(
     console.log(`[v0] [Apify] Run completed with status: ${run.status}`)
     console.log(`[v0] [Apify] Run ID: ${run.id}`)
     console.log(`[v0] [Apify] Dataset ID: ${run.defaultDatasetId}`)
+    console.log(`[v0] [Apify] Run details:`, JSON.stringify({
+      status: run.status,
+      exitCode: run.exitCode,
+      statusMessage: run.statusMessage,
+      runTimeSecs: run.runTimeSecs,
+      metamorph: run.metamorph,
+    }, null, 2))
 
     console.log(`[v0] [Apify] Fetching results from dataset...`)
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
     console.log(`[v0] [Apify] Got ${items.length} items from dataset`)
-
+    
     if (items.length === 0) {
-      console.warn(`[v0] [Apify] No items returned from actor!`)
+      console.warn(`[v0] [Apify] ⚠️ No items returned from actor!`)
+      console.warn(`[v0] [Apify] Actor status was: ${run.status}`)
+      console.warn(`[v0] [Apify] This might mean:`)
+      console.warn(`[v0] [Apify]   - URL is not a valid hotel page`)
+      console.warn(`[v0] [Apify]   - Booking.com blocked the request`)
+      console.warn(`[v0] [Apify]   - Actor timeout or crash`)
+      console.warn(`[v0] [Apify]   - No hotels matched the search`)
+      
       if (run.status !== 'SUCCEEDED') {
-        console.error(`[v0] [Apify] Actor failed with status: ${run.status}`)
+        console.error(`[v0] [Apify] ❌ Actor failed with status: ${run.status}`)
         throw new Error(`Apify actor failed with status: ${run.status}`)
       }
     }
@@ -582,10 +596,13 @@ async function scrapeViaApify(
       }
     }
 
-    console.log(`[v0] [Apify] Final results: ${results.length} rooms found`)
+    console.log(`[v0] [Apify] ✅ Final results: ${results.length} rooms found`)
+    if (results.length === 0) {
+      console.warn(`[v0] [Apify] ⚠️ No prices extracted from ${items.length} items`)
+    }
 
     if (items.length > 0 && results.length === 0) {
-      console.warn(`[v0] [Apify] WARNING: Got ${items.length} hotels but extracted 0 prices!`)
+      console.warn(`[v0] [Apify] Sample item keys:`, items[0] ? Object.keys(items[0]) : 'N/A')
       console.warn(`[v0] [Apify] Sample item:`, JSON.stringify(items[0], null, 2))
     }
 
