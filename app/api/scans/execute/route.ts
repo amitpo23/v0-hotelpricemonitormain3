@@ -157,19 +157,26 @@ export async function POST(request: Request) {
     for (let dayOffset = 0; dayOffset < daysToScan; dayOffset++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + dayOffset)
-      const dateStr = date.toISOString().split("T")[0]
+      const checkInDate = date.toISOString().split("T")[0]
+      
+      const nextDay = new Date(date)
+      nextDay.setDate(nextDay.getDate() + 1)
+      const checkOutDate = nextDay.toISOString().split("T")[0]
 
-            // NEW: Use Apify actor to scrape all competitors at once
-            const scrapedPrices = await scrapeWithNewApifyActor(
-                      hotelData.id,
-                      dateStr,
-                      competitors
-                    )
+      // NEW: Use Apify actor to scrape all competitors at once
+      const result = await scrapeWithNewApifyActor(
+        hotelData,
+        competitors,
+        checkInDate,
+        checkOutDate
+      )
 
-            if (scrapedPrices && scrapedPrices.length > 0) {
-                      realScrapeCount += scrapedPrices.length
-                      competitorPrices.push(...scrapedPrices)
-                    }
+      if (result.success && result.scrapedCount > 0) {
+        realScrapeCount += result.scrapedCount
+        console.log(`[Scan] Successfully scraped ${result.scrapedCount} competitors for ${checkInDate}`)
+      } else {
+        console.log(`[Scan] Failed to scrape for ${checkInDate}: ${result.error || 'Unknown error'}`)
+      }
 
             // OLD CODE - TO BE REMOVED:
             /*
