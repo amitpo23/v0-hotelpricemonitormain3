@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { scrapeWithNewApifyActor } from "@/lib/scraper/apify-scraper-integration"
+import { scrapeBookingWithApify } from "@/lib/scraper/booking-scraper"
 
 // Validate required environment variables
 function validateEnvironment() {
@@ -180,7 +181,7 @@ export async function POST(request: Request) {
     const startDate = new Date()
     let realScrapeCount = 0
 
-    const daysToScan = 7
+    const daysToScan = 3 // Reduce from 7 to 3 for faster testing
 
     for (let dayOffset = 0; dayOffset < daysToScan; dayOffset++) {
       const date = new Date(startDate)
@@ -191,19 +192,45 @@ export async function POST(request: Request) {
       nextDay.setDate(nextDay.getDate() + 1)
       const checkOutDate = nextDay.toISOString().split("T")[0]
 
-      // NEW: Use Apify actor to scrape all competitors at once
-      const result = await scrapeWithNewApifyActor(
-        hotelData,
-        competitors,
-        checkInDate,
-        checkOutDate
-      )
+      console.log(`[Scan] Processing date ${dayOffset + 1}/${daysToScan}: ${checkInDate} - ${checkOutDate}`)
 
-      if (result.success && result.scrapedCount > 0) {
-        realScrapeCount += result.scrapedCount
-        console.log(`[Scan] Successfully scraped ${result.scrapedCount} competitors for ${checkInDate}`)
-      } else {
-        console.log(`[Scan] Failed to scrape for ${checkInDate}: ${result.error || 'Unknown error'}`)
+      // Scrape each competitor individually using the working Apify method
+      for (const competitor of competitors) {
+        try {
+          console.log(`[Scan] Scraping ${competitor.competitor_hotel_name} on ${checkInDate}`)
+          
+          const result = await scrapeBookingWithApify({
+            bookingUrl: competitor.booking_url || "",
+            checkIn: checkInDate,
+            checkOut: checkOutDate,
+            adults: 2,
+            children: 0,
+            rooms: 1,
+            maxItems: 5
+          })
+
+          if (result.success && result.results.length > 0) {
+            realScrapeCount++
+            console.log(`[Scan] Got ${result.results.length} results for ${competitor.competitor_hotel_name}`)
+            
+            for (const room of result.results) {
+              competitorPrices.push({
+                hotel_id: hotelData.id,
+                competitor_id: competitor.id,
+                date: checkInDate,
+                price: room.price,
+                source: room.source || "Booking.com",
+                room_type: room.roomType || "Standard Room",
+                availability: room.available !== false,
+                scraped_at: new Date().toISOString(),
+              })
+            }
+          } else {
+            console.log(`[Scan] No results for ${competitor.competitor_hotel_name}: ${result.error}`)
+          }
+        } catch (error) {
+          console.error(`[Scan] Error scraping ${competitor.competitor_hotel_name}:`, error instanceof Error ? error.message : error)
+        }
       }
 
             // OLD CODE - TO BE REMOVED:

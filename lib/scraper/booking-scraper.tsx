@@ -511,15 +511,27 @@ async function scrapeViaApify(
     console.log(`[v0] [Apify] Final Apify input object:`)
     console.log(JSON.stringify(input, null, 2))
 
+    console.log(`[v0] [Apify] Calling actor ${ACTOR_ID}...`)
     const run = await client.actor(ACTOR_ID).call(input, {
-      waitSecs: 45,
+      waitForFinish: 300, // Wait up to 5 minutes
       memory: 2048,
     })
 
-    console.log(`[v0] [Apify] Run status: ${run.status}`)
+    console.log(`[v0] [Apify] Run completed with status: ${run.status}`)
+    console.log(`[v0] [Apify] Run ID: ${run.id}`)
+    console.log(`[v0] [Apify] Dataset ID: ${run.defaultDatasetId}`)
 
+    console.log(`[v0] [Apify] Fetching results from dataset...`)
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
     console.log(`[v0] [Apify] Got ${items.length} items from dataset`)
+
+    if (items.length === 0) {
+      console.warn(`[v0] [Apify] No items returned from actor!`)
+      if (run.status !== 'SUCCEEDED') {
+        console.error(`[v0] [Apify] Actor failed with status: ${run.status}`)
+        throw new Error(`Apify actor failed with status: ${run.status}`)
+      }
+    }
 
     if (items.length > 0) {
       console.log(`[v0] [Apify] First item structure:`, JSON.stringify(items[0], null, 2))
