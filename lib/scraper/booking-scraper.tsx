@@ -19,8 +19,7 @@ export interface BookingScraperResponse {
   success: boolean
   results: BookingPriceResult[]
   source: string
-  error?: stringbooking-scraper.tsx
-
+  error?: string
   method?: string
 }
 
