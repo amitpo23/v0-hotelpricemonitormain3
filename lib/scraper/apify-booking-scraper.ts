@@ -13,7 +13,8 @@ interface ApifyBookingResult {
 }
 
 interface ScrapeOptions {
-  bookingUrl: string  checkIn: string
+  bookingUrl: string
+  checkIn: string
   checkOut: string
   adults?: number
   children?: number
@@ -59,9 +60,7 @@ export async function scrapeBookingWithApify(
     console.log("[v0] Running Apify actor with input:", input)
 
     // Run the Booking.com scraper actor
-    const run = await client.actor("oeiQgfg5fsmIJB7Cn").call(input, {
-      waitForFinish: 120, // Wait up to 2 minutes
-    })
+    const run = await client.actor("oeiQgfg5fsmIJB7Cn").call(input)
 
     console.log("[v0] Apify run completed:", run.status)
 

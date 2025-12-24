@@ -45,7 +45,7 @@ export async function scrapeCompetitorAllRoomsWithRetry(
 
     const scrapePromise = scrapeCompetitorAllRooms(competitor, checkIn, checkOut)
     const timeoutPromise = new Promise<CompetitorMultiRoomResult>((_, reject) =>
-      setTimeout(() => reject(new Error("Scrape timeout")), 10000),
+      setTimeout(() => reject(new Error("Scrape timeout")), 180000),
     )
 
     try {
@@ -64,7 +64,7 @@ export async function scrapeCompetitorAllRoomsWithRetry(
 
     // Don't retry if it's the last attempt
     if (attempt < maxRetries) {
-      const delayMs = attempt * 1000 // Linear: 1s, 2s instead of exponential
+      const delayMs = attempt * 3000 // 3s, 6s between retries
       console.log(`[v0] [RealScraper] Retrying after ${delayMs}ms...`)
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
@@ -115,7 +115,7 @@ export async function scrapeMultipleCompetitorsWithRetry(
     }
 
     // Small delay between competitors to avoid rate limiting
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 2000))
   }
 
   console.log(`[v0] [RealScraper] ========================================`)

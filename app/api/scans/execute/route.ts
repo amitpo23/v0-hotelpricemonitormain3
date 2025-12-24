@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { scrapeWithNewApifyActor } from "@/lib/scraper/apify-scraper-integration"
-import { scrapeBookingWithApify } from "@/lib/scraper/booking-scraper"
+import { scrapeBookingWithApify } from "@/lib/scraper/apify-booking-scraper"
 
 // Validate required environment variables
 function validateEnvironment() {
