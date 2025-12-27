@@ -500,7 +500,8 @@ async function scrapeViaApify(
     const scriptPath = '/workspaces/v0-hotelpricemonitormain3/scraper_v5.py'
     const roomTypes = '["room_only", "with_breakfast"]'
     // Use checkIn date as start_date to scrape specific date only
-    const command = `python3 ${scriptPath} "${cleanUrl}" 1 '${roomTypes}' '${checkIn}'`
+    const pythonPath = '/home/codespace/.python/current/bin/python3'
+    const command = `${pythonPath} ${scriptPath} "${cleanUrl}" 1 '${roomTypes}' '${checkIn}'`
     
     console.log(`[v0] [Playwright] Running for specific date: ${checkIn}`)
     console.log(`[v0] [Playwright] Command: ${command}`)
@@ -713,10 +714,30 @@ export async function scrapeBookingPrices(
     console.log(`[v0] [BookingScraper] Apify skipped: No API key`)
   }
 
-  // Method 1: Direct URL (if provided)
+  // Method 1: Playwright (if URL provided) - BEST METHOD!
   if (bookingUrl) {
     try {
-      console.log(`[v0] [BookingScraper] Method 1: Direct URL`)
+      console.log(`[v0] [BookingScraper] Method 1: Playwright Scraper`)
+      const playwrightResults = await scrapeViaPlaywright(bookingUrl, checkIn, checkOut)
+
+      if (playwrightResults.length > 0) {
+        console.log(`[v0] [BookingScraper] ✓ ${hotelName}: ${playwrightResults.length} results via Playwright`)
+        return {
+          success: true,
+          results: playwrightResults,
+          source: "Booking.com",
+          method: "Playwright",
+        }
+      }
+    } catch (error) {
+      console.log(`[v0] [BookingScraper] ❌ Playwright failed: ${error instanceof Error ? error.message : error}`)
+    }
+  }
+
+  // Method 2: Direct URL (if provided)
+  if (bookingUrl) {
+    try {
+      console.log(`[v0] [BookingScraper] Method 2: Direct URL`)
       const directResults = await scrapeViaDirectUrl(bookingUrl, checkIn, checkOut)
 
       if (directResults.length > 0) {
@@ -733,9 +754,9 @@ export async function scrapeBookingPrices(
     }
   }
 
-  // Method 2: Tavily (fallback)
+  // Method 3: Tavily (fallback)
   try {
-    console.log(`[v0] [BookingScraper] Method 2: Tavily Search`)
+    console.log(`[v0] [BookingScraper] Method 3: Tavily Search`)
     const tavilyResults = await scrapeViaTavily(hotelName, city, checkIn, checkOut)
 
     if (tavilyResults.length > 0) {

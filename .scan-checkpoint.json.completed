@@ -1,0 +1,15 @@
+{
+  "hotel_id": "716e1e8f-3537-4f67-875d-de3a89642175",
+  "last_completed_date": "2026-01-15",
+  "total_dates": 1,
+  "completed_dates": 1,
+  "failed_dates": [],
+  "started_at": "2025-12-27T00:08:24.005Z",
+  "last_updated": "2025-12-27T00:10:50.792Z",
+  "scrape_stats": {
+    "total_prices": 19,
+    "total_competitors": 0,
+    "successful_scrapes": 1,
+    "failed_scrapes": 0
+  }
+}

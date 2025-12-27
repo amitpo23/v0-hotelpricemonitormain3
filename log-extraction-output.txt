@@ -1,0 +1,74 @@
+🔍 מחלץ נתונים מ-dev-server.log...
+
+📋 מצאתי 10 מתחרים
+
+💾 נמצאו 707 מחירים!
+
+📊 דוגמה מהנתונים:
+   1. 2026-02-07 | A23 Boutique Hotel | 178 EUR
+   2. 2026-02-07 | A23 Boutique Hotel | 233 EUR
+   3. 2026-02-07 | A23 Boutique Hotel | 201 EUR
+   4. 2026-02-07 | A23 Boutique Hotel | 255 EUR
+   5. 2026-02-07 | A23 Boutique Hotel | 184 EUR
+   6. 2026-02-07 | The Arbel Tel Aviv | 192 EUR
+   7. 2026-02-07 | The Arbel Tel Aviv | 239 EUR
+   8. 2026-02-07 | The Arbel Tel Aviv | 226 EUR
+   9. 2026-02-07 | Dizengoff 208 Hotel Tel Aviv | 160 EUR
+   10. 2026-02-07 | Dizengoff 208 Hotel Tel Aviv | 197 EUR
+
+💾 שומר 707 מחירים לבסיס הנתונים...
+
+❌ שגיאה בשמירת batch 1: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+❌ שגיאה בשמירת batch 2: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+❌ שגיאה בשמירת batch 3: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+❌ שגיאה בשמירת batch 4: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+❌ שגיאה בשמירת batch 5: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+❌ שגיאה בשמירת batch 6: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+❌ שגיאה בשמירת batch 7: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+❌ שגיאה בשמירת batch 8: {
+  code: '21000',
+  details: null,
+  hint: 'Ensure that no rows proposed for insertion within the same command have duplicate constrained values.',
+  message: 'ON CONFLICT DO UPDATE command cannot affect row a second time'
+}
+
+═══════════════════════════════════════════════════
+🎉 השחזור הושלם!
+   ✅ נשמרו: 0
+   ❌ נכשלו: 707
+═══════════════════════════════════════════════════

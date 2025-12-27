@@ -1,4 +1,5 @@
 import { ApifyClient } from "apify-client"
+import { APIFY_CONFIG } from "./apify-config"
 
 interface ApifyBookingResult {
   name: string
@@ -43,9 +44,25 @@ export async function scrapeBookingWithApify(
       token: apiKey,
     })
 
+    // Build URL with dates - Booking.com requires dates in the URL for room pricing
+    let urlWithDates = options.bookingUrl
+    try {
+      const url = new URL(options.bookingUrl)
+      url.searchParams.set('checkin', options.checkIn)
+      url.searchParams.set('checkout', options.checkOut)
+      url.searchParams.set('group_adults', String(options.adults || 2))
+      url.searchParams.set('no_rooms', String(options.rooms || 1))
+      url.searchParams.set('group_children', String(options.children || 0))
+      url.searchParams.set('selected_currency', 'ILS')
+      urlWithDates = url.toString()
+      console.log("[v0] Built URL with dates:", urlWithDates)
+    } catch (error) {
+      console.error("[v0] Failed to parse booking URL, using as-is:", error)
+    }
+
     // Prepare Actor input
     const input = {
-    startUrls: [{ url: options.bookingUrl }],
+      startUrls: [{ url: urlWithDates }],
       checkIn: options.checkIn,
       checkOut: options.checkOut,
       adults: options.adults || 2,
@@ -58,9 +75,12 @@ export async function scrapeBookingWithApify(
     }
 
     console.log("[v0] Running Apify actor with input:", input)
+    console.log(`[v0] Using Actor: ${APIFY_CONFIG.ACTOR_ID}`)
 
     // Run the Booking.com scraper actor
-    const run = await client.actor("oeiQgfg5fsmIJB7Cn").call(input)
+    // Actor ID is configured in lib/scraper/apify-config.ts
+    // Change it there to switch between different scrapers
+    const run = await client.actor(APIFY_CONFIG.ACTOR_ID).call(input)
 
     console.log("[v0] Apify run completed:", run.status)
 

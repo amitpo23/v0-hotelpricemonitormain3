@@ -22,6 +22,7 @@ import { YearlyPredictions } from "./yearly-predictions"
 import { MarketIntelligence } from "./market-intelligence"
 import { PredictionChat } from "./prediction-chat"
 import { RevenueForecast } from "./revenue-forecast"
+import { EnhancedPredictionCard } from "./enhanced-prediction-card"
 
 export default async function PredictionsPage() {
   const supabase = await createClient()
@@ -353,6 +354,13 @@ export default async function PredictionsPage() {
         </TabsList>
 
         <TabsContent value="daily" className="space-y-6">
+          {/* Enhanced Prediction Engine */}
+          {hotels && hotels.length > 0 && (
+            <EnhancedPredictionCard 
+              hotelId={hotels[0].id} 
+            />
+          )}
+          
           <Card>
             <CardHeader>
               <CardTitle>Price Forecast / חיזוי מחירים</CardTitle>

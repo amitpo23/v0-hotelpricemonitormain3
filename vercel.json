@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/auto-scan",
+      "schedule": "0 */72 * * *"
+    },
+    {
+      "path": "/api/cron/monitor-scan",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

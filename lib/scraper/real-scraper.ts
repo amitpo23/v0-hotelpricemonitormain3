@@ -196,54 +196,33 @@ export async function scrapeCompetitorAllRooms(
       }
     } else {
       console.log(`[v0] [RealScraper] FAILED: ${response.error || "No rooms found"}`)
-      console.log(`[v0] [RealScraper] 🔄 Generating simulated fallback data...`)
+      console.log(`[v0] [RealScraper] ❌ Returning failure - NO fallback data`)
       
-      // Generate simulated data as fallback
-      const basePrice = 300 + Math.random() * 200
-      const simulatedRooms = [
-        {
-          roomType: "Standard Room",
-          price: Math.round(basePrice),
-          currency: "ILS",
-          available: true,
-        },
-      ]
-      
+      // No fallback - return failure if scraping failed
       return {
         competitorId: competitor.id,
         competitorName: competitor.competitor_hotel_name,
         date: checkIn,
-        rooms: simulatedRooms,
+        rooms: [],
         scrapedAt: new Date().toISOString(),
-        success: true,
-        source: "simulated",
-        errorMessage: response.error || "No rooms found - using simulated data",
+        success: false,
+        source: "Booking.com",
+        errorMessage: response.error || "No rooms found",
       }
     }
   } catch (error) {
     console.error(`[v0] [RealScraper] ERROR:`, error)
-    console.log(`[v0] [RealScraper] 🔄 Generating simulated fallback data after error...`)
     
-    // Generate simulated data as fallback after error
-    const basePrice = 300 + Math.random() * 200
-    const simulatedRooms = [
-      {
-        roomType: "Standard Room",
-        price: Math.round(basePrice),
-        currency: "ILS",
-        available: true,
-      },
-    ]
-    
+    // Return failure - no simulated fallback
     return {
       competitorId: competitor.id,
       competitorName: competitor.competitor_hotel_name,
       date: checkIn,
-      rooms: simulatedRooms,
+      rooms: [],
       scrapedAt: new Date().toISOString(),
-      success: true,
-      source: "simulated",
-      errorMessage: error instanceof Error ? error.message : "Unknown error - using simulated data",
+      success: false,
+      source: "Booking.com",
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
     }
   }
 }
