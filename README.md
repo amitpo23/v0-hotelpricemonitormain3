@@ -18,6 +18,12 @@ A comprehensive hotel price monitoring and revenue management system that tracks
   - 📅 Year-over-year historical analysis
   - 🤖 30+ ML-ready features
   - See [Enhanced Predictions Guide](docs/ENHANCED_PREDICTIONS_GUIDE.md)
+- **🤖 AI Research Agent**: Internet-powered market intelligence
+  - 🔍 Real-time event discovery (conferences, festivals, competitions)
+  - 📰 News sentiment analysis
+  - 📊 Market trend research
+  - 🧠 Claude AI-powered insights
+  - See [AI Agent Guide](docs/AI_AGENT_GUIDE.md)
 - **Market Intelligence**: AI-powered insights using Perplexity AI
 - **Revenue Predictions**: Advanced algorithms for demand forecasting
 - **Competitor Analysis**: Track and compare multiple competitors
@@ -32,8 +38,16 @@ Before setting up the project, ensure you have:
 2. **Apify Account**: For web scraping functionality
    - Sign up at [apify.com](https://apify.com)
    - Get your API token from [console.apify.com/account/integrations](https://console.apify.com/account/integrations)
-3. **Perplexity AI Account** (Optional): For LLM-enhanced predictions
-4. **🆕 OpenWeather API Key** (Optional but Recommended): For weather-enhanced predictions
+3. **🆕 Anthropic Claude API** (Optional but Recommended): For AI-powered insights
+   - Sign up at [console.anthropic.com](https://console.anthropic.com/)
+   - Cost: ~$0.01-0.03 per AI insight request
+   - See [AI Agent Guide](docs/AI_AGENT_GUIDE.md)
+4. **🆕 Tavily Search API** (Optional but Recommended): For internet research
+   - Free tier: 1,000 searches/month
+   - Sign up at [tavily.com](https://tavily.com)
+   - Powers event discovery and market intelligence
+5. **Perplexity AI Account** (Optional): For LLM-enhanced predictions
+6. **🆕 OpenWeather API Key** (Optional but Recommended): For weather-enhanced predictions
    - Free tier: 1000 calls/day
    - Sign up at [openweathermap.org/api](https://openweathermap.org/api)
    - Improves prediction accuracy by +15%
@@ -161,6 +175,16 @@ See [FIX_NO_ROOMS_DATA.md](FIX_NO_ROOMS_DATA.md) for troubleshooting "No rooms f
 - `POST /api/predictions/enhanced` - AI-powered enhanced predictions
 - `GET /api/predictions/enhanced/features` - Get ML feature breakdown
 - See [Enhanced Predictions Guide](docs/ENHANCED_PREDICTIONS_GUIDE.md) for full API documentation
+
+#### 🤖 AI Research Agent Endpoints (NEW!)
+- `POST /api/predictions/ai-insights` - Get AI-powered market insights
+- `GET /api/predictions/ai-insights/search?query=xxx` - Quick internet search
+- **Features:**
+  - 🔍 Real-time event discovery via Tavily
+  - 📰 News sentiment analysis
+  - 🧠 Claude AI intelligent recommendations
+  - 🌐 Market trend research
+- See [AI Agent Guide](docs/AI_AGENT_GUIDE.md) for complete documentation
 
 #### 🔄 Auto-Scan & Monitoring (NEW!)
 - `GET /api/cron/auto-scan` - Auto-scan missing dates (runs every 72h)
