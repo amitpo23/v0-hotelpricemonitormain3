@@ -9,7 +9,7 @@
  * - Only scans missing dates (not already completed)
  * - Retries failed dates
  * 
- * Schedule: Every 72 hours (0 */72 * * *)
+ * Schedule: Every 72 hours (cron: 0 *​/72 * * *)
  */
 
 import { NextRequest, NextResponse } from "next/server";
