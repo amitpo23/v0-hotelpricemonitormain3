@@ -23,6 +23,7 @@ import { MarketIntelligence } from "./market-intelligence"
 import { PredictionChat } from "./prediction-chat"
 import { RevenueForecast } from "./revenue-forecast"
 import { EnhancedPredictionCard } from "./enhanced-prediction-card"
+import { LivePredictions } from "./live-predictions"
 
 export default async function PredictionsPage() {
   const supabase = await createClient()
@@ -329,8 +330,12 @@ export default async function PredictionsPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="daily" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
+      <Tabs defaultValue="live" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+          <TabsTrigger value="live" className="flex items-center gap-2">
+            <SparklesIcon className="h-4 w-4" />
+            Live / חי
+          </TabsTrigger>
           <TabsTrigger value="daily" className="flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
             Daily / יומי
@@ -352,6 +357,10 @@ export default async function PredictionsPage() {
             AI Chat / צ'אט
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="live" className="space-y-6">
+          <LivePredictions />
+        </TabsContent>
 
         <TabsContent value="daily" className="space-y-6">
           {/* Enhanced Prediction Engine */}
