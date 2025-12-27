@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
 
     console.log(`⏰ Last update: ${hoursSinceUpdate.toFixed(1)} hours ago`);
 
-    // If last update was more than 3 hours ago, trigger restart
-    if (hoursSinceUpdate > 3) {
+    // If last update was more than 1 hour ago, trigger restart
+    if (hoursSinceUpdate > 1) {
       console.log("🚨 Scan appears stuck - triggering restart");
       
       const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
