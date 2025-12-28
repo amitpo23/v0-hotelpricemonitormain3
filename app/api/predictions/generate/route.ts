@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { 
+  orchestrateExternalData, 
+  extractDateImpactFactors, 
+  getRecommendedOptions,
+  checkExternalDataAvailability 
+} from "@/lib/agents/orchestrator"
 
 interface PredictionFactors {
   seasonality: number
@@ -94,7 +100,11 @@ function buildHolidayMap(holidays: any): Record<string, { name: string; impact: 
   return map
 }
 
-function calculateConfidence(factors: ConfidenceFactors): number {
+/**
+ * Enhanced confidence calculation - date-specific
+ * Takes into account time distance, event certainty, historical data availability
+ */
+function calculateConfidence(factors: ConfidenceFactors, daysUntilDate: number, hasEvents: boolean, hasHistoricalData: boolean): number {
   const weights = {
     dataQuality: 0.2,
     scanRecency: 0.18,
@@ -102,9 +112,10 @@ function calculateConfidence(factors: ConfidenceFactors): number {
     bookingData: 0.15,
     competitorData: 0.15,
     marketConsistency: 0.1,
-    externalDataQuality: 0.1, // Added external data weight
+    externalDataQuality: 0.1,
   }
 
+  // Base confidence from factors
   let confidence =
     factors.dataQuality * weights.dataQuality +
     factors.scanRecency * weights.scanRecency +
@@ -113,6 +124,27 @@ function calculateConfidence(factors: ConfidenceFactors): number {
     factors.competitorData * weights.competitorData +
     factors.marketConsistency * weights.marketConsistency +
     factors.externalDataQuality * weights.externalDataQuality
+
+  // Date-specific adjustments
+  
+  // 1. Time distance penalty - further dates are less certain
+  const timeDistanceFactor = Math.max(0.7, 1 - (daysUntilDate / 365) * 0.3)
+  confidence *= timeDistanceFactor
+
+  // 2. Event certainty bonus - known events increase confidence
+  if (hasEvents) {
+    confidence *= 1.08 // 8% boost for known events
+  }
+
+  // 3. Historical data bonus - having last year's data increases confidence
+  if (hasHistoricalData) {
+    confidence *= 1.12 // 12% boost for historical comparison
+  }
+
+  // 4. Near-term booking data bonus
+  if (daysUntilDate <= 14 && factors.bookingData > 0.7) {
+    confidence *= 1.15 // 15% boost for near-term with good booking data
+  }
 
   confidence = Math.max(0.45, Math.min(0.96, confidence))
   return confidence
@@ -245,6 +277,62 @@ export async function POST(request: Request) {
     const trendsSource = externalData.trends?.data?.source || "default"
     const marketIntel = externalData.marketIntel
     const bookingVelocity = marketIntel?.bookingVelocity?.trend || "stable"
+
+    // NEW: Orchestrate enhanced external data using multi-agent system
+    console.log('[v0] 🤖 Activating Multi-Agent System...')
+    const dataAvailability = await checkExternalDataAvailability()
+    console.log(`[v0] External data sources: Tavily=${dataAvailability.tavily}, DB=${dataAvailability.database}`)
+    
+    // Collect all prediction dates
+    const allPredictionDates: Date[] = []
+    for (let i = 0; i < predictionDays; i++) {
+      const date = new Date(startDate)
+      date.setDate(date.getDate() + i)
+      allPredictionDates.push(date)
+    }
+
+    // Get recommended orchestrator options
+    const orchestratorOptions = getRecommendedOptions(
+      allPredictionDates.length,
+      Math.ceil((allPredictionDates[0]?.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    )
+
+    console.log(`[v0] Orchestrator options:`, orchestratorOptions)
+
+    // Run orchestrator for the first hotel to gather general market data
+    // (Events and statistics are same for all hotels in same location)
+    let enhancedExternalData: any = null
+    if (dataAvailability.overall && finalHotelIds.length > 0) {
+      try {
+        const { data: firstHotel } = await supabase
+          .from('hotels')
+          .select('id, name, base_price')
+          .eq('id', finalHotelIds[0])
+          .single()
+
+        if (firstHotel) {
+          enhancedExternalData = await orchestrateExternalData(
+            firstHotel.id,
+            firstHotel.name || 'Hotel',
+            'Tel Aviv', // TODO: Get from hotel data
+            allPredictionDates,
+            firstHotel.base_price || 800,
+            orchestratorOptions
+          )
+          
+          console.log(`[v0] 🎉 Multi-Agent System completed:`)
+          console.log(`[v0]   - Events: ${enhancedExternalData.events.size} dates, confidence ${(enhancedExternalData.eventsConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Historical: ${enhancedExternalData.historical.size} dates, confidence ${(enhancedExternalData.historicalConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Statistics: confidence ${(enhancedExternalData.statisticsConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Overall Quality: ${enhancedExternalData.dataQuality}`)
+        }
+      } catch (error) {
+        console.error('[v0] Multi-Agent System failed:', error)
+        enhancedExternalData = null
+      }
+    } else {
+      console.log('[v0] ⚠️  Multi-Agent System skipped - external data sources unavailable')
+    }
 
     const lastScanDate = scans?.[0]?.created_at ? new Date(scans[0].created_at) : null
     const hoursSinceLastScan = lastScanDate ? (today.getTime() - lastScanDate.getTime()) / (1000 * 60 * 60) : 999
@@ -477,11 +565,20 @@ export async function POST(request: Request) {
         const competitorFactor = competitorAvg ? Math.max(0.88, Math.min(1.12, competitorAvg / basePrice)) : 1.0
 
         const events = analysisParams.includeEvents ? holidayMap[monthDay] || [] : []
-        const eventFactor = events.length > 0 ? events.reduce((max, e) => Math.max(max, e.impact), 1.0) : 1.0
+        let eventFactor = events.length > 0 ? events.reduce((max, e) => Math.max(max, e.impact), 1.0) : 1.0
+
+        // Enhanced: Apply multi-agent event impact
+        if (enhancedExternalData) {
+          const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
+          if (dateImpact.eventImpact > eventFactor) {
+            console.log(`[v0] ${dateStr}: Upgrading event factor from ${eventFactor.toFixed(2)} to ${dateImpact.eventImpact.toFixed(2)}`)
+            eventFactor = dateImpact.eventImpact
+          }
+        }
 
         const trendsFactor = analysisParams.includeMarketTrends ? trendsScore / 100 : 0.75
 
-        const rawPrice =
+        let rawPrice =
           basePrice *
           seasonality *
           weekendFactor *
@@ -492,6 +589,12 @@ export async function POST(request: Request) {
           eventFactor *
           velocityFactor *
           (0.9 + trendsFactor * 0.2)
+
+        // Enhanced: Apply overall market impact from multi-agent data
+        if (enhancedExternalData) {
+          const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
+          rawPrice *= dateImpact.overallImpact
+        }
 
         const marketNoise = 0.98 + Math.random() * 0.04
         const predictedPrice = Math.round(rawPrice * marketNoise)
@@ -512,10 +615,31 @@ export async function POST(request: Request) {
                 ? Math.min(1.0, 0.5 + hotelCompetitors.length * 0.1)
                 : 0.3,
           marketConsistency: getMarketConsistency(hotel.id),
-          externalDataQuality: externalData.holidays ? 0.9 : 0.5,
+          externalDataQuality: enhancedExternalData ? Math.min(0.95, enhancedExternalData.overallConfidence) : (externalData.holidays ? 0.9 : 0.5),
         }
 
-        const confidence = calculateConfidence(confidenceFactors)
+        // Calculate days until this date for time-based confidence adjustment
+        const daysUntilDate = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        
+        // Enhanced event detection using multi-agent data
+        let hasEvents = events.length > 0
+        let hasHistoricalData = !!calendarData
+        
+        if (enhancedExternalData) {
+          const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
+          hasEvents = hasEvents || dateImpact.hasEvents
+          hasHistoricalData = hasHistoricalData || dateImpact.hasHistoricalData
+          
+          // Log enhanced insights
+          if (dateImpact.hasEvents) {
+            console.log(`[v0] ${dateStr}: Events detected, impact=${dateImpact.eventImpact.toFixed(2)}x`)
+          }
+          if (dateImpact.hasHistoricalData) {
+            console.log(`[v0] ${dateStr}: Historical trend=${dateImpact.historicalTrend}`)
+          }
+        }
+        
+        const confidence = calculateConfidence(confidenceFactors, daysUntilDate, hasEvents, hasHistoricalData)
 
         const priceVsBase = ((predictedPrice - basePrice) / basePrice) * 100
         const priceVsCompetitor = competitorAvg ? ((predictedPrice - competitorAvg) / competitorAvg) * 100 : 0
