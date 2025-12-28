@@ -482,10 +482,10 @@ export async function POST(request: Request) {
     for (const hotelId of finalHotelIds) {
       // Fetch hotel details from Supabase
       const { data: hotelData } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
-      const hotel = hotelData || { id: hotelId, base_price: 150, total_rooms: 50 }
+      const hotel = hotelData || { id: hotelId, base_price: 150, total_rooms: 34 }
 
       const basePrice = hotel.base_price || marketDataByHotel[hotel.id]?.avg || 150
-      const totalRooms = hotel.total_rooms || 50
+      const totalRooms = hotel.total_rooms || 34 // Default to 34 rooms for Scarlet Hotel
       const hotelCompetitors = competitorsByHotel[hotel.id] || []
       const marketData = marketDataByHotel[hotel.id]
 
@@ -626,9 +626,15 @@ export async function POST(request: Request) {
         const finalMinimum = Math.max(...marketMinimums)
         
         if (predictedPrice < finalMinimum) {
-          console.log(`[v0] ${dateStr}: Price floor applied: ₪${predictedPrice} → ₪${finalMinimum}`)
+          console.log(`[v0] ${dateStr}: Price floor applied: ₪${predictedPrice} → ₪${Math.round(finalMinimum)}`)
           console.log(`[v0]   Competitor avg: ₪${competitorAvg || 'N/A'}, Market avg: ₪${enhancedExternalData?.statistics?.tourism?.avgNightlyRate || 'N/A'}`)
           predictedPrice = Math.round(finalMinimum)
+        }
+        
+        // Double-check: ensure no price is below absolute minimum
+        if (predictedPrice < ABSOLUTE_MINIMUM) {
+          console.warn(`[v0] ${dateStr}: WARNING - Price ₪${predictedPrice} below absolute minimum! Forcing to ₪${ABSOLUTE_MINIMUM}`)
+          predictedPrice = ABSOLUTE_MINIMUM
         }
 
         const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
