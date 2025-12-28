@@ -57,6 +57,7 @@ export async function orchestrateExternalData(
   console.log(`[Orchestrator] Starting data collection for ${targetDates.length} dates`)
   console.log(`[Orchestrator] Hotel: ${hotelName}, Location: ${location}`)
   console.log(`[Orchestrator] Options: Events=${includeEvents}, Historical=${includeHistorical}, Stats=${includeStatistics}`)
+  console.log(`[Orchestrator] Environment: TAVILY_API_KEY=${process.env.TAVILY_API_KEY ? '✓ Set' : '✗ Missing'}`)
 
   const startTime = Date.now()
 
@@ -183,6 +184,18 @@ export async function orchestrateExternalData(
   const duration = Date.now() - startTime
   console.log(`[Orchestrator] Completed in ${(duration / 1000).toFixed(2)}s`)
   console.log(`[Orchestrator] Overall Confidence: ${(overallConfidence * 100).toFixed(0)}%, Quality: ${dataQuality}`)
+  console.log(`[Orchestrator] Breakdown: Events=${(eventsConfidence * 100).toFixed(0)}%, Historical=${(historicalConfidence * 100).toFixed(0)}%, Stats=${(statisticsConfidence * 100).toFixed(0)}%`)
+  
+  // Log any data collection issues
+  if (includeEvents && eventsConfidence === 0) {
+    console.warn(`[Orchestrator] ⚠️ Events Agent returned no data - check TAVILY_API_KEY`)
+  }
+  if (includeHistorical && historicalConfidence === 0) {
+    console.warn(`[Orchestrator] ⚠️ Historical Agent returned no data - check database`)
+  }
+  if (includeStatistics && statisticsConfidence === 0) {
+    console.warn(`[Orchestrator] ⚠️ Statistics Agent returned no data`)
+  }
 
   return {
     events: eventsData,

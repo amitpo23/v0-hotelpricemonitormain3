@@ -324,7 +324,9 @@ export async function POST(request: Request) {
           console.log(`[v0]   - Events: ${enhancedExternalData.events.size} dates, confidence ${(enhancedExternalData.eventsConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Historical: ${enhancedExternalData.historical.size} dates, confidence ${(enhancedExternalData.historicalConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Statistics: confidence ${(enhancedExternalData.statisticsConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Overall Quality: ${enhancedExternalData.dataQuality}`)
+          console.log(`[v0]   - Overall Confidence: ${(enhancedExternalData.overallConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Data Quality: ${enhancedExternalData.dataQuality}`)
+          console.log(`[v0]   - Timestamp: ${enhancedExternalData.timestamp}`)
         }
       } catch (error) {
         console.error('[v0] Multi-Agent System failed:', error)
@@ -615,7 +617,9 @@ export async function POST(request: Request) {
                 ? Math.min(1.0, 0.5 + hotelCompetitors.length * 0.1)
                 : 0.3,
           marketConsistency: getMarketConsistency(hotel.id),
-          externalDataQuality: enhancedExternalData ? Math.min(0.95, enhancedExternalData.overallConfidence) : (externalData.holidays ? 0.9 : 0.5),
+          externalDataQuality: enhancedExternalData 
+            ? Math.min(0.95, enhancedExternalData.overallConfidence) 
+            : (externalData?.holidays ? 0.5 : 0.3), // Fallback to basic external data
         }
 
         // Calculate days until this date for time-based confidence adjustment
