@@ -327,6 +327,11 @@ export async function POST(request: Request) {
           console.log(`[v0]   - Overall Confidence: ${(enhancedExternalData.overallConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Data Quality: ${enhancedExternalData.dataQuality}`)
           console.log(`[v0]   - Timestamp: ${enhancedExternalData.timestamp}`)
+          
+          // Log market pricing floor if available
+          if (enhancedExternalData.statistics?.tourism?.avgNightlyRate) {
+            console.log(`[v0]   - Market Avg Price: ₪${enhancedExternalData.statistics.tourism.avgNightlyRate} (Tel Aviv)`)
+          }
         }
       } catch (error) {
         console.error('[v0] Multi-Agent System failed:', error)
@@ -599,7 +604,32 @@ export async function POST(request: Request) {
         }
 
         const marketNoise = 0.98 + Math.random() * 0.04
-        const predictedPrice = Math.round(rawPrice * marketNoise)
+        let predictedPrice = Math.round(rawPrice * marketNoise)
+
+        // Apply pricing floors to ensure reasonable recommendations
+        const ABSOLUTE_MINIMUM = 300 // Minimum price floor: ₪300
+        
+        // Calculate market-based minimums
+        const marketMinimums: number[] = [ABSOLUTE_MINIMUM]
+        
+        // 1. Don't go below competitor average
+        if (competitorAvg && competitorAvg > 0) {
+          marketMinimums.push(competitorAvg)
+        }
+        
+        // 2. Don't go below Tel Aviv market average (from Statistics Agent)
+        if (enhancedExternalData?.statistics?.tourism?.avgNightlyRate) {
+          marketMinimums.push(enhancedExternalData.statistics.tourism.avgNightlyRate)
+        }
+        
+        // Apply the highest floor
+        const finalMinimum = Math.max(...marketMinimums)
+        
+        if (predictedPrice < finalMinimum) {
+          console.log(`[v0] ${dateStr}: Price floor applied: ₪${predictedPrice} → ₪${finalMinimum}`)
+          console.log(`[v0]   Competitor avg: ₪${competitorAvg || 'N/A'}, Market avg: ₪${enhancedExternalData?.statistics?.tourism?.avgNightlyRate || 'N/A'}`)
+          predictedPrice = Math.round(finalMinimum)
+        }
 
         const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
         const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
@@ -623,7 +653,7 @@ export async function POST(request: Request) {
         }
 
         // Calculate days until this date for time-based confidence adjustment
-        const daysUntilDate = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        const daysUntilDate = Math.ceil((predDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
         
         // Enhanced event detection using multi-agent data
         let hasEvents = events.length > 0
@@ -651,12 +681,18 @@ export async function POST(request: Request) {
         let recommendation = null
         let recommendationType = null
 
+        // Check if price floor was applied
+        const isPriceFloorApplied = predictedPrice === finalMinimum && rawPrice * marketNoise < finalMinimum
+
         if (priceVsBase > 20 && demand === "very_high") {
           recommendation = `העלה מחיר ל-${dateStr} - ביקוש גבוה מאוד`
           recommendationType = "price_increase"
-        } else if (priceVsBase < -10 && occupancyRate < 30) {
+        } else if (priceVsBase < -10 && occupancyRate < 30 && !isPriceFloorApplied) {
           recommendation = `שקול מבצע ל-${dateStr} - תפוסה נמוכה`
           recommendationType = "promotion"
+        } else if (isPriceFloorApplied) {
+          recommendation = `מחיר מינימלי מוחל (₪${finalMinimum}) - לא נמוך ממתחרים ומשוק`
+          recommendationType = "price_floor"
         } else if (competitorAvg && priceVsCompetitor > 15) {
           recommendation = `המחיר שלך גבוה מ-15% מהמתחרים ב-${dateStr}`
           recommendationType = "competitor_alert"
