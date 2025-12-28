@@ -53,8 +53,8 @@ async function fetchInternalHistoricalData(
     }
 
     const prices = scanResults
-      .map(r => Number(r.price))
-      .filter(p => p > 0 && p < 10000) // Sanity check
+      .map((r: any) => Number(r.price))
+      .filter((p: number) => p > 0 && p < 10000) // Sanity check
 
     if (prices.length === 0) {
       return null
@@ -62,7 +62,7 @@ async function fetchInternalHistoricalData(
 
     return {
       date: dateStr,
-      avgPrice: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+      avgPrice: Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length),
       minPrice: Math.min(...prices),
       maxPrice: Math.max(...prices),
       dataPoints: prices.length,
