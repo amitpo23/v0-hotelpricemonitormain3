@@ -285,6 +285,12 @@ export async function POST(request: Request) {
     
     // Collect all prediction dates
     const allPredictionDates: Date[] = []
+      console.log('[DEBUG] 🔍 Environment Check:')
+  console.log('[DEBUG] - TAVILY_API_KEY exists:', !!process.env.TAVILY_API_KEY)
+  console.log('[DEBUG] - TAVILY_API_KEY length:', process.env.TAVILY_API_KEY?.length || 0)
+  console.log('[DEBUG] - TAVILY_API_KEY first 10 chars:', process.env.TAVILY_API_KEY?.substring(0, 10) || 'N/A')
+  console.log('[DEBUG] - dataAvailability.tavily:', dataAvailability.tavily)
+  console.log('[DEBUG] - dataAvailability.overall:', dataAvailability.overall)
     for (let i = 0; i < predictionDays; i++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + i)
