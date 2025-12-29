@@ -90,6 +90,25 @@ After consolidation, verified that all feature branches have **0 unique files** 
 
 All unique files from feature branches have been successfully merged into `main`. The repository now has a single source of truth with all features, integrations, and utilities consolidated in the main branch.
 
+## Security Improvements
+After consolidation, code review identified and fixed several security issues:
+
+1. **Hardcoded API Key Removed** - `lib/scraper/scraperapi-scraper.ts`
+   - Removed hardcoded ScraperAPI key from source code
+   - Now uses environment variable only
+
+2. **Timing Attack Prevention** - `app/api/sync-apify/route.ts`
+   - Replaced simple string comparison with constant-time comparison
+   - Using Node.js `timingSafeEqual` to prevent timing attacks
+   - Added proper length validation
+
+3. **Hardcoded Path Fixed** - `lib/scraper/advanced-puppeteer-scraper.ts`
+   - Removed hardcoded absolute path `/home/user/webapp/debug-screenshot.png`
+   - Now uses environment variable `DEBUG_SCREENSHOT_PATH` or relative path
+
+4. **CodeQL Security Scan** - ✅ Passed
+   - No security vulnerabilities detected in consolidated code
+
 ## Next Steps (Optional)
 The following feature branches can potentially be archived or deleted since their code is now in main:
 - `claude/booking-scraper-01Vy4AJzWf8KtQNppYADmE2r`
