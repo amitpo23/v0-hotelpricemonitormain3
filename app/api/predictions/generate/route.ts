@@ -494,7 +494,19 @@ export async function POST(request: Request) {
           (0.9 + trendsFactor * 0.2)
 
         const marketNoise = 0.98 + Math.random() * 0.04
-        const predictedPrice = Math.round(rawPrice * marketNoise)
+        let rawPredictedPrice = Math.round(rawPrice * marketNoise)
+        
+        // Apply minimum price floor constraints:
+        // 1. Never go below competitor average
+        // 2. Never go below historical government statistics (approximated as 80% of competitor avg)
+        // Use the lower of these two as the absolute minimum
+        if (competitorAvg) {
+          const historicalStatsFloor = competitorAvg * 0.8 // Approximate gov stats as 80% of competitor avg
+          const absoluteMinimum = Math.min(competitorAvg, historicalStatsFloor)
+          rawPredictedPrice = Math.max(rawPredictedPrice, Math.round(absoluteMinimum))
+        }
+        
+        const predictedPrice = rawPredictedPrice
 
         const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
         const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
