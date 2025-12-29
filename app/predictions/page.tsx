@@ -42,7 +42,7 @@ export default async function PredictionsPage() {
       .from("price_predictions")
       .select("*, hotels (name)")
       .order("prediction_date", { ascending: true })
-      .gte("prediction_date", new Date().toISOString().split("T")[0]),
+      .gte("prediction_date", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]),
     supabase.from("hotels").select("id, name, base_price, location, total_rooms"),
     supabase.from("hotel_room_types").select("*").eq("is_active", true),
     supabase.from("revenue_budgets").select("*"),
@@ -73,6 +73,10 @@ export default async function PredictionsPage() {
           {} as Record<string, number>,
         ),
         withRecommendations: predictions.filter((p) => p.recommendation).length,
+        oldestDate: predictions[0]?.prediction_date,
+        newestDate: predictions[predictions.length - 1]?.prediction_date,
+        futurePredictions: predictions.filter((p) => p.prediction_date >= new Date().toISOString().split("T")[0])
+          .length,
       }
     : null
 
@@ -82,6 +86,9 @@ export default async function PredictionsPage() {
   const hoursSinceLastScan = lastScan
     ? Math.round((Date.now() - new Date(lastScan).getTime()) / (1000 * 60 * 60))
     : null
+
+  const isDataStale = stats && stats.futurePredictions === 0
+  const today = new Date().toISOString().split("T")[0]
 
   const getDemandColor = (demand: string | null) => {
     switch (demand) {
@@ -146,6 +153,30 @@ export default async function PredictionsPage() {
         </div>
         <GeneratePredictionsButton hotels={hotels || []} />
       </div>
+
+      {isDataStale && predictions && predictions.length > 0 && (
+        <Card className="mb-6 border-yellow-500/50 bg-yellow-500/10">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangleIcon className="h-6 w-6 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-1">
+                  ⚠️ החיזויים מיושנים / Predictions are Outdated
+                </h3>
+                <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-2">
+                  כל החיזויים הם לתאריכים שעברו. צור חיזויים חדשים לקבלת המלצות עדכניות.
+                  <br />
+                  All predictions are for past dates. Generate new predictions for current recommendations.
+                </p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                  📅 טווח החיזויים הנוכחיים: {stats?.oldestDate} עד {stats?.newestDate}
+                </p>
+              </div>
+              <GeneratePredictionsButton hotels={hotels || []} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
@@ -383,12 +414,25 @@ export default async function PredictionsPage() {
           </Card>
 
           {Object.keys(predictionsByHotel).length === 0 ? (
-            <Card>
+            <Card className="border-dashed border-2">
               <CardContent className="py-16 text-center">
-                <SparklesIcon className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">No predictions yet / אין חיזויים עדיין</h3>
-                <p className="text-slate-500 mb-6">Generate AI predictions to see optimal pricing for your hotels</p>
-                <GeneratePredictionsButton hotels={hotels || []} />
+                <SparklesIcon className="h-16 w-16 text-purple-300 mx-auto mb-4" />
+                <h3 className="text-2xl font-bold mb-2">🎯 אין חיזויים עדכניים</h3>
+                <h4 className="text-xl font-semibold mb-2 text-muted-foreground">No Recent Predictions</h4>
+                <div className="max-w-md mx-auto space-y-4 mt-6">
+                  <p className="text-slate-600 dark:text-slate-400">
+                    Generate AI-powered price predictions to optimize your pricing strategy
+                  </p>
+                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm">
+                    <p className="text-blue-900 dark:text-blue-200 font-medium mb-2">💡 הסבר:</p>
+                    <p className="text-blue-800 dark:text-blue-300 text-right">
+                      המערכת מחפשת חיזויים מ-7 ימים אחורה ואילך.
+                      <br />
+                      צור חיזויים חדשים לראות המלצות מחיר אופטימליות!
+                    </p>
+                  </div>
+                  <GeneratePredictionsButton hotels={hotels || []} />
+                </div>
               </CardContent>
             </Card>
           ) : (
