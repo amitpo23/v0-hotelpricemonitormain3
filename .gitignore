@@ -1,0 +1,12 @@
+node_modules
+.next
+.env
+.env.local
+.env*.local
+tsconfig.tsbuildinfo
+next-env.d.ts
+.vercel
+*.log
+.DS_Store
+
+# Trigger deployment

@@ -10,14 +10,15 @@ import asyncio
 from datetime import datetime, timedelta
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
-async def scrape_hotel_prices(hotel_url: str, days_forward: int = 60, room_types: list = None):
+async def scrape_hotel_prices(hotel_url: str, days_forward: int = 60, room_types: list = None, start_date: str = None):
     """
     Scrape hotel prices from Booking.com for multiple dates
     
     Args:
         hotel_url: Base Booking.com hotel URL
-        days_forward: Number of days to scan forward
+        days_forward: Number of days to scan forward (ignored if start_date provided)
         room_types: List of room types to filter (e.g., ['room_only', 'with_breakfast'])
+        start_date: Specific start date in YYYY-MM-DD format (optional)
     
     Returns:
         List of price results with date, price, currency, room type, availability
@@ -28,17 +29,33 @@ async def scrape_hotel_prices(hotel_url: str, days_forward: int = 60, room_types
     results = []
     
     async with async_playwright() as p:
-        # Launch browser in headless mode
-        browser = await p.chromium.launch(headless=True)
+        # Launch browser with anti-detection settings
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+            ]
+        )
         context = await browser.new_context(
             viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            locale='en-US',
+            timezone_id='Asia/Jerusalem',
         )
         
         try:
+            # Determine starting date
+            if start_date:
+                base_date = datetime.strptime(start_date, '%Y-%m-%d')
+            else:
+                base_date = datetime.now()
+            
             # Iterate through dates
             for day_offset in range(days_forward):
-                check_in = datetime.now() + timedelta(days=day_offset)
+                check_in = base_date + timedelta(days=day_offset)
                 check_out = check_in + timedelta(days=1)
                 
                 check_in_str = check_in.strftime('%Y-%m-%d')
@@ -193,9 +210,10 @@ async def main():
     hotel_url = sys.argv[1]
     days_forward = int(sys.argv[2]) if len(sys.argv) > 2 else 60
     room_types = json.loads(sys.argv[3]) if len(sys.argv) > 3 else ['room_only', 'with_breakfast']
-    
+    start_date = sys.argv[4] if len(sys.argv) > 4 else None
+
     try:
-        results = await scrape_hotel_prices(hotel_url, days_forward, room_types)
+        results = await scrape_hotel_prices(hotel_url, days_forward, room_types, start_date)
         print(json.dumps({
             'success': True,
             'results': results

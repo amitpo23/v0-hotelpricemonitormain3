@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { 
+  orchestrateExternalData, 
+  extractDateImpactFactors, 
+  getRecommendedOptions,
+  checkExternalDataAvailability 
+} from "@/lib/agents/orchestrator"
 
 interface PredictionFactors {
   seasonality: number
@@ -94,7 +100,11 @@ function buildHolidayMap(holidays: any): Record<string, { name: string; impact: 
   return map
 }
 
-function calculateConfidence(factors: ConfidenceFactors): number {
+/**
+ * Enhanced confidence calculation - date-specific
+ * Takes into account time distance, event certainty, historical data availability
+ */
+function calculateConfidence(factors: ConfidenceFactors, daysUntilDate: number, hasEvents: boolean, hasHistoricalData: boolean): number {
   const weights = {
     dataQuality: 0.2,
     scanRecency: 0.18,
@@ -102,9 +112,10 @@ function calculateConfidence(factors: ConfidenceFactors): number {
     bookingData: 0.15,
     competitorData: 0.15,
     marketConsistency: 0.1,
-    externalDataQuality: 0.1, // Added external data weight
+    externalDataQuality: 0.1,
   }
 
+  // Base confidence from factors
   let confidence =
     factors.dataQuality * weights.dataQuality +
     factors.scanRecency * weights.scanRecency +
@@ -113,6 +124,27 @@ function calculateConfidence(factors: ConfidenceFactors): number {
     factors.competitorData * weights.competitorData +
     factors.marketConsistency * weights.marketConsistency +
     factors.externalDataQuality * weights.externalDataQuality
+
+  // Date-specific adjustments
+  
+  // 1. Time distance penalty - further dates are less certain
+  const timeDistanceFactor = Math.max(0.7, 1 - (daysUntilDate / 365) * 0.3)
+  confidence *= timeDistanceFactor
+
+  // 2. Event certainty bonus - known events increase confidence
+  if (hasEvents) {
+    confidence *= 1.08 // 8% boost for known events
+  }
+
+  // 3. Historical data bonus - having last year's data increases confidence
+  if (hasHistoricalData) {
+    confidence *= 1.12 // 12% boost for historical comparison
+  }
+
+  // 4. Near-term booking data bonus
+  if (daysUntilDate <= 14 && factors.bookingData > 0.7) {
+    confidence *= 1.15 // 15% boost for near-term with good booking data
+  }
 
   confidence = Math.max(0.45, Math.min(0.96, confidence))
   return confidence
@@ -245,6 +277,75 @@ export async function POST(request: Request) {
     const trendsSource = externalData.trends?.data?.source || "default"
     const marketIntel = externalData.marketIntel
     const bookingVelocity = marketIntel?.bookingVelocity?.trend || "stable"
+
+    // NEW: Orchestrate enhanced external data using multi-agent system
+    console.log('[v0] 🤖 Activating Multi-Agent System...')
+    const dataAvailability = await checkExternalDataAvailability()
+    console.log(`[v0] External data sources: Tavily=${dataAvailability.tavily}, DB=${dataAvailability.database}`)
+    
+    // Collect all prediction dates
+    const allPredictionDates: Date[] = []
+      console.log('[DEBUG] 🔍 Environment Check:')
+  console.log('[DEBUG] - TAVILY_API_KEY exists:', !!process.env.TAVILY_API_KEY)
+  console.log('[DEBUG] - TAVILY_API_KEY length:', process.env.TAVILY_API_KEY?.length || 0)
+  console.log('[DEBUG] - TAVILY_API_KEY first 10 chars:', process.env.TAVILY_API_KEY?.substring(0, 10) || 'N/A')
+  console.log('[DEBUG] - dataAvailability.tavily:', dataAvailability.tavily)
+  console.log('[DEBUG] - dataAvailability.overall:', dataAvailability.overall)
+    for (let i = 0; i < predictionDays; i++) {
+      const date = new Date(startDate)
+      date.setDate(date.getDate() + i)
+      allPredictionDates.push(date)
+    }
+
+    // Get recommended orchestrator options
+    const orchestratorOptions = getRecommendedOptions(
+      allPredictionDates.length,
+      Math.ceil((allPredictionDates[0]?.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    )
+
+    console.log(`[v0] Orchestrator options:`, orchestratorOptions)
+
+    // Run orchestrator for the first hotel to gather general market data
+    // (Events and statistics are same for all hotels in same location)
+    let enhancedExternalData: any = null
+    if (dataAvailability.overall && finalHotelIds.length > 0) {
+      try {
+        const { data: firstHotel } = await supabase
+          .from('hotels')
+          .select('id, name, base_price')
+          .eq('id', finalHotelIds[0])
+          .single()
+
+        if (firstHotel) {
+          enhancedExternalData = await orchestrateExternalData(
+            firstHotel.id,
+            firstHotel.name || 'Hotel',
+            'Tel Aviv', // TODO: Get from hotel data
+            allPredictionDates,
+            firstHotel.base_price || 800,
+            orchestratorOptions
+          )
+          
+          console.log(`[v0] 🎉 Multi-Agent System completed:`)
+          console.log(`[v0]   - Events: ${enhancedExternalData.events.size} dates, confidence ${(enhancedExternalData.eventsConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Historical: ${enhancedExternalData.historical.size} dates, confidence ${(enhancedExternalData.historicalConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Statistics: confidence ${(enhancedExternalData.statisticsConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Overall Confidence: ${(enhancedExternalData.overallConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Data Quality: ${enhancedExternalData.dataQuality}`)
+          console.log(`[v0]   - Timestamp: ${enhancedExternalData.timestamp}`)
+          
+          // Log market pricing floor if available
+          if (enhancedExternalData.statistics?.tourism?.avgNightlyRate) {
+            console.log(`[v0]   - Market Avg Price: ₪${enhancedExternalData.statistics.tourism.avgNightlyRate} (Tel Aviv)`)
+          }
+        }
+      } catch (error) {
+        console.error('[v0] Multi-Agent System failed:', error)
+        enhancedExternalData = null
+      }
+    } else {
+      console.log('[v0] ⚠️  Multi-Agent System skipped - external data sources unavailable')
+    }
 
     const lastScanDate = scans?.[0]?.created_at ? new Date(scans[0].created_at) : null
     const hoursSinceLastScan = lastScanDate ? (today.getTime() - lastScanDate.getTime()) / (1000 * 60 * 60) : 999
@@ -387,10 +488,10 @@ export async function POST(request: Request) {
     for (const hotelId of finalHotelIds) {
       // Fetch hotel details from Supabase
       const { data: hotelData } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
-      const hotel = hotelData || { id: hotelId, base_price: 150, total_rooms: 50 }
+      const hotel = hotelData || { id: hotelId, base_price: 150, total_rooms: 34 }
 
       const basePrice = hotel.base_price || marketDataByHotel[hotel.id]?.avg || 150
-      const totalRooms = hotel.total_rooms || 50
+      const totalRooms = hotel.total_rooms || 34 // Default to 34 rooms for Scarlet Hotel
       const hotelCompetitors = competitorsByHotel[hotel.id] || []
       const marketData = marketDataByHotel[hotel.id]
 
@@ -477,11 +578,20 @@ export async function POST(request: Request) {
         const competitorFactor = competitorAvg ? Math.max(0.88, Math.min(1.12, competitorAvg / basePrice)) : 1.0
 
         const events = analysisParams.includeEvents ? holidayMap[monthDay] || [] : []
-        const eventFactor = events.length > 0 ? events.reduce((max, e) => Math.max(max, e.impact), 1.0) : 1.0
+        let eventFactor = events.length > 0 ? events.reduce((max, e) => Math.max(max, e.impact), 1.0) : 1.0
+
+        // Enhanced: Apply multi-agent event impact
+        if (enhancedExternalData) {
+          const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
+          if (dateImpact.eventImpact > eventFactor) {
+            console.log(`[v0] ${dateStr}: Upgrading event factor from ${eventFactor.toFixed(2)} to ${dateImpact.eventImpact.toFixed(2)}`)
+            eventFactor = dateImpact.eventImpact
+          }
+        }
 
         const trendsFactor = analysisParams.includeMarketTrends ? trendsScore / 100 : 0.75
 
-        const rawPrice =
+        let rawPrice =
           basePrice *
           seasonality *
           weekendFactor *
@@ -493,21 +603,45 @@ export async function POST(request: Request) {
           velocityFactor *
           (0.9 + trendsFactor * 0.2)
 
+        // Enhanced: Apply overall market impact from multi-agent data
+        if (enhancedExternalData) {
+          const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
+          rawPrice *= dateImpact.overallImpact
+        }
+
         const marketNoise = 0.98 + Math.random() * 0.04
-        let rawPredictedPrice = Math.round(rawPrice * marketNoise)
+        let predictedPrice = Math.round(rawPrice * marketNoise)
+
+        // Apply pricing floors to ensure reasonable recommendations
+        const ABSOLUTE_MINIMUM = 300 // Minimum price floor: ₪300
         
-        // Apply minimum price floor constraints per user requirements:
-        // "Not lower than competitor average AND not lower than government stats - whichever is LOWER"
-        // This means: use the LOWER of (competitor avg, gov stats) as the minimum floor
-        // 1. Never go below competitor average
-        // 2. Never go below historical government statistics (approximated as 80% of competitor avg)
-        if (competitorAvg) {
-          const historicalStatsFloor = competitorAvg * 0.8 // Approximate gov stats as 80% of competitor avg
-          const absoluteMinimum = Math.min(competitorAvg, historicalStatsFloor) // Use the lower as floor
-          rawPredictedPrice = Math.max(rawPredictedPrice, Math.round(absoluteMinimum))
+        // Calculate market-based minimums
+        const marketMinimums: number[] = [ABSOLUTE_MINIMUM]
+        
+        // 1. Don't go below competitor average
+        if (competitorAvg && competitorAvg > 0) {
+          marketMinimums.push(competitorAvg)
         }
         
-        const predictedPrice = rawPredictedPrice
+        // 2. Don't go below Tel Aviv market average (from Statistics Agent)
+        if (enhancedExternalData?.statistics?.tourism?.avgNightlyRate) {
+          marketMinimums.push(enhancedExternalData.statistics.tourism.avgNightlyRate)
+        }
+        
+        // Apply the highest floor
+        const finalMinimum = Math.max(...marketMinimums)
+        
+        if (predictedPrice < finalMinimum) {
+          console.log(`[v0] ${dateStr}: Price floor applied: ₪${predictedPrice} → ₪${Math.round(finalMinimum)}`)
+          console.log(`[v0]   Competitor avg: ₪${competitorAvg || 'N/A'}, Market avg: ₪${enhancedExternalData?.statistics?.tourism?.avgNightlyRate || 'N/A'}`)
+          predictedPrice = Math.round(finalMinimum)
+        }
+        
+        // Double-check: ensure no price is below absolute minimum
+        if (predictedPrice < ABSOLUTE_MINIMUM) {
+          console.warn(`[v0] ${dateStr}: WARNING - Price ₪${predictedPrice} below absolute minimum! Forcing to ₪${ABSOLUTE_MINIMUM}`)
+          predictedPrice = ABSOLUTE_MINIMUM
+        }
 
         const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
         const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
@@ -525,10 +659,33 @@ export async function POST(request: Request) {
                 ? Math.min(1.0, 0.5 + hotelCompetitors.length * 0.1)
                 : 0.3,
           marketConsistency: getMarketConsistency(hotel.id),
-          externalDataQuality: externalData.holidays ? 0.9 : 0.5,
+          externalDataQuality: enhancedExternalData 
+            ? Math.min(0.95, enhancedExternalData.overallConfidence) 
+            : (externalData?.holidays ? 0.5 : 0.3), // Fallback to basic external data
         }
 
-        const confidence = calculateConfidence(confidenceFactors)
+        // Calculate days until this date for time-based confidence adjustment
+        const daysUntilDate = Math.ceil((predDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        
+        // Enhanced event detection using multi-agent data
+        let hasEvents = events.length > 0
+        let hasHistoricalData = !!calendarData
+        
+        if (enhancedExternalData) {
+          const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
+          hasEvents = hasEvents || dateImpact.hasEvents
+          hasHistoricalData = hasHistoricalData || dateImpact.hasHistoricalData
+          
+          // Log enhanced insights
+          if (dateImpact.hasEvents) {
+            console.log(`[v0] ${dateStr}: Events detected, impact=${dateImpact.eventImpact.toFixed(2)}x`)
+          }
+          if (dateImpact.hasHistoricalData) {
+            console.log(`[v0] ${dateStr}: Historical trend=${dateImpact.historicalTrend}`)
+          }
+        }
+        
+        const confidence = calculateConfidence(confidenceFactors, daysUntilDate, hasEvents, hasHistoricalData)
 
         const priceVsBase = ((predictedPrice - basePrice) / basePrice) * 100
         const priceVsCompetitor = competitorAvg ? ((predictedPrice - competitorAvg) / competitorAvg) * 100 : 0
@@ -536,12 +693,18 @@ export async function POST(request: Request) {
         let recommendation = null
         let recommendationType = null
 
+        // Check if price floor was applied
+        const isPriceFloorApplied = predictedPrice === finalMinimum && rawPrice * marketNoise < finalMinimum
+
         if (priceVsBase > 20 && demand === "very_high") {
           recommendation = `העלה מחיר ל-${dateStr} - ביקוש גבוה מאוד`
           recommendationType = "price_increase"
-        } else if (priceVsBase < -10 && occupancyRate < 30) {
+        } else if (priceVsBase < -10 && occupancyRate < 30 && !isPriceFloorApplied) {
           recommendation = `שקול מבצע ל-${dateStr} - תפוסה נמוכה`
           recommendationType = "promotion"
+        } else if (isPriceFloorApplied) {
+          recommendation = `מחיר מינימלי מוחל (₪${finalMinimum}) - לא נמוך ממתחרים ומשוק`
+          recommendationType = "price_floor"
         } else if (competitorAvg && priceVsCompetitor > 15) {
           recommendation = `המחיר שלך גבוה מ-15% מהמתחרים ב-${dateStr}`
           recommendationType = "competitor_alert"

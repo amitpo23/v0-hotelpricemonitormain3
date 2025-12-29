@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
 const SCAN_DAYS = 45 // Scan 45 days forwar
-const TIMEOUT_MS = 180000 // 3 minutes timeout to avoid Vercel function timeout
+const TIMEOUT_MS = 600000 // 10 minutes timeout for serial scraping
 const maxExecutionTime = TIMEOUT_MS
 
 function getDemandLevel(date: Date): { level: string; multiplier: number } {
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
       `[v0] Will scan ${datesToScan.length} dates from ${datesToScan[0].toISOString().split("T")[0]} to ${datesToScan[datesToScan.length - 1].toISOString().split("T")[0]}`,
     )
 
-    const { scrapeCompetitorAllRoomsWithRetry } = await import("@/lib/scraper/real-scraper")
+    const { scrapeCompetitorAllRoomsWithRetry, scrapeMultipleCompetitorsWithRetry } = await import("@/lib/scraper/real-scraper")
 
     const scrapedData: Array<{
       competitorId: string
@@ -239,33 +239,19 @@ export async function POST(request: Request) {
 
       console.log(`[v0] Scraping date: ${checkInStr} for ${activeCompetitors.length} competitors`)
 
-      const competitorPromises = activeCompetitors.map((competitor: any) =>
-        scrapeCompetitorAllRoomsWithRetry(
-          competitor,
-          checkInStr,
-          checkOutStr,
-          2, // Reduced retries from 3 to 2 to save time
-        ),
+      // Use serial scraping to avoid too many concurrent Chromium processes
+      const scrapedResults = await scrapeMultipleCompetitorsWithRetry(
+        activeCompetitors,
+        checkInStr,
+        checkOutStr,
+        2, // Reduced retries from 3 to 2 to save time
       )
 
-      const dateTimeout = Math.min(30000, timeRemaining - 5000) // 30 seconds max per date, or remaining time
-      const dateResults = await Promise.race([
-        Promise.allSettled(competitorPromises),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Date batch timeout")), dateTimeout)),
-      ]).catch((error) => {
-        console.log(`[v0] Date ${checkInStr} timed out after ${dateTimeout}ms`)
-        return competitorPromises.map(() => ({
-          status: "rejected" as const,
-          reason: "timeout",
-        }))
-      })
-
-      for (let i = 0; i < dateResults.length; i++) {
-        const result = dateResults[i]
+      for (let i = 0; i < scrapedResults.length; i++) {
+        const competitorResult = scrapedResults[i]
         const competitor = activeCompetitors[i]
 
-        if (result.status === "fulfilled") {
-          const competitorResult = result.value
+        if (competitorResult.success) {
           scrapedData.push({
             competitorId: competitorResult.competitorId,
             competitorName: competitorResult.competitorName,
@@ -277,7 +263,7 @@ export async function POST(request: Request) {
             error: competitorResult.errorMessage,
           })
         } else {
-          console.log(`[v0] Competitor ${competitor.competitor_hotel_name} failed: ${result.reason}`)
+          console.log(`[v0] Competitor ${competitor.competitor_hotel_name} failed: ${competitorResult.errorMessage}`)
           scrapedData.push({
             competitorId: competitor.id,
             competitorName: competitor.competitor_hotel_name,
@@ -286,7 +272,7 @@ export async function POST(request: Request) {
             success: false,
             rooms: [],
             source: "error",
-            error: result.reason?.toString() || "Promise rejected",
+            error: competitorResult.errorMessage || "Scrape failed",
           })
         }
       }

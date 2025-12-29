@@ -1,10 +1,14 @@
 /**
  * Advanced Prediction Algorithms Library
- * ML-based price prediction and demand forecasting
+ * Enhanced ML-based price prediction with multi-source intelligence
  */
 
 import { buildPredictionContext, formatContextForPrompt, combinePredictions } from "./rag/prediction-context"
 import { getHotelPricingInsights } from "./llm/perplexity-client"
+import { weatherService } from "./external/weather-service"
+import { bookingVelocityTracker } from "./analytics/booking-velocity"
+import { yoyService } from "./analytics/year-over-year"
+import { featureEngineer } from "./features/feature-engineering"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export interface PredictionInput {
@@ -24,6 +28,17 @@ export interface PredictionInput {
   eventFactor: number
   weatherFactor?: number
   priceHistoryTrend: number // -1 to 1
+  
+  // Enhanced fields (optional for backward compatibility)
+  weatherScore?: number
+  bookingVelocity7d?: number
+  bookingVelocity30d?: number
+  bookingMomentumScore?: number
+  yoyPriceChange?: number
+  yoySeasonalIndex?: number
+  competitorPriceStd?: number
+  pricePositionVsCompetitors?: number
+  dataQualityScore?: number
 }
 
 export interface PredictionOutput {
@@ -189,7 +204,98 @@ export function predictPrice(input: PredictionInput): PredictionOutput {
     priceMultiplier *= input.eventFactor
   }
 
-  // 9. Price trend momentum
+  // 9. Weather factor (NEW!)
+  if (input.weatherScore !== undefined && input.weatherFactor !== undefined) {
+    const weatherImpact = Math.round(input.weatherScore * 15)
+    if (Math.abs(weatherImpact) > 3) {
+      factors.push({
+        name: "Weather Conditions",
+        impact: weatherImpact,
+        description: weatherImpact > 0 ? "Excellent weather forecast" : "Poor weather expected",
+      })
+      priceMultiplier *= input.weatherFactor
+      confidenceScore += Math.abs(weatherImpact) / 3 // More confident with weather data
+    }
+  }
+
+  // 10. Booking velocity (NEW!)
+  if (input.bookingVelocity7d !== undefined && input.bookingVelocity30d !== undefined) {
+    const velocityTrend = input.bookingVelocity7d - input.bookingVelocity30d
+    if (velocityTrend > 0.2) {
+      // Accelerating bookings
+      const velocityImpact = Math.min(Math.round(velocityTrend * 25), 15)
+      factors.push({
+        name: "Booking Acceleration",
+        impact: velocityImpact,
+        description: `Bookings accelerating rapidly (+${velocityImpact}% boost)`,
+      })
+      priceMultiplier *= 1 + velocityImpact / 100
+      confidenceScore += 8
+    } else if (velocityTrend < -0.2) {
+      // Slowing bookings
+      const velocityImpact = Math.max(Math.round(velocityTrend * 25), -10)
+      factors.push({
+        name: "Booking Slowdown",
+        impact: velocityImpact,
+        description: `Booking pace slowing (${velocityImpact}% adjustment)`,
+      })
+      priceMultiplier *= 1 + velocityImpact / 100
+      confidenceScore -= 3
+    }
+  }
+
+  // 11. Booking momentum (NEW!)
+  if (input.bookingMomentumScore !== undefined && input.bookingMomentumScore > 0.7) {
+    const momentumImpact = Math.round((input.bookingMomentumScore - 0.5) * 20)
+    factors.push({
+      name: "High Booking Momentum",
+      impact: momentumImpact,
+      description: "Strong recent booking activity",
+    })
+    priceMultiplier *= 1 + momentumImpact / 100
+    confidenceScore += 5
+  }
+
+  // 12. Year-over-Year patterns (NEW!)
+  if (input.yoyPriceChange !== undefined && input.yoySeasonalIndex !== undefined) {
+    // Apply seasonal index
+    if (Math.abs(input.yoySeasonalIndex - 1) > 0.1) {
+      const seasonalImpact = Math.round((input.yoySeasonalIndex - 1) * 100)
+      factors.push({
+        name: "Seasonal Pattern (YoY)",
+        impact: seasonalImpact,
+        description: `Historical seasonal pattern: ${seasonalImpact > 0 ? 'high' : 'low'} season`,
+      })
+      priceMultiplier *= input.yoySeasonalIndex
+      confidenceScore += 10 // YoY data is very reliable
+    }
+  }
+
+  // 13. Price position vs competitors (NEW!)
+  if (input.pricePositionVsCompetitors !== undefined && input.competitorPriceStd !== undefined) {
+    const position = input.pricePositionVsCompetitors
+    if (position < -0.5) {
+      // We're significantly cheaper - room to increase
+      const positionImpact = Math.round(Math.abs(position) * 10)
+      factors.push({
+        name: "Competitive Price Position",
+        impact: positionImpact,
+        description: "Priced below market - opportunity to increase",
+      })
+      priceMultiplier *= 1 + positionImpact / 100
+    } else if (position > 0.5) {
+      // We're significantly more expensive - may need to adjust
+      const positionImpact = -Math.round(position * 8)
+      factors.push({
+        name: "Competitive Price Position",
+        impact: positionImpact,
+        description: "Priced above market - consider adjustment",
+      })
+      priceMultiplier *= 1 + positionImpact / 100
+    }
+  }
+
+  // 9. Price trend momentum (kept from original)
   if (Math.abs(input.priceHistoryTrend) > 0.1) {
     const trendImpact = Math.round(input.priceHistoryTrend * 10)
     factors.push({
@@ -198,6 +304,18 @@ export function predictPrice(input: PredictionInput): PredictionOutput {
       description: input.priceHistoryTrend > 0 ? "Prices trending up" : "Prices trending down",
     })
     priceMultiplier *= 1 + input.priceHistoryTrend * 0.05
+  }
+
+  // Adjust confidence based on data quality
+  if (input.dataQualityScore !== undefined) {
+    confidenceScore = Math.round(confidenceScore * input.dataQualityScore)
+    if (input.dataQualityScore < 0.7) {
+      factors.push({
+        name: "Data Quality",
+        impact: -Math.round((1 - input.dataQualityScore) * 20),
+        description: `Limited data availability (${Math.round(input.dataQualityScore * 100)}% complete)`,
+      })
+    }
   }
 
   // Calculate predicted price
@@ -261,6 +379,98 @@ export function predictPrice(input: PredictionInput): PredictionOutput {
  */
 export function predictPricesForRange(inputs: PredictionInput[]): PredictionOutput[] {
   return inputs.map((input) => predictPrice(input))
+}
+
+/**
+ * Enhanced prediction using all available data sources (NEW!)
+ * Integrates weather, booking velocity, YoY patterns, and more
+ */
+export async function predictPriceEnhanced(
+  hotelId: string,
+  targetDate: string,
+  currentPrice: number,
+  location: string = 'Tel Aviv'
+): Promise<PredictionOutput> {
+  try {
+    // Generate comprehensive features
+    const features = await featureEngineer.generateFeatures(hotelId, targetDate, location)
+
+    // Build enhanced prediction input
+    const enhancedInput: PredictionInput = {
+      date: targetDate,
+      dayOfWeek: features.dayOfWeek,
+      isWeekend: features.isWeekend,
+      isHoliday: features.isHoliday,
+      daysUntilDate: features.daysUntilCheckIn,
+      currentOccupancy: features.currentOccupancy,
+      historicalOccupancy: features.historicalOccupancy,
+      currentPrice,
+      competitorAvgPrice: features.competitorAvgPrice,
+      competitorBookingPrice: features.competitorAvgPrice, // Simplified
+      competitorExpediaPrice: features.competitorAvgPrice, // Simplified
+      demandScore: features.demandScore,
+      seasonalityFactor: features.seasonalIndex,
+      eventFactor: 1 + features.eventImpactScore,
+      weatherFactor: features.weatherMultiplier,
+      priceHistoryTrend: features.currentPriceMomentum,
+      
+      // Enhanced fields
+      weatherScore: features.weatherScore,
+      bookingVelocity7d: features.bookingVelocity7d,
+      bookingVelocity30d: features.bookingVelocity30d,
+      bookingMomentumScore: features.bookingMomentumScore,
+      yoyPriceChange: features.yoyPriceChange,
+      yoySeasonalIndex: features.seasonalIndex,
+      competitorPriceStd: features.competitorPriceStd,
+      pricePositionVsCompetitors: features.pricePositionVsCompetitors,
+      dataQualityScore: features.dataQuality,
+    }
+
+    // Run prediction with enhanced features
+    const prediction = predictPrice(enhancedInput)
+
+    // Boost confidence if data quality is high
+    if (features.dataQuality > 0.8 && features.confidenceLevel > 0.7) {
+      prediction.confidenceScore = Math.min(95, prediction.confidenceScore + 10)
+    }
+
+    return prediction
+  } catch (error) {
+    console.error('Enhanced prediction error:', error)
+    // Fallback to basic prediction
+    return predictPrice({
+      date: targetDate,
+      dayOfWeek: new Date(targetDate).getDay(),
+      isWeekend: [5, 6].includes(new Date(targetDate).getDay()),
+      isHoliday: false,
+      daysUntilDate: Math.floor((new Date(targetDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+      currentOccupancy: 50,
+      historicalOccupancy: 55,
+      currentPrice,
+      competitorAvgPrice: currentPrice,
+      competitorBookingPrice: currentPrice,
+      competitorExpediaPrice: currentPrice,
+      demandScore: 0.5,
+      seasonalityFactor: 1.0,
+      eventFactor: 1.0,
+      priceHistoryTrend: 0,
+    })
+  }
+}
+
+/**
+ * Batch enhanced prediction for multiple dates
+ */
+export async function predictPricesEnhancedBatch(
+  hotelId: string,
+  dates: string[],
+  currentPrice: number,
+  location: string = 'Tel Aviv'
+): Promise<PredictionOutput[]> {
+  const predictions = await Promise.all(
+    dates.map(date => predictPriceEnhanced(hotelId, date, currentPrice, location))
+  )
+  return predictions
 }
 
 /**

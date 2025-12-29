@@ -1,9 +1,12 @@
 /**
- * RAG (Retrieval-Augmented Generation) Context Builder
- * Builds rich context from historical data for LLM-enhanced predictions
+ * RAG (Retrieval-Augmented Generation) Context Builder - Enhanced
+ * Builds rich context from multiple data sources for LLM predictions
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { weatherService } from "@/lib/external/weather-service"
+import { bookingVelocityTracker } from "@/lib/analytics/booking-velocity"
+import { yoyService } from "@/lib/analytics/year-over-year"
 
 interface HistoricalPriceData {
   date: string
@@ -29,6 +32,13 @@ interface PredictionContext {
   recentTrends: string
   seasonalPattern: string
   marketContext: string
+  
+  // Enhanced context (NEW!)
+  weatherForecast?: string
+  bookingMomentum?: string
+  yoyComparison?: string
+  demandSignals?: string
+  dataQuality?: number
 }
 
 /**
@@ -111,6 +121,74 @@ export async function buildPredictionContext(
 }
 
 /**
+ * Build enhanced prediction context with all data sources (NEW!)
+ */
+export async function buildEnhancedPredictionContext(
+  supabase: SupabaseClient,
+  hotelId: string,
+  targetDate: Date,
+  location: string = 'Tel Aviv'
+): Promise<PredictionContext> {
+  // Get base context
+  const baseContext = await buildPredictionContext(supabase, hotelId, targetDate)
+  
+  const targetDateStr = targetDate.toISOString().split('T')[0]
+  
+  try {
+    // Fetch enhanced data in parallel
+    const [
+      weatherImpact,
+      bookingVelocity,
+      yoyComparison,
+      bookingMomentum,
+    ] = await Promise.all([
+      weatherService.getWeatherImpact(location, targetDateStr),
+      bookingVelocityTracker.getVelocityForDate(hotelId, targetDateStr),
+      yoyService.compareYearOverYear(hotelId, targetDateStr, 3),
+      bookingVelocityTracker.getBookingMomentum(hotelId),
+    ])
+
+    // Build enhanced context strings
+    const weatherForecast = `Weather: ${weatherImpact.temp}°C, ${weatherImpact.condition}. ${weatherImpact.reasoning}. Impact: ${weatherImpact.score > 0 ? '+' : ''}${(weatherImpact.score * 100).toFixed(0)}%`
+
+    const bookingMomentumStr = `Booking velocity: ${bookingVelocity.velocity7d.toFixed(2)}/day (last 7d), ${bookingVelocity.velocity30d.toFixed(2)}/day (last 30d). Trend: ${bookingVelocity.trend}. ${bookingVelocity.reasoning}. Momentum: ${bookingMomentum.momentum} (score: ${(bookingMomentum.score * 100).toFixed(0)}%).`
+
+    const yoyComparisonStr = yoyComparison.historicalPrices.length > 0
+      ? `Year-over-year: ${yoyComparison.pattern} (${yoyComparison.priceChange > 0 ? '+' : ''}${yoyComparison.priceChange.toFixed(1)}% vs last year). Seasonal index: ${yoyComparison.seasonalIndex.toFixed(2)}. ${yoyComparison.reasoning}`
+      : 'No year-over-year data available'
+
+    const demandSignalsStr = `Demand score: ${(bookingVelocity.demandScore * 100).toFixed(0)}%. Recent bookings: ${bookingVelocity.recentBookings} in last 7 days (${bookingVelocity.totalBookings} total for this date). Booking momentum: ${bookingMomentum.reasoning}.`
+
+    // Calculate data quality
+    const dataQuality = (
+      (weatherImpact.score !== 0 ? 0.25 : 0) +
+      (bookingVelocity.totalBookings > 0 ? 0.25 : 0) +
+      (yoyComparison.historicalPrices.length > 0 ? 0.25 : 0) +
+      (baseContext.competitorPrices.length > 0 ? 0.25 : 0)
+    )
+
+    return {
+      ...baseContext,
+      weatherForecast,
+      bookingMomentum: bookingMomentumStr,
+      yoyComparison: yoyComparisonStr,
+      demandSignals: demandSignalsStr,
+      dataQuality,
+    }
+  } catch (error) {
+    console.error('Error building enhanced context:', error)
+    return {
+      ...baseContext,
+      weatherForecast: 'Weather data unavailable',
+      bookingMomentum: 'Booking momentum data unavailable',
+      yoyComparison: 'Year-over-year data unavailable',
+      demandSignals: 'Demand signals unavailable',
+      dataQuality: 0.25, // Only base context available
+    }
+  }
+}
+
+/**
  * Analyze recent pricing trends
  */
 function analyzeRecentTrends(historicalData: HistoricalPriceData[]): string {
@@ -178,10 +256,15 @@ function buildMarketContext(historicalData: HistoricalPriceData[], competitorDat
 }
 
 /**
- * Format context for LLM prompt
+ * Format context for LLM prompt (Enhanced)
  */
 export function formatContextForPrompt(context: PredictionContext): string {
   return `
+Hotel: ${context.hotelName} in ${context.location}
+Target Date: ${context.targetDate}
+Current Price: $${context.currentPrice}
+Current Occupancy: ${context.currentOccupancy}%
+
 Historical Performance (Last 90 Days):
 ${context.historicalPrices
   .slice(0, 10)
@@ -199,6 +282,8 @@ ${context.marketContext}
 
 Competitor Positioning:
 ${context.competitorPrices.map((c) => `${c.name}: $${c.avgPrice.toFixed(0)} (range: $${c.priceRange.min}-$${c.priceRange.max})`).join("\n")}
+
+${context.weatherForecast ? `\nWeather Forecast:\n${context.weatherForecast}\n` : ''}${context.bookingMomentum ? `\nBooking Momentum:\n${context.bookingMomentum}\n` : ''}${context.yoyComparison ? `\nYear-over-Year Comparison:\n${context.yoyComparison}\n` : ''}${context.demandSignals ? `\nDemand Signals:\n${context.demandSignals}\n` : ''}${context.dataQuality !== undefined ? `\nData Quality: ${(context.dataQuality * 100).toFixed(0)}%\n` : ''}
 `
 }
 
