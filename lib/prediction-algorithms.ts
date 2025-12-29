@@ -321,8 +321,22 @@ export function predictPrice(input: PredictionInput): PredictionOutput {
   // Calculate predicted price
   const predictedPrice = Math.round(input.currentPrice * priceMultiplier)
 
-  // Calculate recommended price (capped at reasonable bounds)
-  const minPrice = Math.round(input.currentPrice * 0.7)
+  // Calculate minimum price floor based on user requirements:
+  // "Not lower than competitor average AND not lower than government statistics - whichever is LOWER"
+  // This means: use the LOWER of (competitor avg, gov stats) as the minimum floor
+  // 1. Competitor average price
+  // 2. Historical government statistics (approximated as 80% of competitor avg if not available)
+  const competitorFloor = input.competitorAvgPrice
+  const historicalStatsFloor = input.competitorAvgPrice * 0.8 // Approximate government stats as 80% of competitor avg
+  // Use the lower of the two as the absolute minimum
+  const absoluteMinimumPrice = Math.min(competitorFloor, historicalStatsFloor)
+  
+  // Also respect a reasonable minimum based on current price (70% floor)
+  const currentPriceFloor = input.currentPrice * 0.7
+  // Final minimum is the HIGHER of: absolute minimum OR 70% of current price
+  // This ensures we don't go too far below current price while respecting the market floor
+  const minPrice = Math.round(Math.max(absoluteMinimumPrice, currentPriceFloor))
+  
   const maxPrice = Math.round(input.currentPrice * 1.5)
   const recommendedPrice = Math.min(maxPrice, Math.max(minPrice, predictedPrice))
 

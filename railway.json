@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pnpm install && pnpm exec playwright install --with-deps chromium"
+    "buildCommand": "pip install playwright && python3 -m playwright install --with-deps chromium && pnpm install && pnpm exec playwright install --with-deps chromium"
   },
   "deploy": {
     "startCommand": "NODE_ENV=development pnpm run dev",
