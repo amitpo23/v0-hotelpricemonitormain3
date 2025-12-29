@@ -5,6 +5,8 @@ nixPkgs = ["nodejs_20", "python311", "python311Packages.pip"]
 cmds = [
     "rm -f pnpm-lock.yaml",
     "npm install --legacy-peer-deps",
+    "pip install playwright",
+    "python3 -m playwright install --with-deps chromium",
     "npx playwright install --with-deps chromium"
 ]
 

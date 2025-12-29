@@ -13,7 +13,8 @@ interface ApifyBookingResult {
 }
 
 interface ScrapeOptions {
-  bookingUrl: string  checkIn: string
+  bookingUrl: string
+  checkIn: string
   checkOut: string
   adults?: number
   children?: number
