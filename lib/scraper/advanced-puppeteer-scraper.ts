@@ -164,8 +164,9 @@ export async function scrapeBookingAdvanced(
 
     // Take screenshot for debugging
     try {
-      await page.screenshot({ path: '/home/user/webapp/debug-screenshot.png' })
-      console.log('[AdvancedScraper] Screenshot saved to debug-screenshot.png')
+      const debugPath = process.env.DEBUG_SCREENSHOT_PATH || './debug-screenshot.png'
+      await page.screenshot({ path: debugPath })
+      console.log(`[AdvancedScraper] Screenshot saved to ${debugPath}`)
     } catch (e) {
       // Ignore screenshot errors
     }

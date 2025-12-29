@@ -3,7 +3,7 @@
 
 import { type BookingPriceResult, extractAllRoomsFromHTML } from "./booking-scraper"
 
-const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY || "1e1275322e81f07ca0a13ecb33288c77"
+const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY
 
 export interface ScraperAPIResult {
   success: boolean

@@ -1,6 +1,7 @@
 import { ApifyClient } from 'apify-client'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 
 interface SearchParams {
   destination: string
@@ -17,8 +18,21 @@ export async function POST(request: Request) {
     const authHeader = request.headers.get('authorization')
     const token = authHeader?.split(' ')[1]
     
-    // Simple auth check
-    if (token !== process.env.SYNC_SECRET_TOKEN) {
+    // Constant-time auth check to prevent timing attacks
+    const expectedToken = process.env.SYNC_SECRET_TOKEN
+    if (!token || !expectedToken || token.length !== expectedToken.length) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    try {
+      const isValid = timingSafeEqual(
+        Buffer.from(token),
+        Buffer.from(expectedToken)
+      )
+      if (!isValid) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    } catch {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
