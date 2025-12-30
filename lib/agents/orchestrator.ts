@@ -7,6 +7,7 @@
 import { discoverEvents, discoverEventsBatch } from './events-agent'
 import { getHistoricalComparison, getHistoricalComparisonBatch } from './historical-agent'
 import { gatherMarketStatistics } from './statistics-agent'
+import { getCachedData } from '@/lib/cache/external-data-cache'
 
 interface EnhancedExternalData {
   // Events data
@@ -70,6 +71,16 @@ export async function orchestrateExternalData(
   let historicalConfidence = 0
   let statisticsConfidence = 0
 
+  // Helper function to add timeout to any promise
+  const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, taskName: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`${taskName} timeout after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ])
+  }
+
   // Run agents in parallel where possible
   const tasks: Promise<void>[] = []
 
@@ -77,17 +88,37 @@ export async function orchestrateExternalData(
   if (includeEvents) {
     const eventsTask = async () => {
       try {
-        console.log('[Orchestrator] Starting Events Agent...')
-        if (batchOptimization && targetDates.length > 5) {
-          eventsData = await discoverEventsBatch(location, targetDates, 7)
-        } else {
-          // For small sets, fetch individually
-          for (const date of targetDates) {
-            const result = await discoverEvents(location, date, 7)
-            const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0]
-            eventsData.set(dateStr, result)
+        console.log('[Orchestrator] Starting Events Agent with caching...')
+        const eventsPromise = async () => {
+          if (batchOptimization && targetDates.length > 5) {
+            // Cache key for batch
+            const dateRange = `${targetDates[0]}_to_${targetDates[targetDates.length - 1]}`
+            const cacheKey = `${location}_batch_${dateRange}_${targetDates.length}`
+            return getCachedData(
+              'tavily_events_batch',
+              cacheKey,
+              () => discoverEventsBatch(location, targetDates, 7),
+              { ttl: 24 * 60 * 60 } // 24 hours
+            )
+          } else {
+            // For small sets, fetch individually with cache
+            const results = new Map<string, any>()
+            for (const date of targetDates) {
+              const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0]
+              const cacheKey = `${location}_${dateStr}_7days`
+              const result = await getCachedData(
+                'tavily_events',
+                cacheKey,
+                () => discoverEvents(location, date, 7),
+                { ttl: 24 * 60 * 60 } // 24 hours
+              )
+              results.set(dateStr, result)
+            }
+            return results
           }
         }
+        
+        eventsData = await withTimeout(eventsPromise(), 10000, 'Events Agent')
         
         // Calculate average confidence
         const confidences = Array.from(eventsData.values()).map(v => v.confidence || 0)
@@ -97,7 +128,8 @@ export async function orchestrateExternalData(
         
         console.log(`[Orchestrator] Events Agent completed: ${eventsData.size} dates, ${(eventsConfidence * 100).toFixed(0)}% confidence`)
       } catch (error) {
-        console.error('[Orchestrator] Events Agent failed:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[Orchestrator] Events Agent failed:', errorMsg)
         eventsConfidence = 0
       }
     }
@@ -109,26 +141,32 @@ export async function orchestrateExternalData(
     const historicalTask = async () => {
       try {
         console.log('[Orchestrator] Starting Historical Agent...')
-        if (batchOptimization) {
-          historicalData = await getHistoricalComparisonBatch(
-            hotelId,
-            hotelName,
-            location,
-            targetDates,
-            hotelBasePrice
-          )
-        } else {
-          for (const date of targetDates) {
-            const result = await getHistoricalComparison(
+        const historicalPromise = async () => {
+          if (batchOptimization) {
+            return await getHistoricalComparisonBatch(
               hotelId,
               hotelName,
               location,
-              date,
+              targetDates,
               hotelBasePrice
             )
-            historicalData.set(result.targetDate, result)
+          } else {
+            const results = new Map<string, any>()
+            for (const date of targetDates) {
+              const result = await getHistoricalComparison(
+                hotelId,
+                hotelName,
+                location,
+                date,
+                hotelBasePrice
+              )
+              results.set(result.targetDate, result)
+            }
+            return results
           }
         }
+
+        historicalData = await withTimeout(historicalPromise(), 10000, 'Historical Agent')
 
         // Calculate average confidence
         const confidences = Array.from(historicalData.values()).map(v => v.confidence || 0)
@@ -138,7 +176,8 @@ export async function orchestrateExternalData(
 
         console.log(`[Orchestrator] Historical Agent completed: ${historicalData.size} dates, ${(historicalConfidence * 100).toFixed(0)}% confidence`)
       } catch (error) {
-        console.error('[Orchestrator] Historical Agent failed:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[Orchestrator] Historical Agent failed:', errorMsg)
         historicalConfidence = 0
       }
     }
@@ -149,18 +188,31 @@ export async function orchestrateExternalData(
   if (includeStatistics) {
     const statisticsTask = async () => {
       try {
-        console.log('[Orchestrator] Starting Statistics Agent...')
+        console.log('[Orchestrator] Starting Statistics Agent with caching...')
         // Use middle date or current date
         const targetDate = targetDates.length > 0 
           ? targetDates[Math.floor(targetDates.length / 2)] 
           : new Date()
         
-        statisticsData = await gatherMarketStatistics(location, targetDate)
+        const dateStr = typeof targetDate === 'string' ? targetDate : targetDate.toISOString().split('T')[0]
+        const cacheKey = `${location}_${dateStr}`
+        
+        statisticsData = await withTimeout(
+          getCachedData(
+            'tavily_statistics',
+            cacheKey,
+            () => gatherMarketStatistics(location, targetDate),
+            { ttl: 12 * 60 * 60 } // 12 hours (statistics change less frequently)
+          ),
+          8000,
+          'Statistics Agent'
+        )
         statisticsConfidence = statisticsData?.confidence || 0
 
         console.log(`[Orchestrator] Statistics Agent completed: ${(statisticsConfidence * 100).toFixed(0)}% confidence`)
       } catch (error) {
-        console.error('[Orchestrator] Statistics Agent failed:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[Orchestrator] Statistics Agent failed:', errorMsg)
         statisticsConfidence = 0
       }
     }

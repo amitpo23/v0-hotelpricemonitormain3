@@ -7,6 +7,9 @@ import {
   checkExternalDataAvailability 
 } from "@/lib/agents/orchestrator"
 
+// Route segment config - set max duration to 50 seconds
+export const maxDuration = 50
+
 interface PredictionFactors {
   seasonality: number
   weekendPremium: number
@@ -317,7 +320,8 @@ export async function POST(request: Request) {
           .single()
 
         if (firstHotel) {
-          enhancedExternalData = await orchestrateExternalData(
+          // Add timeout wrapper to prevent hanging (30 seconds max)
+          const orchestratorPromise = orchestrateExternalData(
             firstHotel.id,
             firstHotel.name || 'Hotel',
             'Tel Aviv', // TODO: Get from hotel data
@@ -325,6 +329,12 @@ export async function POST(request: Request) {
             firstHotel.base_price || 800,
             orchestratorOptions
           )
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Orchestrator timeout after 30s')), 30000)
+          )
+          
+          enhancedExternalData = await Promise.race([orchestratorPromise, timeoutPromise])
           
           console.log(`[v0] 🎉 Multi-Agent System completed:`)
           console.log(`[v0]   - Events: ${enhancedExternalData.events.size} dates, confidence ${(enhancedExternalData.eventsConfidence * 100).toFixed(0)}%`)
@@ -340,7 +350,11 @@ export async function POST(request: Request) {
           }
         }
       } catch (error) {
-        console.error('[v0] Multi-Agent System failed:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[v0] Multi-Agent System failed:', errorMsg)
+        if (errorMsg.includes('timeout')) {
+          console.error('[v0] ⏱️  Orchestrator timed out after 30 seconds - continuing without external data')
+        }
         enhancedExternalData = null
       }
     } else {

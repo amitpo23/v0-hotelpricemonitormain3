@@ -4,6 +4,27 @@
  * Sources: CBS (לשכת הסטטיסטיקה המרכזית), tourism ministry, economic data
  */
 
+// Helper: Fetch with timeout
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 8000): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    return response
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`)
+    }
+    throw error
+  }
+}
+
 interface TourismStatistics {
   period: string
   touristArrivals?: number
@@ -52,7 +73,7 @@ async function searchTourismStats(period: string): Promise<TourismStatistics | n
   try {
     const query = `סטטיסטיקות תיירות ישראל ${period} תפוסת מלונות מחיר ממוצע לילה tourism statistics Israel hotel occupancy`
 
-    const response = await fetch('https://api.tavily.com/search', {
+    const response = await fetchWithTimeout('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -70,7 +91,7 @@ async function searchTourismStats(period: string): Promise<TourismStatistics | n
           'themarker.com'
         ]
       }),
-    })
+    }, 7000)
 
     if (!response.ok) {
       return null
@@ -140,7 +161,7 @@ async function searchEconomicIndicators(period: string): Promise<EconomicIndicat
   try {
     const query = `מדדים כלכליים ישראל ${period} אינפלציה שער חליפין דולר inflation exchange rate Israel`
 
-    const response = await fetch('https://api.tavily.com/search', {
+    const response = await fetchWithTimeout('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -224,7 +245,7 @@ async function analyzeMarketTrends(location: string, period: string): Promise<Ma
   try {
     const query = `מגמות תיירות מלונאות ${location} ${period} חדשות טרנדים hotel trends news`
 
-    const response = await fetch('https://api.tavily.com/search', {
+    const response = await fetchWithTimeout('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -236,7 +257,7 @@ async function analyzeMarketTrends(location: string, period: string): Promise<Ma
         max_results: 10,
         include_answer: true,
       }),
-    })
+    }, 7000)
 
     if (!response.ok) {
       throw new Error('Search failed')

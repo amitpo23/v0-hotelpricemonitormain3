@@ -6,6 +6,27 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+// Helper: Fetch with timeout
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 8000): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    return response
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`)
+    }
+    throw error
+  }
+}
+
 interface HistoricalDataPoint {
   date: string
   avgPrice: number
@@ -130,7 +151,7 @@ async function searchExternalHistoricalData(
     
     const query = `מחיר ממוצע מלון ${hotelName} ${location} ${monthName} hotel average price`
 
-    const response = await fetch('https://api.tavily.com/search', {
+    const response = await fetchWithTimeout('https://api.tavily.com/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -148,7 +169,7 @@ async function searchExternalHistoricalData(
           'priceoftravel.com'
         ]
       }),
-    })
+    }, 7000)
 
     if (!response.ok) {
       return null

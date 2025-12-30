@@ -36,37 +36,52 @@ async function searchEventsWithTavily(location: string, dateRange: string): Prom
   try {
     const query = `אירועים כנסים קונצרטים פסטיבלים ב${location} ${dateRange} events conferences concerts festivals`
     
-    const response = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query,
-        search_depth: 'advanced',
-        include_answer: true,
-        include_raw_content: true,
-        max_results: 10,
-        include_domains: [
-          'timeout.com',
-          'eventbrite.com',
-          'ticketmaster.co.il',
-          'leaan.co.il',
-          'itraveljerusalem.com',
-          'events.themarker.com',
-          'ynet.co.il',
-          'mako.co.il'
-        ]
-      }),
-    })
+    // Add timeout to fetch call (8 seconds)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    
+    try {
+      const response = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          api_key: apiKey,
+          query,
+          search_depth: 'advanced',
+          include_answer: true,
+          include_raw_content: true,
+          max_results: 10,
+          include_domains: [
+            'timeout.com',
+            'eventbrite.com',
+            'ticketmaster.co.il',
+            'leaan.co.il',
+            'itraveljerusalem.com',
+            'events.themarker.com',
+            'ynet.co.il',
+            'mako.co.il'
+          ]
+        }),
+      })
 
-    if (!response.ok) {
-      console.error('[EventsAgent] Tavily API error:', response.status)
-      return { results: [] }
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        console.error('[EventsAgent] Tavily API error:', response.status)
+        return { results: [] }
+      }
+
+      return await response.json()
+    } catch (fetchError) {
+      clearTimeout(timeoutId)
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        console.error('[EventsAgent] Tavily API timeout after 8s')
+      }
+      throw fetchError
     }
-
-    return await response.json()
   } catch (error) {
     console.error('[EventsAgent] Search failed:', error)
     return { results: [] }
@@ -245,7 +260,8 @@ export async function discoverEventsBatch(
   }
 
   // Process each week group
-  for (const [weekKey, weekDates] of weekGroups.entries()) {
+  for (const entry of Array.from(weekGroups.entries())) {
+    const [weekKey, weekDates] = entry
     // Use middle date for search
     const middleDate = weekDates[Math.floor(weekDates.length / 2)]
     const weekResults = await discoverEvents(location, middleDate, daysRange)

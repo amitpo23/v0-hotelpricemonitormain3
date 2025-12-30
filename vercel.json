@@ -11,6 +11,14 @@
     {
       "path": "/api/cron/update-predictions",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/daily-predictions",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/cache-cleanup",
+      "schedule": "0 3 * * *"
     }
   ]
 }
