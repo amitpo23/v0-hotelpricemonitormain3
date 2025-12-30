@@ -2,8 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/auto-scan",
-      "schedule": "0 */72 * * *"
-    },
+      "schedule": "0 */24 * * *"    },
     {
       "path": "/api/cron/monitor-scan",
       "schedule": "0 * * * *"
