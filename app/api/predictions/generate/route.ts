@@ -6,6 +6,7 @@ import {
   getRecommendedOptions,
   checkExternalDataAvailability 
 } from "@/lib/agents/orchestrator"
+import { predictPriceEnhanced } from "@/lib/prediction-algorithms"
 
 // Route segment config - set max duration to 50 seconds
 export const maxDuration = 50
