@@ -162,6 +162,58 @@ function getDemandLevel(score: number, occupancyRate: number, trendsScore: numbe
   return "low"
 }
 
+async function getDynamicBasePrice(hotelId: string, supabase: any): Promise<number> {
+  try {
+    // Calculate date 180 days ago
+    const date180DaysAgo = new Date()
+    date180DaysAgo.setDate(date180DaysAgo.getDate() - 180)
+    const date180Str = date180DaysAgo.toISOString().split('T')[0]
+
+    // Query avg nightly_rate from bookings (last 180 days, status confirmed/completed)
+    const { data: bookingsData } = await supabase
+      .from('bookings')
+      .select('nightly_rate')
+      .eq('hotel_id', hotelId)
+      .in('status', ['confirmed', 'completed'])
+      .gte('check_in_date', date180Str)
+      .not('nightly_rate', 'is', null)
+
+    if (bookingsData && bookingsData.length > 0) {
+      const avgBookingRate = bookingsData.reduce((sum: number, b: any) => sum + (b.nightly_rate || 0), 0) / bookingsData.length
+      if (avgBookingRate > 300) {
+        return Math.round(avgBookingRate)
+      }
+    }
+
+    // Calculate date 60 days ago
+    const date60DaysAgo = new Date()
+    date60DaysAgo.setDate(date60DaysAgo.getDate() - 60)
+    const date60Str = date60DaysAgo.toISOString().split('T')[0]
+
+    // Query avg price from competitor_daily_prices (last 60 days, price > 100)
+    const { data: competitorData } = await supabase
+      .from('competitor_daily_prices')
+      .select('price')
+      .eq('hotel_id', hotelId)
+      .gte('scan_date', date60Str)
+      .gt('price', 100)
+      .not('price', 'is', null)
+
+    if (competitorData && competitorData.length > 0) {
+      const avgCompetitorPrice = competitorData.reduce((sum: number, c: any) => sum + (c.price || 0), 0) / competitorData.length
+      if (avgCompetitorPrice > 300) {
+        return Math.round(avgCompetitorPrice)
+      }
+    }
+
+    // Fallback
+    return 550
+  } catch (error) {
+    console.error('Error calculating dynamic base price:', error)
+    return 550 // Return fallback on error
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -515,7 +567,7 @@ export async function POST(request: Request) {
       const { data: hotelData } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
       const hotel = hotelData || { id: hotelId, base_price: 150, total_rooms: 34 }
 
-      const basePrice = hotel.base_price || marketDataByHotel[hotel.id]?.avg || 150
+      const basePrice = hotel.base_price || await getDynamicBasePrice(hotel.id, supabase) || 550
       const totalRooms = hotel.total_rooms || 34 // Default to 34 rooms for Scarlet Hotel
       const hotelCompetitors = competitorsByHotel[hotel.id] || []
       const marketData = marketDataByHotel[hotel.id]
