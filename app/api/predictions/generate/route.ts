@@ -232,17 +232,10 @@ export async function POST(request: Request) {
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:3000"
 
-    const [
-      externalData,
-      { data: bookings },
-      { data: budgets },
-      { data: revenueTracking },
-      { data: recentResults },
-      { data: dailyPrices },
-      { data: scans },
-      { data: competitors },
-      { data: competitorPrices },
-    ] = await Promise.all([
+    console.log('[v0] 📊 Fetching data from Supabase and external sources...')
+    
+    // Wrap Promise.all with timeout to prevent hanging
+    const dataFetchPromise = Promise.all([
       fetchExternalData(baseUrl),
       supabase
         .from("bookings")
@@ -274,6 +267,24 @@ export async function POST(request: Request) {
         .gte("date", today.toISOString().split("T")[0])
         .lte("date", new Date(today.getTime() + predictionDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]),
     ])
+    
+    const dataFetchTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Data fetch timeout after 20s')), 20000)
+    )
+    
+    const [
+      externalData,
+      { data: bookings },
+      { data: budgets },
+      { data: revenueTracking },
+      { data: recentResults },
+      { data: dailyPrices },
+      { data: scans },
+      { data: competitors },
+      { data: competitorPrices },
+    ] = await Promise.race([dataFetchPromise, dataFetchTimeout]) as any
+    
+    console.log('[v0] ✅ Data fetched successfully')
 
     const holidayMap = buildHolidayMap(externalData.holidays)
     const trendsScore = externalData.trends?.data?.interestScore || 75
