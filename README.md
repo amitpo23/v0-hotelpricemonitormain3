@@ -1,4 +1,4 @@
-# Hotel Price Monitor
+# Hotel Price Monitor 
 
 *Automatically synced with your [v0.app](https://v0.app) deployments*
 
