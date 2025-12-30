@@ -80,7 +80,39 @@ export default async function PredictionsPage() {
       }
     : null
 
-  const recommendations = predictions?.filter((p) => p.recommendation).slice(0, 10) || []
+  const recommendations = predictions?.filter((p) => p.recommendation).length
+    ? (() => {
+        const withRecs = predictions.filter((p) => p.recommendation)
+        
+        // Group by date, keep highest confidence per date
+        const byDate = withRecs.reduce((acc: Record<string, typeof withRecs[0]>, pred) => {
+          const date = pred.prediction_date
+          if (!acc[date] || (pred.confidence_score || 0) > (acc[date].confidence_score || 0)) {
+            acc[date] = pred
+          }
+          return acc
+        }, {})
+        
+        // Sort dates and select from different time periods
+        const sortedDates = Object.keys(byDate).sort()
+        const selected: typeof withRecs = []
+        
+        // Strategy: Pick from early, middle, late dates evenly
+        const step = Math.max(1, Math.floor(sortedDates.length / 10))
+        for (let i = 0; i < sortedDates.length && selected.length < 10; i += step) {
+          selected.push(byDate[sortedDates[i]])
+        }
+        
+        // Fill remaining slots if needed
+        for (let i = 0; i < sortedDates.length && selected.length < 10; i++) {
+          if (!selected.find(s => s.prediction_date === sortedDates[i])) {
+            selected.push(byDate[sortedDates[i]])
+          }
+        }
+        
+        return selected
+      })()
+    : []
 
   const lastScan = scans?.[0]?.created_at
   const hoursSinceLastScan = lastScan
