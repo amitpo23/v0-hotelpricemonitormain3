@@ -549,9 +549,11 @@ export async function POST(request: Request) {
         const daysRemaining = daysInMonth - dayOfMonth + 1
         const dailyRevenueNeeded = daysRemaining > 0 ? budgetGap / daysRemaining : 0
 
+        // Budget pressure: can increase up to 1.18x, but never decrease below 0.95x
+        // This ensures we don't undercut the market even when budget pressure is negative
         const budgetPressure =
           analysisParams.includeBudget && targetRevenue > 0
-            ? Math.max(0.92, Math.min(1.18, 1 + (budgetGap / targetRevenue) * 0.25))
+            ? Math.max(0.95, Math.min(1.18, 1 + (budgetGap / targetRevenue) * 0.25))
             : 1.0
 
         const velocityFactor = analysisParams.includeMarketTrends
@@ -637,34 +639,43 @@ export async function POST(request: Request) {
         const marketNoise = 0.98 + Math.random() * 0.04
         let predictedPrice = Math.round(rawPrice * marketNoise)
 
-        // Apply pricing floors to ensure reasonable recommendations
-        const ABSOLUTE_MINIMUM = 300 // Minimum price floor: ₪300
+        // ===== PRICING CONSTRAINTS =====
+        // Apply strict pricing floors to ensure reasonable recommendations
+        const ABSOLUTE_MINIMUM = 300 // Hard floor: never go below ₪300
         
         // Calculate market-based minimums
         const marketMinimums: number[] = [ABSOLUTE_MINIMUM]
         
-        // 1. Don't go below competitor average
+        // 1. Don't go below competitor average (primary constraint)
         if (competitorAvg && competitorAvg > 0) {
           marketMinimums.push(competitorAvg)
         }
         
-        // 2. Don't go below Tel Aviv market average (from Statistics Agent)
+        // 2. Don't go below Tel Aviv market average from government statistics
         if (enhancedExternalData?.statistics?.tourism?.avgNightlyRate) {
-          marketMinimums.push(enhancedExternalData.statistics.tourism.avgNightlyRate)
+          const govStatsAvg = enhancedExternalData.statistics.tourism.avgNightlyRate
+          marketMinimums.push(govStatsAvg)
         }
         
-        // Apply the highest floor
+        // 3. Don't go too far below base price (max 25% discount)
+        const basePriceFloor = basePrice * 0.75
+        marketMinimums.push(basePriceFloor)
+        
+        // Apply the highest floor (most restrictive)
         const finalMinimum = Math.max(...marketMinimums)
+        const originalPrice = predictedPrice
         
         if (predictedPrice < finalMinimum) {
-          console.log(`[v0] ${dateStr}: Price floor applied: ₪${predictedPrice} → ₪${Math.round(finalMinimum)}`)
-          console.log(`[v0]   Competitor avg: ₪${competitorAvg || 'N/A'}, Market avg: ₪${enhancedExternalData?.statistics?.tourism?.avgNightlyRate || 'N/A'}`)
           predictedPrice = Math.round(finalMinimum)
+          console.log(`[v0] 🔒 ${dateStr}: PRICE FLOOR APPLIED`)
+          console.log(`[v0]   Original: ₪${originalPrice} → Adjusted: ₪${predictedPrice}`)
+          console.log(`[v0]   Constraints: Competitor=₪${competitorAvg || 'N/A'}, GovStats=₪${enhancedExternalData?.statistics?.tourism?.avgNightlyRate || 'N/A'}, Base*0.75=₪${Math.round(basePriceFloor)}, Min=₪${ABSOLUTE_MINIMUM}`)
+          console.log(`[v0]   Budget Pressure: ${budgetPressure.toFixed(2)}x, Occupancy: ${occupancyRate.toFixed(0)}%`)
         }
         
-        // Double-check: ensure no price is below absolute minimum
+        // Safety check: ensure no price is below absolute minimum
         if (predictedPrice < ABSOLUTE_MINIMUM) {
-          console.warn(`[v0] ${dateStr}: WARNING - Price ₪${predictedPrice} below absolute minimum! Forcing to ₪${ABSOLUTE_MINIMUM}`)
+          console.error(`[v0] ⚠️ ${dateStr}: CRITICAL - Price ₪${predictedPrice} below ₪${ABSOLUTE_MINIMUM}! Forcing correction.`)
           predictedPrice = ABSOLUTE_MINIMUM
         }
 

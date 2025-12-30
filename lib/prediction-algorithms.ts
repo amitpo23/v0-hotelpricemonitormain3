@@ -321,23 +321,35 @@ export function predictPrice(input: PredictionInput): PredictionOutput {
   // Calculate predicted price
   const predictedPrice = Math.round(input.currentPrice * priceMultiplier)
 
-  // Calculate minimum price floor based on user requirements:
-  // "Not lower than competitor average AND not lower than government statistics - whichever is LOWER"
-  // This means: use the LOWER of (competitor avg, gov stats) as the minimum floor
-  // 1. Competitor average price
-  // 2. Historical government statistics (approximated as 80% of competitor avg if not available)
+  // ===== PRICING CONSTRAINTS =====
+  // Apply strict pricing floors based on user requirements
+  const ABSOLUTE_MINIMUM = 300 // Hard floor: never go below ₪300
+  
+  // Calculate market-based minimums
+  const marketMinimums: number[] = [ABSOLUTE_MINIMUM]
+  
+  // 1. Don't go below competitor average (primary market constraint)
   const competitorFloor = input.competitorAvgPrice
-  const historicalStatsFloor = input.competitorAvgPrice * 0.8 // Approximate government stats as 80% of competitor avg
-  // Use the lower of the two as the absolute minimum
-  const absoluteMinimumPrice = Math.min(competitorFloor, historicalStatsFloor)
+  if (competitorFloor > 0) {
+    marketMinimums.push(competitorFloor)
+  }
   
-  // Also respect a reasonable minimum based on current price (70% floor)
-  const currentPriceFloor = input.currentPrice * 0.7
-  // Final minimum is the HIGHER of: absolute minimum OR 70% of current price
-  // This ensures we don't go too far below current price while respecting the market floor
-  const minPrice = Math.round(Math.max(absoluteMinimumPrice, currentPriceFloor))
+  // 2. Don't go below government statistics baseline (approximated as 85% of competitor avg)
+  // In production, this should come from actual CBS/tourism ministry data
+  const govStatsFloor = input.competitorAvgPrice * 0.85
+  if (govStatsFloor > 0) {
+    marketMinimums.push(govStatsFloor)
+  }
   
+  // 3. Don't discount more than 30% below current price
+  const currentPriceFloor = input.currentPrice * 0.70
+  marketMinimums.push(currentPriceFloor)
+  
+  // Apply the HIGHEST floor (most restrictive constraint wins)
+  const minPrice = Math.round(Math.max(...marketMinimums))
   const maxPrice = Math.round(input.currentPrice * 1.5)
+  
+  // Apply constraints and ensure we never go below the floor
   const recommendedPrice = Math.min(maxPrice, Math.max(minPrice, predictedPrice))
 
   // Determine demand level
