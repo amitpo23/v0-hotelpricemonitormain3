@@ -31,44 +31,60 @@ export async function getCachedData<T>(
 ): Promise<T> {
   const { ttl = 3600, force = false } = options // Default: 1 hour
 
-  const supabase = await createClient()
-  const now = new Date()
+  try {
+    const supabase = await createClient()
+    const now = new Date()
 
-  // Check cache first (unless force refresh)
-  if (!force) {
-    const { data: cached } = await supabase
-      .from('external_data_cache')
-      .select('*')
-      .eq('source', source)
-      .eq('query_key', queryKey)
-      .gte('expires_at', now.toISOString())
-      .single()
+    // Check cache first (unless force refresh)
+    if (!force) {
+      const { data: cached, error } = await supabase
+        .from('external_data_cache')
+        .select('*')
+        .eq('source', source)
+        .eq('query_key', queryKey)
+        .gte('expires_at', now.toISOString())
+        .single()
 
-    if (cached) {
-      console.log(`[Cache] HIT: ${source}/${queryKey}`)
-      return cached.data as T
+      // If table doesn't exist, skip cache and fetch directly
+      if (error && error.code === '42P01') {
+        console.warn('[Cache] Table does not exist - fetching without cache')
+        return await fetchFn()
+      }
+
+      if (cached && !error) {
+        console.log(`[Cache] HIT: ${source}/${queryKey}`)
+        return cached.data as T
+      }
     }
+
+    console.log(`[Cache] MISS: ${source}/${queryKey} - fetching...`)
+
+    // Fetch fresh data
+    const data = await fetchFn()
+
+    // Try to store in cache (but don't fail if table doesn't exist)
+    try {
+      const expiresAt = new Date(now.getTime() + ttl * 1000)
+      
+      await supabase
+        .from('external_data_cache')
+        .upsert({
+          source,
+          query_key: queryKey,
+          data,
+          fetched_at: now.toISOString(),
+          expires_at: expiresAt.toISOString(),
+        })
+    } catch (cacheError) {
+      console.warn('[Cache] Failed to store - continuing without cache:', cacheError)
+    }
+
+    return data
+  } catch (error) {
+    // If cache completely fails, just fetch the data
+    console.warn('[Cache] Cache system failed - fetching directly:', error)
+    return await fetchFn()
   }
-
-  console.log(`[Cache] MISS: ${source}/${queryKey} - fetching...`)
-
-  // Fetch fresh data
-  const data = await fetchFn()
-
-  // Store in cache
-  const expiresAt = new Date(now.getTime() + ttl * 1000)
-  
-  await supabase
-    .from('external_data_cache')
-    .upsert({
-      source,
-      query_key: queryKey,
-      data,
-      fetched_at: now.toISOString(),
-      expires_at: expiresAt.toISOString(),
-    })
-
-  return data
 }
 
 /**
