@@ -6,7 +6,6 @@ import {
   getRecommendedOptions,
   checkExternalDataAvailability 
 } from "@/lib/agents/orchestrator"
-import { predictPriceEnhanced } from "@/lib/prediction-algorithms"
 
 // Route segment config - set max duration to 50 seconds
 export const maxDuration = 50
@@ -617,24 +616,42 @@ export async function POST(request: Request) {
           }
         }
 
-        // ===== USE ENHANCED PREDICTION ALGORITHM =====
-        // Call the enhanced prediction function with all available data
-        const enhancedResult = await predictPriceEnhanced(
-          hotel.id,
-          dateStr,
-          basePrice,
-          hotel.city || 'Tel Aviv'
-        )
-        
-        // Extract results from enhanced prediction
-        let predictedPrice = enhancedResult.recommendedPrice
-        const demand = enhancedResult.demandLevel
-        const confidence = enhancedResult.confidenceScore / 100 // Convert 0-100 to 0-1
-        
-        console.log(`[v0] 🎯 ${dateStr}: Enhanced prediction - Price: ₪${predictedPrice}, Demand: ${demand}, Confidence: ${(confidence * 100).toFixed(0)}%`)
-        
-        // Keep demandScore calculation for backward compatibility with existing code
+        // ===== CALCULATE PREDICTED PRICE USING ORCHESTRATOR DATA =====
         const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
+        
+        // Calculate raw price with all factors
+        let rawPrice = basePrice * seasonality * weekendFactor * leadTimeFactor * occupancyFactor * eventFactor * competitorFactor * budgetPressure * velocityFactor
+        
+        // Apply enhanced historical trends if available from orchestrator
+        if (enhancedExternalData) {
+          const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
+          if (dateImpact.historicalTrend === 'increasing') {
+            rawPrice *= 1.08
+          } else if (dateImpact.historicalTrend === 'decreasing') {
+            rawPrice *= 0.94
+          }
+        }
+        
+        // Calculate market-based price floors (use HIGHEST - most restrictive)
+        const ABSOLUTE_MINIMUM = 300 // Hard floor - never go below ₪300
+        const competitorFloor = competitorAvg || basePrice
+        const govStatsFloor = enhancedExternalData?.statistics?.tourism?.avgNightlyRate 
+          ? enhancedExternalData.statistics.tourism.avgNightlyRate * 0.85 
+          : competitorFloor * 0.85
+        const currentPriceFloor = basePrice * 0.75 // Don't drop below 75% of base
+        
+        const marketMinimums = [ABSOLUTE_MINIMUM, competitorFloor, govStatsFloor, currentPriceFloor]
+        const minPrice = Math.max(...marketMinimums) // Take HIGHEST (most restrictive)
+        
+        // Enforce price floor
+        let predictedPrice = Math.max(minPrice, rawPrice)
+        
+        // Round to nearest 5 for cleaner pricing
+        predictedPrice = Math.round(predictedPrice / 5) * 5
+        
+        const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
+        
+        console.log(`[v0] 🎯 ${dateStr}: Price: ₪${predictedPrice} (floor: ₪${Math.round(minPrice)}, raw: ₪${Math.round(rawPrice)}), Demand: ${demand}`)
 
         const confidenceFactors: ConfidenceFactors = {
           dataQuality: marketData ? Math.min(1.0, marketData.count / 20) : 0.3,
@@ -665,15 +682,10 @@ export async function POST(request: Request) {
           const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
           hasEvents = hasEvents || dateImpact.hasEvents
           hasHistoricalData = hasHistoricalData || dateImpact.hasHistoricalData
-          
-          // Log enhanced insights
-          if (dateImpact.hasEvents) {
-            console.log(`[v0] ${dateStr}: Events detected, impact=${dateImpact.eventImpact.toFixed(2)}x`)
-          }
-          if (dateImpact.hasHistoricalData) {
-            console.log(`[v0] ${dateStr}: Historical trend=${dateImpact.historicalTrend}`)
-          }
         }
+        
+        // Calculate confidence using enhanced data
+        const confidence = calculateConfidence(confidenceFactors, daysUntilDate, hasEvents, hasHistoricalData)
         
         const priceVsBase = ((predictedPrice - basePrice) / basePrice) * 100
         const priceVsCompetitor = competitorAvg ? ((predictedPrice - competitorAvg) / competitorAvg) * 100 : 0
