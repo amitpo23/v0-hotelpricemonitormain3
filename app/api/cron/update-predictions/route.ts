@@ -19,10 +19,16 @@ import {
   applyPricingStrategy 
 } from "@/lib/prediction-algorithms";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Create Supabase client at runtime, not at module load time
+function getSupabaseClient() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 // Verify cron secret
 function verifyCronAuth(request: NextRequest): boolean {
@@ -39,6 +45,8 @@ function verifyCronAuth(request: NextRequest): boolean {
 
 export async function GET(request: NextRequest) {
   console.log('🔄 Update Predictions Cron - התחלה');
+  
+  const supabase = getSupabaseClient();
   
   // Verify auth
   if (!verifyCronAuth(request)) {

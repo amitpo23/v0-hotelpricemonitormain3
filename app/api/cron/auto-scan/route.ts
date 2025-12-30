@@ -17,17 +17,25 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 const CHECKPOINT_FILE = join(process.cwd(), '.missing-dates-checkpoint.json');
 const MISSING_DATES_FILE = join(process.cwd(), 'missing-dates.txt');
 const HOTEL_ID = '716e1e8f-3537-4f67-875d-de3a89642175';
 
+// Create Supabase client at runtime, not at module load time
+function getSupabaseClient() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
+
 export async function GET(request: NextRequest) {
   console.log("🕐 Auto-scan cron job triggered");
+  
+  const supabase = getSupabaseClient();
 
   // Verify cron secret (security)
   const authHeader = request.headers.get("authorization");
