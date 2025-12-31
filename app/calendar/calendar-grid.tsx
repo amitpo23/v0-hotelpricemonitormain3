@@ -245,7 +245,7 @@ export function CalendarGrid({
                       />
                       {rt.name}
                     </div>
-                    {rt.base_price && <span className="text-xs text-muted-foreground">₪{rt.base_price}</span>}
+                    {rt.base_price && <span className="text-xs text-muted-foreground">${rt.base_price}</span>}
                   </div>
                 </SelectItem>
               ))}
@@ -301,13 +301,13 @@ export function CalendarGrid({
               <div>
                 <span className="font-medium">{selectedRoomTypeData.name}</span>
                 <p className="text-xs text-muted-foreground">
-                  Base price: ₪{selectedRoomTypeData.base_price} | Avg price: ₪{avgPriceForRoomType}
+                  Base price: ${selectedRoomTypeData.base_price} | Avg price: ${avgPriceForRoomType}
                 </p>
               </div>
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold" style={{ color: selectedRoomTypeData.display_color || "#06b6d4" }}>
-                ₪{avgPriceForRoomType}
+                ${avgPriceForRoomType}
               </span>
               <p className="text-xs text-muted-foreground">avg/night</p>
             </div>
@@ -424,18 +424,18 @@ export function CalendarGrid({
                       <div className="flex-1 flex flex-col justify-end text-[10px] space-y-0.5">
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">Us:</span>
-                          <span className="font-medium text-cyan-400">₪{priceData.our_price}</span>
+                          <span className="font-medium text-cyan-400">${priceData.our_price}</span>
                         </div>
                         {bookingAvg && (
                           <div className="flex items-center justify-between">
                             <span className="text-blue-400 text-[8px]">B:</span>
-                            <span className="text-blue-400 font-medium">₪{bookingAvg}</span>
+                            <span className="text-blue-400 font-medium">${bookingAvg}</span>
                           </div>
                         )}
                         {priceData.recommended_price && priceData.autopilot_action !== "maintain" && (
                           <div className="flex items-center justify-between pt-0.5 border-t border-border/50">
                             {getRecommendationIcon(priceData)}
-                            <span className="font-bold text-yellow-400">₪{priceData.recommended_price}</span>
+                            <span className="font-bold text-yellow-400">${priceData.recommended_price}</span>
                           </div>
                         )}
                       </div>
@@ -446,7 +446,7 @@ export function CalendarGrid({
                         {bookingAvg && (
                           <div className="flex items-center justify-between">
                             <span className="text-blue-400 text-[8px]">B:</span>
-                            <span className="text-blue-400 font-medium">₪{bookingAvg}</span>
+                            <span className="text-blue-400 font-medium">${bookingAvg}</span>
                           </div>
                         )}
                       </div>
@@ -487,14 +487,14 @@ export function CalendarGrid({
                           {booking.check_in_date} - {booking.check_out_date}
                         </span>
                       </div>
-                      <div className="text-green-400">₪{booking.total_price?.toLocaleString()}</div>
+                      <div className="text-green-400">${booking.total_price?.toLocaleString()}</div>
                     </div>
                   ))}
                 </div>
                 <div className="flex justify-between pt-2 border-t border-border/50">
                   <span className="font-medium">Total Revenue</span>
                   <span className="text-green-400 font-bold">
-                    ₪
+                    $
                     {selectedDay.bookings
                       .reduce((sum: number, b: any) => sum + (b.total_price || 0), 0)
                       .toLocaleString()}
@@ -526,14 +526,14 @@ export function CalendarGrid({
                         <span className="font-medium">{result.source}</span>
                         <span className="text-muted-foreground text-xs">({result.room_type})</span>
                       </div>
-                      <div className="text-cyan-400 font-bold">₪{Number.parseFloat(result.price).toLocaleString()}</div>
+                      <div className="text-cyan-400 font-bold">${Number.parseFloat(result.price).toLocaleString()}</div>
                     </div>
                   ))}
                   {/* Channel Average */}
                   <div className="flex justify-between items-center p-2 bg-cyan-500/20 rounded text-sm mt-1">
                     <span className="text-cyan-400 font-medium">Channel Average</span>
                     <span className="text-cyan-400 font-bold">
-                      ₪
+                      $
                       {Math.round(
                         selectedDay.scanResults.reduce(
                           (sum: number, r: any) => sum + Number.parseFloat(r.price || 0),
@@ -600,7 +600,7 @@ export function CalendarGrid({
                                   :
                                 </span>
                                 <span className="text-orange-400 font-bold">
-                                  ₪{Number(price.price).toLocaleString()}
+                                  ${Number(price.price).toLocaleString()}
                                 </span>
                               </div>
                             ))}
@@ -630,7 +630,7 @@ export function CalendarGrid({
                               <span className="font-medium text-blue-400">Booking.com Average</span>
                               <span className="text-xs text-muted-foreground">({bookingPrices.length} hotels)</span>
                             </div>
-                            <div className="text-blue-400 font-bold">₪{bookingAvg.toLocaleString()}</div>
+                            <div className="text-blue-400 font-bold">${bookingAvg.toLocaleString()}</div>
                           </div>
                         )}
                       </div>
@@ -691,11 +691,11 @@ export function CalendarGrid({
                 <div className="grid grid-cols-3 gap-4">
                   <div className="p-3 bg-muted/20 rounded">
                     <div className="text-xs text-muted-foreground">Current</div>
-                    <div className="text-lg font-bold">₪{selectedDay.priceData.our_price}</div>
+                    <div className="text-lg font-bold">${selectedDay.priceData.our_price}</div>
                   </div>
                   <div className="p-3 bg-muted/20 rounded">
                     <div className="text-xs text-muted-foreground">Recommended</div>
-                    <div className="text-lg font-bold text-cyan-400">₪{selectedDay.priceData.recommended_price}</div>
+                    <div className="text-lg font-bold text-cyan-400">${selectedDay.priceData.recommended_price}</div>
                   </div>
                   <div className="p-3 bg-muted/20 rounded">
                     <div className="text-xs text-muted-foreground">Action</div>
