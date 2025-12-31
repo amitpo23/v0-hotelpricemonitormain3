@@ -389,9 +389,7 @@ export async function POST(request: Request) {
             firstHotel.name || 'Hotel',
             'Tel Aviv', // TODO: Get from hotel data
             allPredictionDates,
-            firstHotel.base_price || 800,
-            orchestratorOptions
-          )
+                    firstHotel.base_price || 180,          )
           
           const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Orchestrator timeout after 30s')), 30000)
