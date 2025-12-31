@@ -425,5 +425,10 @@ const serverClient = {
 }
 
 export async function createClient() {
-  return serverClient
+  const { createClient } = await import('@supabase/supabase-js')
+  
+  return createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  )
 }
