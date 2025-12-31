@@ -1,0 +1,259 @@
+"use client"
+
+import { useState } from "react"
+import type { Prediction, Hotel } from "./page"
+
+interface Props {
+  initialPredictions: Prediction[]
+  hotels: Hotel[]
+}
+
+export default function PredictionsClient({ initialPredictions, hotels }: Props) {
+  const [predictions, setPredictions] = useState(initialPredictions)
+  const [selectedYear, setSelectedYear] = useState(2025)
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([1])
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [message, setMessage] = useState("")
+
+  // Filter state
+  const [filterHotel, setFilterHotel] = useState("")
+  const [filterStartDate, setFilterStartDate] = useState("")
+  const [filterEndDate, setFilterEndDate] = useState("")
+  const [filterMinConfidence, setFilterMinConfidence] = useState(0)
+
+  const handleGeneratePredictions = async () => {
+    setIsGenerating(true)
+    setMessage("")
+    try {
+      const response = await fetch(`/api/predictions/generate?selectedYear=${selectedYear}&selectedMonths=${selectedMonths.join(",")}`, {
+        method: "POST"
+      })
+      const data = await response.json()
+      
+      if (response.ok) {
+        setMessage(`Successfully generated ${data.count || 0} predictions!`)
+        // Reload predictions
+        window.location.reload()
+      } else {
+        setMessage(`Error: ${data.error || "Failed to generate predictions"}`)
+      }
+    } catch (error) {
+      setMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const toggleMonth = (month: number) => {
+    if (selectedMonths.includes(month)) {
+      setSelectedMonths(selectedMonths.filter(m => m !== month))
+    } else {
+      setSelectedMonths([...selectedMonths, month].sort((a, b) => a - b))
+    }
+  }
+
+  // Filter predictions
+  const filteredPredictions = predictions.filter(pred => {
+    if (filterHotel && pred.hotel_id !== filterHotel) return false
+    if (filterStartDate && pred.prediction_date && pred.prediction_date < filterStartDate) return false
+    if (filterEndDate && pred.prediction_date && pred.prediction_date > filterEndDate) return false
+    if (filterMinConfidence && pred.confidence_score && pred.confidence_score < filterMinConfidence) return false
+    return true
+  })
+
+  return (
+    <div className="space-y-8">
+      {/* Generate Predictions Form */}
+      <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
+        <h2 className="text-2xl font-bold mb-6 text-white">Generate New Predictions</h2>
+        
+        <div className="space-y-4">
+          {/* Year Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Select Year</label>
+            <div className="flex gap-4">
+              {[2025, 2026].map(year => (
+                <button
+                  key={year}
+                  onClick={() => setSelectedYear(year)}
+                  className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                    selectedYear === year
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  }`}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Month Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Select Months</label>
+            <div className="grid grid-cols-6 gap-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => (
+                <button
+                  key={month}
+                  onClick={() => toggleMonth(month)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    selectedMonths.includes(month)
+                      ? "bg-green-600 text-white"
+                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  }`}
+                >
+                  {month}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Generate Button */}
+          <button
+            onClick={handleGeneratePredictions}
+            disabled={isGenerating || selectedMonths.length === 0}
+            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-bold text-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {isGenerating ? "Generating..." : `Generate Predictions for ${selectedMonths.length} Month(s)`}
+          </button>
+
+          {message && (
+            <div className={`p-4 rounded-lg ${
+              message.includes("Error") ? "bg-red-900 text-red-200" : "bg-green-900 text-green-200"
+            }`}>
+              {message}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
+        <h2 className="text-2xl font-bold mb-6 text-white">Filters</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Hotel Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Hotel</label>
+            <select
+              value={filterHotel}
+              onChange={(e) => setFilterHotel(e.target.value)}
+              className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">All Hotels</option>
+              {hotels.map(hotel => (
+                <option key={hotel.id} value={hotel.id}>
+                  {hotel.name || hotel.id}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Start Date Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Start Date</label>
+            <input
+              type="date"
+              value={filterStartDate}
+              onChange={(e) => setFilterStartDate(e.target.value)}
+              className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          {/* End Date Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">End Date</label>
+            <input
+              type="date"
+              value={filterEndDate}
+              onChange={(e) => setFilterEndDate(e.target.value)}
+              className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Confidence Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Min Confidence</label>
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.1"
+              value={filterMinConfidence}
+              onChange={(e) => setFilterMinConfidence(parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={() => {
+            setFilterHotel("")
+            setFilterStartDate("")
+            setFilterEndDate("")
+            setFilterMinConfidence(0)
+          }}
+          className="mt-4 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+        >
+          Clear Filters
+        </button>
+      </div>
+
+      {/* Predictions Table */}
+      <div className="bg-gray-800 rounded-lg p-6 shadow-xl overflow-x-auto">
+        <h2 className="text-2xl font-bold mb-6 text-white">
+          Predictions ({filteredPredictions.length})
+        </h2>
+        
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-700">
+              <th className="text-left py-3 px-4 text-gray-300 font-semibold">Date</th>
+              <th className="text-left py-3 px-4 text-gray-300 font-semibold">Hotel</th>
+              <th className="text-left py-3 px-4 text-gray-300 font-semibold">Predicted Price</th>
+              <th className="text-left py-3 px-4 text-gray-300 font-semibold">Confidence</th>
+              <th className="text-left py-3 px-4 text-gray-300 font-semibold">Demand</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPredictions.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center py-8 text-gray-400">
+                  No predictions found. Try adjusting your filters or generate new predictions.
+                </td>
+              </tr>
+            ) : (
+              filteredPredictions.map((pred, idx) => (
+                <tr key={pred.id || idx} className="border-b border-gray-700 hover:bg-gray-750">
+                  <td className="py-3 px-4 text-white">
+                    {pred.prediction_date || "N/A"}
+                  </td>
+                  <td className="py-3 px-4 text-gray-300">
+                    {hotels.find(h => h.id === pred.hotel_id)?.name || pred.hotel_id || "N/A"}
+                  </td>
+                  <td className="py-3 px-4 text-green-400 font-semibold">
+                    ${pred.predicted_price?.toFixed(2) || "N/A"}
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className={`px-3 py-1 rounded-full text-sm ${
+                      (pred.confidence_score || 0) >= 0.7
+                        ? "bg-green-900 text-green-200"
+                        : (pred.confidence_score || 0) >= 0.5
+                        ? "bg-yellow-900 text-yellow-200"
+                        : "bg-red-900 text-red-200"
+                    }`}>
+                      {pred.confidence_score?.toFixed(2) || "N/A"}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-gray-300">
+                    {pred.predicted_demand || "N/A"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
