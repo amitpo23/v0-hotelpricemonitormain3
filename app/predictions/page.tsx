@@ -221,14 +221,14 @@ export default async function PredictionsPage() {
           <Card className="bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 border-cyan-500/20">
             <CardContent className="p-4">
               <div className="text-sm text-muted-foreground">Avg Price</div>
-              <div className="text-2xl font-bold text-cyan-400">₪{Math.round(stats.avgPrice)}</div>
+              <div className="text-2xl font-bold text-cyan-400">${Math.round(stats.avgPrice)}</div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
             <CardContent className="p-4">
               <div className="text-sm text-muted-foreground">Price Range</div>
               <div className="text-lg font-bold text-green-400">
-                ₪{stats.minPrice} - ₪{stats.maxPrice}
+                ${stats.minPrice} - ${stats.maxPrice}
               </div>
             </CardContent>
           </Card>
@@ -382,7 +382,7 @@ export default async function PredictionsPage() {
                     <div>
                       <div className="text-sm font-medium">{rec.recommendation}</div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        ₪{rec.predicted_price} | {(rec.confidence_score * 100).toFixed(0)}% confidence
+                        ${rec.predicted_price} | {(rec.confidence_score * 100).toFixed(0)}% confidence
                       </div>
                     </div>
                   </div>
@@ -485,7 +485,7 @@ export default async function PredictionsPage() {
                           </CardTitle>
                           {basePrice > 0 && (
                             <CardDescription className="mt-1">
-                              Current base price: <span className="font-semibold text-cyan-500">₪{basePrice}</span>
+                              Current base price: <span className="font-semibold text-cyan-500">${basePrice}</span>
                               /night
                             </CardDescription>
                           )}
@@ -534,7 +534,7 @@ export default async function PredictionsPage() {
                                   day: "numeric",
                                 })}
                               </div>
-                              <div className="text-xl font-bold">₪{pred.predicted_price}</div>
+                              <div className="text-xl font-bold">${pred.predicted_price}</div>
                               {priceDiff && (
                                 <div
                                   className={`text-xs ${Number(priceDiff) >= 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}
@@ -573,13 +573,13 @@ export default async function PredictionsPage() {
                           <div className="flex items-center gap-2">
                             <DollarSignIcon className="h-5 w-5 text-cyan-500" />
                             <span className="text-sm text-slate-300">Current Hotel Price:</span>
-                            <span className="text-lg font-bold text-cyan-400">₪{basePrice}</span>
+                            <span className="text-lg font-bold text-cyan-400">${basePrice}</span>
                             <span className="text-sm text-slate-400">/night</span>
                           </div>
                           <div className="text-right">
                             <div className="text-xs text-slate-400">Predicted Range / טווח חיזוי</div>
                             <div className="text-sm font-medium">
-                              ₪{Math.min(...data.predictions.slice(0, 14).map((p: any) => p.predicted_price))} - ₪
+                              ${Math.min(...data.predictions.slice(0, 14).map((p: any) => p.predicted_price))} - $
                               {Math.max(...data.predictions.slice(0, 14).map((p: any) => p.predicted_price))}
                             </div>
                           </div>
@@ -595,7 +595,7 @@ export default async function PredictionsPage() {
                             )}
                             {data.predictions[0].factors.competitor_avg && (
                               <Badge variant="outline">
-                                Competitor Avg: ₪{data.predictions[0].factors.competitor_avg}
+                                Competitor Avg: ${data.predictions[0].factors.competitor_avg}
                               </Badge>
                             )}
                             {data.predictions[0].factors.occupancy_rate !== undefined && (
@@ -613,7 +613,7 @@ export default async function PredictionsPage() {
                                       : "bg-green-50 dark:bg-green-950"
                                   }
                                 >
-                                  Budget Gap: {data.predictions[0].factors.budget_gap > 0 ? "-" : "+"}₪
+                                  Budget Gap: {data.predictions[0].factors.budget_gap > 0 ? "-" : "+"}$
                                   {Math.abs(data.predictions[0].factors.budget_gap).toLocaleString()}
                                 </Badge>
                               )}
