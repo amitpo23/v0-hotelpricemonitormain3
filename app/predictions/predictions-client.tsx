@@ -25,9 +25,14 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
     setIsGenerating(true)
     setMessage("")
     try {
-      const response = await fetch(`/api/predictions/generate?selectedYear=${selectedYear}&selectedMonths=${selectedMonths.join(",")}`, {
-        method: "POST"
-      })
+      const response = await fetch('/api/predictions/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedYear,
+          selectedMonths
+        })
+      })     
       const data = await response.json()
       
       if (response.ok) {
