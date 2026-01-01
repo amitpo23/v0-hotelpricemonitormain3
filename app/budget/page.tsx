@@ -84,13 +84,24 @@ export default async function BudgetPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Set targets and track progress towards your revenue goals</p>
         </div>
-        <a 
-          href="/budget/analysis"
-          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
-        >
-          <TrendingUpIcon className="h-5 w-5" />
-          ניתוח מתקדם
-        </a>
+        <div className="flex gap-3">
+          <a 
+            href="/budget/analysis"
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+          >
+            <TrendingUpIcon className="h-5 w-5" />
+            ניתוח מתקדם
+          </a>
+          <a 
+            href="/autopilot/tools"
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Autopilot Tools
+          </a>
+        </div>
       </div>
 
       {/* Summary Cards */}
