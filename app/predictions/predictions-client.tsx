@@ -12,7 +12,7 @@ interface Props {
 
 export default function PredictionsClient({ initialPredictions, hotels }: Props) {
   const [predictions, setPredictions] = useState(initialPredictions)
-  const [selectedYear, setSelectedYear] = useState(2025)
+  const [selectedYear, setSelectedYear] = useState(2026)
   const [selectedMonths, setSelectedMonths] = useState<number[]>([1])
   const [isGenerating, setIsGenerating] = useState(false)
   const [message, setMessage] = useState("")
@@ -56,11 +56,14 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
       const data = await response.json()
       
       if (response.ok) {
-        setMessage(`Successfully generated ${data.count || 0} predictions!`)
-        // Reload predictions
-        window.location.reload()
+        setMessage(`✅ נוצרו ${data.count || 0} חיזויים בהצלחה! מרענן דף...`)
+        
+        // Reload page to show new predictions
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
       } else {
-        setMessage(`Error: ${data.error || "Failed to generate predictions"}`)
+        setMessage(`❌ שגיאה: ${data.error || "Failed to generate predictions"}`)
       }
     } catch (error) {
       setMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -77,8 +80,11 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
     }
   }
 
-  // Filter predictions
+  // Filter predictions - only show 2026 and later
   const filteredPredictions = predictions.filter(pred => {
+    // Hide predictions from 2025 and earlier
+    if (pred.prediction_date && pred.prediction_date < '2026-01-01') return false
+    
     if (filterHotel && pred.hotel_id !== filterHotel) return false
     if (filterStartDate && pred.prediction_date && pred.prediction_date < filterStartDate) return false
     if (filterEndDate && pred.prediction_date && pred.prediction_date > filterEndDate) return false
@@ -97,7 +103,7 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Select Year</label>
             <div className="flex gap-4">
-              {[2025, 2026].map(year => (
+              {[2026, 2027].map(year => (
                 <button
                   key={year}
                   onClick={() => setSelectedYear(year)}
