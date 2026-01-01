@@ -6,6 +6,8 @@ import {
   getRecommendedOptions,
   checkExternalDataAvailability 
 } from "@/lib/agents/orchestrator"
+import { getPredictionLogger } from "@/lib/logging/prediction-logger"
+import { savePredictionLog } from "@/lib/logging/prediction-logger-db"
 
 // Route segment config - set max duration to 50 seconds
 export const maxDuration = 50
@@ -218,6 +220,10 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const body = await request.json()
+    
+    // Get debug mode from query params
+    const url = new URL(request.url)
+    const debugMode = url.searchParams.get('debug') === 'true'
 
     const selectedMonths: number[] = body.months || body.selectedMonths || []
     const selectedYear: number = body.year || body.selectedYear || new Date().getFullYear()
@@ -338,6 +344,12 @@ export async function POST(request: Request) {
     
     console.log('[v0] ✅ Data fetched successfully')
 
+    // Initialize prediction logger (enable with query param ?debug=true)
+    const predictionLogger = getPredictionLogger(debugMode)
+    if (debugMode) {
+      console.log('[v0] 🔍 Debug mode enabled - detailed logging active')
+    }
+
     const holidayMap = buildHolidayMap(externalData.holidays)
     const trendsScore = externalData.trends?.data?.interestScore || 75
     const trendsSource = externalData.trends?.data?.source || "default"
@@ -404,6 +416,22 @@ export async function POST(request: Request) {
           console.log(`[v0]   - Overall Confidence: ${(enhancedExternalData.overallConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Data Quality: ${enhancedExternalData.dataQuality}`)
           console.log(`[v0]   - Timestamp: ${enhancedExternalData.timestamp}`)
+          
+          // Log to prediction logger
+          predictionLogger.logMultiAgent(
+            firstHotel.id,
+            firstHotel.name || 'Hotel',
+            {
+              eventsFound: enhancedExternalData.events.size,
+              eventsConfidence: enhancedExternalData.eventsConfidence,
+              historicalData: enhancedExternalData.historical.size,
+              historicalConfidence: enhancedExternalData.historicalConfidence,
+              statisticsConfidence: enhancedExternalData.statisticsConfidence,
+              overallConfidence: enhancedExternalData.overallConfidence,
+              dataQuality: enhancedExternalData.dataQuality,
+              executionTime: Date.now() - new Date(enhancedExternalData.timestamp).getTime()
+            }
+          )
           
           // Log market pricing floor if available
           if (enhancedExternalData.statistics?.tourism?.avgNightlyRate) {
@@ -570,6 +598,19 @@ export async function POST(request: Request) {
       const hotelCompetitors = competitorsByHotel[hotel.id] || []
       const marketData = marketDataByHotel[hotel.id]
 
+      // Log data collection for this hotel
+      predictionLogger.logDataCollection(
+        hotel.id,
+        hotel.name || 'Unknown Hotel',
+        {
+          scanResults: recentResults?.length || 0,
+          bookings: bookings?.filter((b: any) => b.hotel_id === hotel.id).length || 0,
+          competitorPrices: competitorPrices?.filter((cp: any) => cp.hotel_id === hotel.id).length || 0,
+          basePrice: basePrice,
+          totalRooms: totalRooms
+        }
+      )
+
       const hotelRecommendations: string[] = []
 
       for (let i = 0; i < predictionDays; i++) {
@@ -666,19 +707,51 @@ export async function POST(request: Request) {
           }
         }
 
+        // Log factor calculation for first 3 dates or when debug enabled
+        if ((i < 3 || debugMode) && predictionLogger) {
+          predictionLogger.logFactorCalculation(
+            hotel.id,
+            hotel.name || 'Unknown Hotel',
+            dateStr,
+            {
+              basePrice,
+              seasonality,
+              seasonalityLabel: seasonData.label,
+              weekendFactor,
+              isWeekend,
+              leadTimeFactor,
+              leadTimeDays: i,
+              occupancyFactor,
+              occupancyRate,
+              eventFactor,
+              events: events.map(e => e.name),
+              competitorFactor,
+              competitorAvg,
+              budgetPressure,
+              budgetGap,
+              velocityFactor,
+              bookingVelocity
+            }
+          )
+        }
+
         // ===== CALCULATE PREDICTED PRICE USING ORCHESTRATOR DATA =====
         const demandScore = seasonality * weekendFactor * occupancyFactor * eventFactor
         
         // Calculate raw price with all factors
         let rawPrice = basePrice * seasonality * weekendFactor * leadTimeFactor * occupancyFactor * eventFactor * competitorFactor * budgetPressure * velocityFactor
         
+        const adjustments: string[] = []
+        
         // Apply enhanced historical trends if available from orchestrator
         if (enhancedExternalData) {
           const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
           if (dateImpact.historicalTrend === 'increasing') {
             rawPrice *= 1.08
+            adjustments.push('Historical trend: +8% (increasing)')
           } else if (dateImpact.historicalTrend === 'decreasing') {
             rawPrice *= 0.94
+            adjustments.push('Historical trend: -6% (decreasing)')
           }
         }
         
@@ -693,11 +766,42 @@ export async function POST(request: Request) {
         const marketMinimums = [ABSOLUTE_MINIMUM, competitorFloor, govStatsFloor, currentPriceFloor]
         const minPrice = Math.max(...marketMinimums) // Take HIGHEST (most restrictive)
         
+        // Check if floor is applied
+        const floorApplied = rawPrice < minPrice
+        if (floorApplied) {
+          adjustments.push(`Price floor applied: ₪${Math.round(rawPrice)} → ₪${Math.round(minPrice)}`)
+        }
+        
         // Enforce price floor
         let predictedPrice = Math.max(minPrice, rawPrice)
         
         // Round to nearest 5 for cleaner pricing
+        const preRoundPrice = predictedPrice
         predictedPrice = Math.round(predictedPrice / 5) * 5
+        if (preRoundPrice !== predictedPrice) {
+          adjustments.push(`Rounded to nearest 5: ₪${Math.round(preRoundPrice)} → ₪${predictedPrice}`)
+        }
+        
+        // Log price calculation for first 3 dates or when debug enabled
+        if ((i < 3 || debugMode) && predictionLogger) {
+          predictionLogger.logPriceCalculation(
+            hotel.id,
+            hotel.name || 'Unknown Hotel',
+            dateStr,
+            {
+              rawPrice,
+              marketFloors: {
+                absolute: ABSOLUTE_MINIMUM,
+                competitor: competitorFloor,
+                govStats: govStatsFloor,
+                current: currentPriceFloor,
+                applied: minPrice
+              },
+              finalPrice: predictedPrice,
+              adjustments
+            }
+          )
+        }
         
         const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
         
@@ -735,7 +839,42 @@ export async function POST(request: Request) {
         }
         
         // Calculate confidence using enhanced data
+        const baseConfidence = 
+          confidenceFactors.dataQuality * 0.2 +
+          confidenceFactors.scanRecency * 0.18 +
+          confidenceFactors.historicalData * 0.12 +
+          confidenceFactors.bookingData * 0.15 +
+          confidenceFactors.competitorData * 0.15 +
+          confidenceFactors.marketConsistency * 0.1 +
+          confidenceFactors.externalDataQuality * 0.1
+        
+        const timeDistanceFactor = Math.max(0.7, 1 - (daysUntilDate / 365) * 0.3)
+        const eventBonus = hasEvents
+        const historicalBonus = hasHistoricalData
+        const nearTermBonus = daysUntilDate <= 14 && confidenceFactors.bookingData > 0.7
+        
         const confidence = calculateConfidence(confidenceFactors, daysUntilDate, hasEvents, hasHistoricalData)
+        
+        // Log confidence calculation for first 3 dates or when debug enabled
+        if ((i < 3 || debugMode) && predictionLogger) {
+          predictionLogger.logConfidenceCalculation(
+            hotel.id,
+            hotel.name || 'Unknown Hotel',
+            dateStr,
+            {
+              factors: confidenceFactors,
+              adjustments: {
+                timeDistance: timeDistanceFactor,
+                eventBonus,
+                historicalBonus,
+                nearTermBonus
+              },
+              baseConfidence,
+              finalConfidence: confidence,
+              daysUntilDate
+            }
+          )
+        }
         
         const priceVsBase = ((predictedPrice - basePrice) / basePrice) * 100
         const priceVsCompetitor = competitorAvg ? ((predictedPrice - competitorAvg) / competitorAvg) * 100 : 0
@@ -755,6 +894,170 @@ export async function POST(request: Request) {
         } else if (competitorAvg && priceVsCompetitor < -15) {
           recommendation = `יש מקום להעלות מחיר ב-${dateStr} - מתחת למתחרים`
           recommendationType = "opportunity"
+        }
+
+        // Log final result for first 3 dates or when debug enabled
+        if ((i < 3 || debugMode) && predictionLogger) {
+          predictionLogger.logFinalResult(
+            hotel.id,
+            hotel.name || 'Unknown Hotel',
+            dateStr,
+            {
+              predictedPrice,
+              confidence,
+              demand,
+              recommendation,
+              recommendationType,
+              basePrice,
+              priceVsBase,
+              priceVsCompetitor
+            }
+          )
+        }
+
+        // Save detailed log to database (only for first 5 dates or when debug enabled)
+        if (i < 5 || debugMode) {
+          await savePredictionLog({
+            hotelId: hotel.id,
+            hotelName: hotel.name || 'Unknown Hotel',
+            predictionDate: dateStr,
+            algorithmVersion: '3.2',
+            
+            // Multi-Agent data
+            multiAgentData: enhancedExternalData ? {
+              eventsFound: enhancedExternalData.events.size,
+              eventsConfidence: enhancedExternalData.eventsConfidence,
+              eventsList: Array.from(enhancedExternalData.events.values()).slice(0, 10).map((e: any) => ({
+                name: e.name || 'Unknown',
+                date: e.date || dateStr,
+                impact: e.impact || 1.0
+              })),
+              historicalData: enhancedExternalData.historical.size,
+              historicalConfidence: enhancedExternalData.historicalConfidence,
+              historicalTrend: extractDateImpactFactors(dateStr, enhancedExternalData).historicalTrend,
+              statisticsConfidence: enhancedExternalData.statisticsConfidence,
+              marketAvgPrice: enhancedExternalData.statistics?.tourism?.avgNightlyRate,
+              overallConfidence: enhancedExternalData.overallConfidence,
+              dataQuality: enhancedExternalData.dataQuality
+            } : undefined,
+            
+            // Input data
+            inputData: {
+              basePrice,
+              totalRooms,
+              bookedRooms,
+              scanResults: recentResults?.length || 0,
+              bookings: bookings?.filter((b: any) => b.hotel_id === hotel.id).length || 0,
+              competitorPrices: competitorPrices?.filter((cp: any) => cp.hotel_id === hotel.id).length || 0,
+              competitorAvg: competitorAvg || undefined,
+              lastScanHoursAgo: hoursSinceLastScan
+            },
+            
+            // Factors
+            factors: {
+              seasonality: {
+                value: seasonality,
+                label: seasonData.label,
+                impact: seasonality > 1.15 ? 'high' : seasonality < 0.9 ? 'high' : 'medium',
+                reasoning: `${seasonData.label} - עונת ${seasonality > 1 ? 'שיא' : seasonality < 1 ? 'שפל' : 'רגיל'}`,
+                calculation: `${(seasonality * 100 - 100).toFixed(0)}%`
+              },
+              weekendPremium: {
+                value: weekendFactor,
+                isWeekend,
+                impact: 'medium',
+                reasoning: isWeekend ? 'סוף שבוע - ביקוש גבוה יותר' : 'אמצע שבוע'
+              },
+              leadTime: {
+                value: leadTimeFactor,
+                days: i,
+                impact: leadTimeFactor > 1.1 ? 'high' : leadTimeFactor < 0.97 ? 'medium' : 'low',
+                reasoning: `${i} ימים לפני הגעה - ${i < 7 ? 'הזמנה דחופה' : i < 30 ? 'טווח קצר' : 'טווח ארוך'}`
+              },
+              occupancy: {
+                value: occupancyFactor,
+                rate: occupancyRate,
+                impact: occupancyRate > 70 ? 'high' : occupancyRate < 20 ? 'high' : 'medium',
+                reasoning: `תפוסה ${occupancyRate.toFixed(0)}% - ${occupancyRate > 70 ? 'לחץ גבוה' : occupancyRate < 30 ? 'תפוסה נמוכה' : 'תפוסה בינונית'}`
+              },
+              events: {
+                value: eventFactor,
+                eventsList: events.map(e => e.name),
+                impact: eventFactor > 1.2 ? 'high' : eventFactor > 1.0 ? 'medium' : 'low',
+                reasoning: events.length > 0 ? `אירועים: ${events.map(e => e.name).join(', ')}` : 'אין אירועים'
+              },
+              competitor: {
+                value: competitorFactor,
+                avgPrice: competitorAvg,
+                impact: Math.abs(competitorFactor - 1) > 0.1 ? 'high' : 'medium',
+                reasoning: competitorAvg ? `מחיר מתחרים ממוצע: ₪${competitorAvg.toFixed(0)}` : 'אין נתוני מתחרים'
+              },
+              budget: {
+                value: budgetPressure,
+                gap: budgetGap,
+                impact: Math.abs(budgetPressure - 1) > 0.1 ? 'high' : 'medium',
+                reasoning: `פער תקציב: ₪${budgetGap.toFixed(0)} - ${budgetGap > 0 ? 'צריך להעלות הכנסות' : 'מעל יעד'}`
+              },
+              velocity: {
+                value: velocityFactor,
+                trend: bookingVelocity,
+                impact: 'medium',
+                reasoning: `מגמת שוק: ${bookingVelocity === 'increasing' ? 'עולה' : bookingVelocity === 'decreasing' ? 'יורדת' : 'יציבה'}`
+              }
+            },
+            
+            // Price calculation
+            priceCalculation: {
+              rawPrice,
+              priceBeforeFloors: rawPrice,
+              floors: {
+                absolute: 300,
+                competitor: competitorAvg || basePrice,
+                govStats: enhancedExternalData?.statistics?.tourism?.avgNightlyRate ? enhancedExternalData.statistics.tourism.avgNightlyRate * 0.85 : (competitorAvg || basePrice) * 0.85,
+                currentPrice: basePrice * 0.75,
+                applied: minPrice
+              },
+              adjustments,
+              floorApplied: rawPrice < minPrice,
+              finalPrice: predictedPrice,
+              roundingApplied: preRoundPrice !== predictedPrice
+            },
+            
+            // Confidence calculation
+            confidenceCalculation: {
+              factors: confidenceFactors,
+              weights: {
+                dataQuality: 0.2,
+                scanRecency: 0.18,
+                historicalData: 0.12,
+                bookingData: 0.15,
+                competitorData: 0.15,
+                marketConsistency: 0.1,
+                externalDataQuality: 0.1
+              },
+              baseConfidence,
+              adjustments: {
+                timeDistance: timeDistanceFactor,
+                eventBonus,
+                historicalBonus,
+                nearTermBonus
+              },
+              finalConfidence: confidence,
+              daysUntilDate
+            },
+            
+            // Final result
+            result: {
+              predictedPrice,
+              basePrice,
+              confidence,
+              demand,
+              priceVsBase,
+              priceVsCompetitor,
+              recommendation,
+              recommendationType
+            }
+          })
         }
 
         predictions.push({
@@ -846,6 +1149,12 @@ export async function POST(request: Request) {
             max: Math.max(...predictions.map((p) => p.predicted_price)),
           }
         : { min: 0, max: 0 }
+
+    // Print logger summary if debug mode
+    if (debugMode && predictionLogger) {
+      predictionLogger.printSummary()
+      console.log('[v0] 💾 Full logs available via predictionLogger.getLogs()')
+    }
 
     return NextResponse.json({
       success: true,

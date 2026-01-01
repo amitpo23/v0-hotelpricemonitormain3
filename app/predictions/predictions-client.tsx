@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import type { Prediction, Hotel } from "./page"
+import { PredictionLogViewer } from "@/components/prediction-log-viewer"
+import { FileText } from "lucide-react"
 
 interface Props {
   initialPredictions: Prediction[]
@@ -14,12 +16,30 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
   const [selectedMonths, setSelectedMonths] = useState<number[]>([1])
   const [isGenerating, setIsGenerating] = useState(false)
   const [message, setMessage] = useState("")
+  
+  // Log viewer state
+  const [logViewerOpen, setLogViewerOpen] = useState(false)
+  const [selectedLog, setSelectedLog] = useState<{
+    hotelId: string
+    predictionDate: string
+    hotelName: string
+  } | null>(null)
 
   // Filter state
   const [filterHotel, setFilterHotel] = useState("")
   const [filterStartDate, setFilterStartDate] = useState("")
   const [filterEndDate, setFilterEndDate] = useState("")
   const [filterMinConfidence, setFilterMinConfidence] = useState(0)
+
+  const handleViewLog = (hotelId: string, predictionDate: string) => {
+    const hotel = hotels.find(h => h.id === hotelId)
+    setSelectedLog({
+      hotelId,
+      predictionDate,
+      hotelName: hotel?.name || hotelId
+    })
+    setLogViewerOpen(true)
+  }
 
   const handleGeneratePredictions = async () => {
     setIsGenerating(true)
@@ -218,12 +238,13 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
               <th className="text-left py-3 px-4 text-gray-300 font-semibold">Predicted Price</th>
               <th className="text-left py-3 px-4 text-gray-300 font-semibold">Confidence</th>
               <th className="text-left py-3 px-4 text-gray-300 font-semibold">Demand</th>
+              <th className="text-left py-3 px-4 text-gray-300 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredPredictions.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-8 text-gray-400">
+                <td colSpan={6} className="text-center py-8 text-gray-400">
                   No predictions found. Try adjusting your filters or generate new predictions.
                 </td>
               </tr>
@@ -236,8 +257,8 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
                   <td className="py-3 px-4 text-gray-300">
                     {hotels.find(h => h.id === pred.hotel_id)?.name || pred.hotel_id || "N/A"}
                   </td>
-                  <td className="py-3 px-4 text-green-400 font-semibold">
-                    ${pred.predicted_price?.toFixed(2) || "N/A"}
+                  <td className="py-3 px-4 text-green-400 font-semibold" dir="rtl">
+                    ₪{pred.predicted_price?.toFixed(0) || "N/A"}
                   </td>
                   <td className="py-3 px-4">
                     <span className={`px-3 py-1 rounded-full text-sm ${
@@ -247,11 +268,22 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
                         ? "bg-yellow-900 text-yellow-200"
                         : "bg-red-900 text-red-200"
                     }`}>
-                      {pred.confidence_score?.toFixed(2) || "N/A"}
+                      {((pred.confidence_score || 0) * 100).toFixed(0)}%
                     </span>
                   </td>
                   <td className="py-3 px-4 text-gray-300">
                     {pred.predicted_demand || "N/A"}
+                  </td>
+                  <td className="py-3 px-4">
+                    <button
+                      onClick={() => pred.hotel_id && pred.prediction_date && handleViewLog(pred.hotel_id, pred.prediction_date)}
+                      disabled={!pred.hotel_id || !pred.prediction_date}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm"
+                      title="View detailed decision logs"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Logs</span>
+                    </button>
                   </td>
                 </tr>
               ))
@@ -259,6 +291,17 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
           </tbody>
         </table>
       </div>
+      
+      {/* Log Viewer Dialog */}
+      {selectedLog && (
+        <PredictionLogViewer
+          hotelId={selectedLog.hotelId}
+          predictionDate={selectedLog.predictionDate}
+          hotelName={selectedLog.hotelName}
+          open={logViewerOpen}
+          onOpenChange={setLogViewerOpen}
+        />
+      )}
     </div>
   )
 }
