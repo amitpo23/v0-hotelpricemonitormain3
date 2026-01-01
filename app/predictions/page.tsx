@@ -23,7 +23,7 @@ export default async function PredictionsPage() {
 
     // Fetch predictions with proper null handling
     const { data: predictions, error: predError } = await supabase
-      .from("price_predictions")
+      .from("daily_prices")
       .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, created_at")
       .order("prediction_date", { ascending: false })
       .limit(500)
