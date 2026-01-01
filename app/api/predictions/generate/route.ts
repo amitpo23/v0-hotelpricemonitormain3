@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { 
-  orchestrateExternalData, 
+  orchestrateComprehensiveData, 
   extractDateImpactFactors, 
   getRecommendedOptions,
   checkExternalDataAvailability 
-} from "@/lib/agents/orchestrator"
+} from "@/lib/agents/orchestrator-v2"
 import { getPredictionLogger } from "@/lib/logging/prediction-logger"
 import { savePredictionLog } from "@/lib/logging/prediction-logger-db"
 
@@ -396,12 +396,14 @@ export async function POST(request: Request) {
 
         if (firstHotel) {
           // Add timeout wrapper to prevent hanging (30 seconds max)
-          const orchestratorPromise = orchestrateExternalData(
+          const orchestratorPromise = orchestrateComprehensiveData(
             firstHotel.id,
             firstHotel.name || 'Hotel',
             'Tel Aviv', // TODO: Get from hotel data
             allPredictionDates,
-                    firstHotel.base_price || 180,          )
+            firstHotel.base_price || 180,
+            orchestratorOptions
+          )
           
           const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Orchestrator timeout after 30s')), 30000)
@@ -409,12 +411,18 @@ export async function POST(request: Request) {
           
           enhancedExternalData = await Promise.race([orchestratorPromise, timeoutPromise])
           
-          console.log(`[v0] 🎉 Multi-Agent System completed:`)
+          console.log(`[v0] 🎉 Enhanced Multi-Agent System completed:`)
           console.log(`[v0]   - Events: ${enhancedExternalData.events.size} dates, confidence ${(enhancedExternalData.eventsConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Historical: ${enhancedExternalData.historical.size} dates, confidence ${(enhancedExternalData.historicalConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Holidays: ${enhancedExternalData.holidays.size} dates, confidence ${(enhancedExternalData.holidaysConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Trends: ${enhancedExternalData.trends.size} dates, confidence ${(enhancedExternalData.trendsConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Competitors: ${enhancedExternalData.competitors.size} dates, confidence ${(enhancedExternalData.competitorsConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Budget: ${enhancedExternalData.budget ? 'Available' : 'N/A'}, confidence ${(enhancedExternalData.budgetConfidence * 100).toFixed(0)}%`)
+          console.log(`[v0]   - Velocity: ${enhancedExternalData.velocity ? enhancedExternalData.velocity.trend : 'N/A'}, confidence ${(enhancedExternalData.velocityConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Statistics: confidence ${(enhancedExternalData.statisticsConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Overall Confidence: ${(enhancedExternalData.overallConfidence * 100).toFixed(0)}%`)
           console.log(`[v0]   - Data Quality: ${enhancedExternalData.dataQuality}`)
+          console.log(`[v0]   - Data Sources: ${enhancedExternalData.dataSources.join(', ')}`)
           console.log(`[v0]   - Timestamp: ${enhancedExternalData.timestamp}`)
           
           // Log to prediction logger
@@ -426,9 +434,20 @@ export async function POST(request: Request) {
               eventsConfidence: enhancedExternalData.eventsConfidence,
               historicalData: enhancedExternalData.historical.size,
               historicalConfidence: enhancedExternalData.historicalConfidence,
+              holidaysData: enhancedExternalData.holidays.size,
+              holidaysConfidence: enhancedExternalData.holidaysConfidence,
+              trendsData: enhancedExternalData.trends.size,
+              trendsConfidence: enhancedExternalData.trendsConfidence,
+              competitorsData: enhancedExternalData.competitors.size,
+              competitorsConfidence: enhancedExternalData.competitorsConfidence,
+              budgetData: enhancedExternalData.budget ? 'Available' : 'N/A',
+              budgetConfidence: enhancedExternalData.budgetConfidence,
+              velocityData: enhancedExternalData.velocity ? enhancedExternalData.velocity.trend : 'N/A',
+              velocityConfidence: enhancedExternalData.velocityConfidence,
               statisticsConfidence: enhancedExternalData.statisticsConfidence,
               overallConfidence: enhancedExternalData.overallConfidence,
               dataQuality: enhancedExternalData.dataQuality,
+              dataSources: enhancedExternalData.dataSources,
               executionTime: Date.now() - new Date(enhancedExternalData.timestamp).getTime()
             }
           )
@@ -437,10 +456,20 @@ export async function POST(request: Request) {
           if (enhancedExternalData.statistics?.tourism?.avgNightlyRate) {
             console.log(`[v0]   - Market Avg Price: ₪${enhancedExternalData.statistics.tourism.avgNightlyRate} (Tel Aviv)`)
           }
+          
+          // Log budget insights if available
+          if (enhancedExternalData.budget) {
+            console.log(`[v0]   - Budget Gap: ₪${Math.round(enhancedExternalData.budget.budgetGap)}, Pressure: ${enhancedExternalData.budget.pricingPressure.toFixed(2)}x`)
+          }
+          
+          // Log velocity insights if available
+          if (enhancedExternalData.velocity) {
+            console.log(`[v0]   - Booking Velocity: ${enhancedExternalData.velocity.trend} (${enhancedExternalData.velocity.bookingsLast7Days} bookings/7d), Impact: ${enhancedExternalData.velocity.pricingImpact.toFixed(2)}x`)
+          }
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-        console.error('[v0] Multi-Agent System failed:', errorMsg)
+        console.error('[v0] Enhanced Multi-Agent System failed:', errorMsg)
         if (errorMsg.includes('timeout')) {
           console.error('[v0] ⏱️  Orchestrator timed out after 30 seconds - continuing without external data')
         }
@@ -741,6 +770,22 @@ export async function POST(request: Request) {
         // Calculate raw price with all factors
         let rawPrice = basePrice * seasonality * weekendFactor * leadTimeFactor * occupancyFactor * eventFactor * competitorFactor * budgetPressure * velocityFactor
         
+        // Debug log for first few dates
+        if (i < 5 || debugMode) {
+          console.log(`[v0] 🎯 ${dateStr} Price Debug:`, {
+            basePrice,
+            seasonality: seasonality.toFixed(2),
+            weekendFactor: weekendFactor.toFixed(2),
+            leadTimeFactor: leadTimeFactor.toFixed(2),
+            occupancyFactor: occupancyFactor.toFixed(2),
+            eventFactor: eventFactor.toFixed(2),
+            competitorFactor: competitorFactor.toFixed(2),
+            budgetPressure: budgetPressure.toFixed(2),
+            velocityFactor: velocityFactor.toFixed(2),
+            rawPrice: Math.round(rawPrice)
+          })
+        }
+        
         const adjustments: string[] = []
         
         // Apply enhanced historical trends if available from orchestrator
@@ -757,7 +802,7 @@ export async function POST(request: Request) {
         
         // Calculate market-based price floors (use HIGHEST - most restrictive)
         const ABSOLUTE_MINIMUM = 300 // Hard floor - never go below ₪300
-        const competitorFloor = competitorAvg || basePrice
+        const competitorFloor = competitorAvg || (basePrice * 0.80) // Lower fallback when no competitor data
         const govStatsFloor = enhancedExternalData?.statistics?.tourism?.avgNightlyRate 
           ? enhancedExternalData.statistics.tourism.avgNightlyRate * 0.85 
           : competitorFloor * 0.85
@@ -765,6 +810,21 @@ export async function POST(request: Request) {
         
         const marketMinimums = [ABSOLUTE_MINIMUM, competitorFloor, govStatsFloor, currentPriceFloor]
         const minPrice = Math.max(...marketMinimums) // Take HIGHEST (most restrictive)
+        
+        // Debug log for floor application
+        if (i < 5 || debugMode) {
+          console.log(`[v0] 💰 ${dateStr} Floor Debug:`, {
+            rawPrice: Math.round(rawPrice),
+            floors: {
+              absolute: ABSOLUTE_MINIMUM,
+              competitor: Math.round(competitorFloor),
+              govStats: Math.round(govStatsFloor),
+              current: Math.round(currentPriceFloor)
+            },
+            minPrice: Math.round(minPrice),
+            floorWillApply: rawPrice < minPrice
+          })
+        }
         
         // Check if floor is applied
         const floorApplied = rawPrice < minPrice

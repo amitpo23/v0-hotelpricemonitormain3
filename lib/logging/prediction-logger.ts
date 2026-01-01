@@ -68,9 +68,20 @@ export class PredictionLogger {
     eventsConfidence?: number
     historicalData?: number
     historicalConfidence?: number
+    holidaysData?: number
+    holidaysConfidence?: number
+    trendsData?: number
+    trendsConfidence?: number
+    competitorsData?: number | string
+    competitorsConfidence?: number
+    budgetData?: string
+    budgetConfidence?: number
+    velocityData?: string
+    velocityConfidence?: number
     statisticsConfidence?: number
     overallConfidence?: number
     dataQuality?: string
+    dataSources?: string[]
     executionTime?: number
   }) {
     if (!this.enabled) return
@@ -86,14 +97,25 @@ export class PredictionLogger {
     
     this.logs.push(entry)
     
-    console.log(`\n🤖 [PredictionLogger] Multi-Agent System for ${hotelName}`)
+    console.log(`\n🤖 [PredictionLogger] Enhanced Multi-Agent System for ${hotelName}`)
     console.log(`   ├─ Events Found: ${data.eventsFound || 0}`)
     console.log(`   ├─ Events Confidence: ${((data.eventsConfidence || 0) * 100).toFixed(0)}%`)
     console.log(`   ├─ Historical Data: ${data.historicalData || 0} dates`)
     console.log(`   ├─ Historical Confidence: ${((data.historicalConfidence || 0) * 100).toFixed(0)}%`)
+    console.log(`   ├─ Holidays Data: ${data.holidaysData || 0} dates`)
+    console.log(`   ├─ Holidays Confidence: ${((data.holidaysConfidence || 0) * 100).toFixed(0)}%`)
+    console.log(`   ├─ Trends Data: ${data.trendsData || 0} dates`)
+    console.log(`   ├─ Trends Confidence: ${((data.trendsConfidence || 0) * 100).toFixed(0)}%`)
+    console.log(`   ├─ Competitors Data: ${data.competitorsData || 0} dates`)
+    console.log(`   ├─ Competitors Confidence: ${((data.competitorsConfidence || 0) * 100).toFixed(0)}%`)
+    console.log(`   ├─ Budget Data: ${data.budgetData || 'N/A'}`)
+    console.log(`   ├─ Budget Confidence: ${((data.budgetConfidence || 0) * 100).toFixed(0)}%`)
+    console.log(`   ├─ Velocity Data: ${data.velocityData || 'N/A'}`)
+    console.log(`   ├─ Velocity Confidence: ${((data.velocityConfidence || 0) * 100).toFixed(0)}%`)
     console.log(`   ├─ Statistics Confidence: ${((data.statisticsConfidence || 0) * 100).toFixed(0)}%`)
     console.log(`   ├─ Overall Confidence: ${((data.overallConfidence || 0) * 100).toFixed(0)}%`)
     console.log(`   ├─ Data Quality: ${data.dataQuality || 'unknown'}`)
+    console.log(`   ├─ Data Sources: ${data.dataSources?.join(', ') || 'none'}`)
     console.log(`   └─ Execution Time: ${data.executionTime || 0}ms`)
   }
 
