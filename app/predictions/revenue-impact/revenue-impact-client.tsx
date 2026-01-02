@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { calculateRevenue } from "@/lib/calculations/revenue-calculator"
+import { MetricsGlossary, QuickHelp } from "@/components/metrics-glossary"
 import { ArrowUpIcon, ArrowDownIcon, TrendingUpIcon, CalendarIcon, DollarSignIcon, TargetIcon, InfoIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 interface Hotel {
@@ -275,17 +277,23 @@ export default function RevenueImpactClient({ hotels, predictions }: RevenueImpa
     avgOccupancy: number,
     days: number
   ): Omit<RevenueScenario, 'difference' | 'percentChange'> => {
-    const totalRooms = selectedHotel?.total_rooms || 50
-    const dailyRevenue = avgPrice * (avgOccupancy / 100) * totalRooms
-    const periodRevenue = dailyRevenue * days
+    const totalRooms = selectedHotel?.total_rooms || 35 // Updated default to Scarlet's actual rooms
+    
+    // Use centralized Revenue Calculator - Single Source of Truth
+    const revenueCalc = calculateRevenue({
+      price: avgPrice,
+      rooms: totalRooms,
+      occupancy: avgOccupancy,
+      days: days
+    })
 
     return {
       scenario,
       description,
       avgPrice: Math.round(avgPrice),
       avgOccupancy: Math.round(avgOccupancy * 10) / 10,
-      dailyRevenue: Math.round(dailyRevenue),
-      periodRevenue: Math.round(periodRevenue),
+      dailyRevenue: revenueCalc.dailyRevenue,
+      periodRevenue: revenueCalc.revenue,
       difference: 0,
       percentChange: 0
     }
@@ -310,7 +318,14 @@ export default function RevenueImpactClient({ hotels, predictions }: RevenueImpa
       const demandBoost = pred.predicted_demand === 'high' ? 1.2 : pred.predicted_demand === 'medium' ? 1.0 : 0.85
       const occupancy = Math.min(95, 65 * demandBoost * (1 + confidenceBoost * 0.1))
       
-      const dayRevenue = priceOptimized * (occupancy / 100) * hotel.total_rooms
+      // Use centralized Revenue Calculator for consistency
+      const dayRevenueCalc = calculateRevenue({
+        price: priceOptimized,
+        rooms: hotel.total_rooms,
+        occupancy: occupancy,
+        days: 1
+      })
+      const dayRevenue = dayRevenueCalc.revenue
 
       // Log first 3 days as examples
       if (index < 3) {
@@ -323,7 +338,8 @@ export default function RevenueImpactClient({ hotels, predictions }: RevenueImpa
           demand: pred.predicted_demand,
           demandBoost: demandBoost,
           occupancy: occupancy.toFixed(1) + '%',
-          revenue: dayRevenue.toFixed(2)
+          revenue: dayRevenue.toFixed(2),
+          formula: dayRevenueCalc.formula
         })
       }
       
@@ -341,7 +357,8 @@ export default function RevenueImpactClient({ hotels, predictions }: RevenueImpa
       note: `Showing first 3 days out of ${days} total`,
       examples: dayDetails,
       formula: 'OptimizedPrice = AIPrice × (1 + Confidence × 0.15)',
-      occupancyFormula: 'Occupancy = min(95, 65 × DemandBoost × (1 + Confidence × 0.1))'
+      occupancyFormula: 'Occupancy = min(95, 65 × DemandBoost × (1 + Confidence × 0.1))',
+      revenueFormula: 'Revenue = calculateRevenue() - Single Source of Truth'
     })
 
     return {
@@ -511,21 +528,30 @@ export default function RevenueImpactClient({ hotels, predictions }: RevenueImpa
                   {/* Metrics Grid */}
                   <div className="space-y-4 mb-6">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-300">מחיר ממוצע</span>
+                      <span className="text-gray-300 flex items-center gap-1">
+                        מחיר ממוצע
+                        <QuickHelp term="Predicted Price" />
+                      </span>
                       <span className="text-xl font-bold text-white">
                         {formatCurrency(scenario.avgPrice)}
                       </span>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-300">תפוסה ממוצעת</span>
+                      <span className="text-gray-300 flex items-center gap-1">
+                        תפוסה ממוצעת
+                        <QuickHelp term="Occupancy Rate" />
+                      </span>
                       <span className="text-xl font-bold text-white">
                         {scenario.avgOccupancy}%
                       </span>
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-300">הכנסה יומית</span>
+                      <span className="text-gray-300 flex items-center gap-1">
+                        הכנסה יומית
+                        <QuickHelp term="Revenue" />
+                      </span>
                       <span className="text-xl font-bold text-white">
                         {formatCurrency(scenario.dailyRevenue)}
                       </span>

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { MetricsGlossary, QuickHelp } from "@/components/metrics-glossary"
 import Link from "next/link"
 import {
   TrendingUpIcon,
@@ -281,6 +282,7 @@ export default async function DashboardPage() {
           <p className="text-slate-400">Real-time revenue intelligence and autopilot status</p>
         </div>
         <div className="flex gap-3">
+          <MetricsGlossary />
           <Link href="/calendar">
             <Button
               variant="outline"
@@ -304,7 +306,10 @@ export default async function DashboardPage() {
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-6">
               <div>
-                <div className="text-sm text-slate-400">Total Revenue</div>
+                <div className="text-sm text-slate-400 flex items-center gap-1">
+                  Total Revenue
+                  <QuickHelp term="Revenue" />
+                </div>
                 <div className="text-2xl font-bold text-green-400">₪{totalRevenue.toLocaleString()}</div>
               </div>
               <div className="h-8 w-px bg-slate-700" />
@@ -384,13 +389,19 @@ export default async function DashboardPage() {
               <div className="text-2xl font-bold text-green-400">₪{actualRevenue.toLocaleString()}</div>
             </div>
             <div>
-              <div className="text-sm text-slate-400 mb-1">Gap to Target</div>
+              <div className="text-sm text-slate-400 mb-1 flex items-center gap-1">
+                Gap to Target
+                <QuickHelp term="Budget Gap" />
+              </div>
               <div className={`text-2xl font-bold ${budgetGap > 0 ? "text-red-400" : "text-green-400"}`}>
                 {targetRevenue > 0 ? (budgetGap > 0 ? "-" : "+") + "₪" + Math.abs(budgetGap).toLocaleString() : "N/A"}
               </div>
             </div>
             <div>
-              <div className="text-sm text-slate-400 mb-1">Occupancy</div>
+              <div className="text-sm text-slate-400 mb-1 flex items-center gap-1">
+                Occupancy
+                <QuickHelp term="Occupancy Rate" />
+              </div>
               <div className="text-2xl font-bold text-cyan-400">{avgOccupancy.toFixed(1)}%</div>
             </div>
             <div>
