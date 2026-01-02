@@ -4,6 +4,8 @@ import { useState } from "react"
 import type { Prediction, Hotel } from "./page"
 import { PredictionLogViewer } from "@/components/prediction-log-viewer"
 import { GenerationLogsViewer } from "@/components/generation-logs-viewer"
+import { ConfidenceBadge } from "@/components/confidence-badge"
+import { MetricsGlossary } from "@/components/metrics-glossary"
 import { FileText, ScrollText } from "lucide-react"
 
 interface Props {
@@ -110,7 +112,10 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
     <div className="space-y-8">
       {/* Generate Predictions Form */}
       <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
-        <h2 className="text-2xl font-bold mb-6 text-white">Generate New Predictions</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white">Generate New Predictions</h2>
+          <MetricsGlossary />
+        </div>
         
         <div className="space-y-4">
           {/* Year Selector */}
@@ -308,15 +313,10 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
                     ₪{pred.predicted_price?.toFixed(0) || "N/A"}
                   </td>
                   <td className="py-3 px-4">
-                    <span className={`px-3 py-1 rounded-full text-sm ${
-                      (pred.confidence_score || 0) >= 0.7
-                        ? "bg-green-900 text-green-200"
-                        : (pred.confidence_score || 0) >= 0.5
-                        ? "bg-yellow-900 text-yellow-200"
-                        : "bg-red-900 text-red-200"
-                    }`}>
-                      {((pred.confidence_score || 0) * 100).toFixed(0)}%
-                    </span>
+                    <ConfidenceBadge 
+                      confidence={(pred.confidence_score || 0) * 100} 
+                      size="sm"
+                    />
                   </td>
                   <td className="py-3 px-4 text-gray-300">
                     {pred.predicted_demand || "N/A"}

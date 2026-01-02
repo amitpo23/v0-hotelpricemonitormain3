@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { MetricsGlossary } from "@/components/metrics-glossary"
 import { 
   TrendingUpIcon, 
   AlertTriangleIcon, 
@@ -170,9 +171,12 @@ export function AutopilotTools({ hotels }: Props) {
           </h1>
           <p className="text-slate-400 mt-2">חיזוי הכנסות ואזהרות תמחור מתקדמות</p>
         </div>
-        <Badge variant="outline" className="text-sm px-4 py-2">
-          AI-Powered
-        </Badge>
+        <div className="flex items-center gap-3">
+          <MetricsGlossary />
+          <Badge variant="outline" className="text-sm px-4 py-2">
+            AI-Powered
+          </Badge>
+        </div>
       </div>
 
       {/* Hotel Selector */}
