@@ -101,12 +101,20 @@ export async function GET(request: Request) {
       .gte('check_in_date', startDate)
       .lte('check_in_date', endDate)
 
-    // Calculate current revenue
+    // Calculate current revenue (using same occupancy calculation as forecast for fair comparison)
     let currentRevenue = 0
     const currentPriceMap = new Map<string, number>()
     
     predictions?.forEach(pred => {
-      const revenue = pred.predicted_price * hotel.total_rooms * 0.65 // Assume 65% occupancy
+      // Get historical occupancy for this date from last year
+      const lastYearDate = new Date(pred.prediction_date)
+      lastYearDate.setFullYear(lastYearDate.getFullYear() - 1)
+      const lastYearStr = lastYearDate.toISOString().split('T')[0]
+      const historical = historicalData?.find(h => h.date === lastYearStr)
+      const historicalOccupancy = historical?.occupancy_rate || 65
+      
+      // Use historical occupancy for current revenue calculation (same as forecast)
+      const revenue = pred.predicted_price * hotel.total_rooms * (historicalOccupancy / 100)
       currentRevenue += revenue
       currentPriceMap.set(pred.prediction_date, pred.predicted_price)
     })

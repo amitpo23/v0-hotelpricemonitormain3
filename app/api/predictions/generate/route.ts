@@ -217,6 +217,9 @@ async function getDynamicBasePrice(hotelId: string, supabase: any): Promise<numb
 }
 
 export async function POST(request: Request) {
+  // Generate unique session ID for tracking
+  const sessionId = `gen-${Date.now()}-${Math.random().toString(36).substring(7)}`
+  
   try {
     const supabase = await createClient()
     const body = await request.json()
@@ -229,6 +232,22 @@ export async function POST(request: Request) {
     const selectedYear: number = body.year || body.selectedYear || new Date().getFullYear()
     const hotelIds: string[] = body.hotelIds || (body.hotels ? body.hotels.map((h: any) => h.id) : [])
     const daysAhead: number = body.daysAhead || 90
+    
+    // Initialize generation log
+    await supabase.from('prediction_generation_logs').insert({
+      session_id: sessionId,
+      status: 'running',
+      selected_year: selectedYear,
+      selected_months: selectedMonths,
+      hotel_ids: hotelIds,
+      logs: [{
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: `Starting prediction generation for ${selectedMonths.length} months in ${selectedYear}`,
+        data: { selectedMonths, selectedYear, hotelCount: hotelIds.length }
+      }]
+    })
+    
     const analysisParams = body.analysisParams || {
       includeCompetitors: true,
       includeSeasonality: true,
@@ -291,6 +310,17 @@ export async function POST(request: Request) {
         : "http://localhost:3000"
 
     console.log('[v0] 📊 Fetching data from Supabase and external sources...')
+    
+    // Add log entry
+    await supabase.rpc('add_generation_log_entry', {
+      p_session_id: sessionId,
+      p_log_entry: {
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'Fetching data from Supabase and external sources...',
+        data: { hotelIds: finalHotelIds, dateRange: `${startDate.toISOString()} - ${predictionDays} days` }
+      }
+    })
     
     // Wrap Promise.all with timeout to prevent hanging
     const dataFetchPromise = Promise.all([
@@ -621,6 +651,17 @@ export async function POST(request: Request) {
       // Fetch hotel details from Supabase
       const { data: hotelData } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
       const hotel = hotelData || { id: hotelId, base_price: 150, total_rooms: 34 }
+
+      // Add log entry for hotel processing
+      await supabase.rpc('add_generation_log_entry', {
+        p_session_id: sessionId,
+        p_log_entry: {
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `Processing hotel: ${hotel.name || hotelId}`,
+          data: { hotelId, hotelName: hotel.name, basePrice: hotel.base_price, rooms: hotel.total_rooms }
+        }
+      })
 
       const basePrice = hotel.base_price || await getDynamicBasePrice(hotel.id, supabase) || 550
       const totalRooms = hotel.total_rooms || 34 // Default to 34 rooms for Scarlet Hotel
@@ -1216,8 +1257,33 @@ export async function POST(request: Request) {
       console.log('[v0] 💾 Full logs available via predictionLogger.getLogs()')
     }
 
+    // Complete generation log
+    await supabase.rpc('complete_generation_session', {
+      p_session_id: sessionId,
+      p_status: 'completed',
+      p_predictions_created: predictions.length,
+      p_predictions_updated: 0,
+      p_errors_count: 0
+    })
+
+    // Add final log entry
+    await supabase.rpc('add_generation_log_entry', {
+      p_session_id: sessionId,
+      p_log_entry: {
+        timestamp: new Date().toISOString(),
+        level: 'success',
+        message: `✅ Successfully generated ${predictions.length} predictions`,
+        data: {
+          predictionsCount: predictions.length,
+          avgConfidence: (avgConfidence * 100).toFixed(1) + '%',
+          avgPrice: Math.round(avgPrice)
+        }
+      }
+    })
+
     return NextResponse.json({
       success: true,
+      sessionId, // Return session ID for tracking
       count: predictions.length,
       days_ahead: predictionDays,
       selected_months: selectedMonths,
@@ -1259,10 +1325,37 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("[v0] Error generating predictions:", error)
+    
+    // Log error to database
+    try {
+      const supabase = await createClient()
+      await supabase.rpc('complete_generation_session', {
+        p_session_id: sessionId,
+        p_status: 'failed',
+        p_predictions_created: 0,
+        p_predictions_updated: 0,
+        p_errors_count: 1,
+        p_error_message: error instanceof Error ? error.message : 'Unknown error'
+      })
+      
+      await supabase.rpc('add_generation_log_entry', {
+        p_session_id: sessionId,
+        p_log_entry: {
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          message: `❌ Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          data: { error: String(error) }
+        }
+      })
+    } catch (logError) {
+      console.error("[v0] Failed to log error:", logError)
+    }
+    
     return NextResponse.json(
       {
         error: "Internal server error",
         details: error instanceof Error ? error.message : "Unknown error",
+        sessionId, // Return session ID even on error for debugging
       },
       { status: 500 },
     )

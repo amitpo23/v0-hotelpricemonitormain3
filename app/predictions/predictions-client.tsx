@@ -3,7 +3,8 @@
 import { useState } from "react"
 import type { Prediction, Hotel } from "./page"
 import { PredictionLogViewer } from "@/components/prediction-log-viewer"
-import { FileText } from "lucide-react"
+import { GenerationLogsViewer } from "@/components/generation-logs-viewer"
+import { FileText, ScrollText } from "lucide-react"
 
 interface Props {
   initialPredictions: Prediction[]
@@ -16,6 +17,8 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
   const [selectedMonths, setSelectedMonths] = useState<number[]>([1])
   const [isGenerating, setIsGenerating] = useState(false)
   const [message, setMessage] = useState("")
+  const [generationSessionId, setGenerationSessionId] = useState<string | null>(null)
+  const [showGenerationLogs, setShowGenerationLogs] = useState(false)
   
   // Log viewer state
   const [logViewerOpen, setLogViewerOpen] = useState(false)
@@ -44,6 +47,8 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
   const handleGeneratePredictions = async () => {
     setIsGenerating(true)
     setMessage("")
+    setShowGenerationLogs(true) // Show logs immediately
+    
     try {
       const response = await fetch('/api/predictions/generate', {
         method: 'POST',
@@ -56,12 +61,15 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
       const data = await response.json()
       
       if (response.ok) {
-        setMessage(`✅ נוצרו ${data.count || 0} חיזויים בהצלחה! מרענן דף...`)
+        setGenerationSessionId(data.sessionId) // Store session ID for tracking
+        setMessage(`✅ נוצרו ${data.count || 0} חיזויים בהצלחה!`)
         
-        // Reload page to show new predictions
+        // Don't reload immediately - let user see the logs
         setTimeout(() => {
-          window.location.reload()
-        }, 1500)
+          if (confirm('רענן את הדף כדי לראות את החיזויים החדשים?')) {
+            window.location.reload()
+          }
+        }, 2000)
       } else {
         setMessage(`❌ שגיאה: ${data.error || "Failed to generate predictions"}`)
       }
@@ -78,6 +86,12 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
     } else {
       setSelectedMonths([...selectedMonths, month].sort((a, b) => a - b))
     }
+  }
+
+  // Helper to get month names
+  const getMonthNames = (months: number[]) => {
+    const monthNames = ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יוני', 'יולי', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ']
+    return months.map(m => monthNames[m - 1]).join(', ')
   }
 
   // Filter predictions - only show 2026 and later
@@ -145,7 +159,12 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
             disabled={isGenerating || selectedMonths.length === 0}
             className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-bold text-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            {isGenerating ? "Generating..." : `Generate Predictions for ${selectedMonths.length} Month(s)`}
+            {isGenerating 
+              ? "מייצר חיזויים..." 
+              : selectedMonths.length > 0
+                ? `ייצר חיזויים עבור ${selectedMonths.length} חודשים: ${getMonthNames(selectedMonths)}`
+                : "בחר לפחות חודש אחד"
+            }
           </button>
 
           {message && (
@@ -157,6 +176,28 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
           )}
         </div>
       </div>
+
+      {/* Generation Logs - Show during and after generation */}
+      {showGenerationLogs && generationSessionId && (
+        <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <ScrollText className="w-5 h-5" />
+              לוג ייצור חיזויים
+            </h3>
+            <button
+              onClick={() => setShowGenerationLogs(false)}
+              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+            >
+              הסתר
+            </button>
+          </div>
+          <GenerationLogsViewer 
+            sessionId={generationSessionId}
+            autoRefresh={isGenerating}
+          />
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
