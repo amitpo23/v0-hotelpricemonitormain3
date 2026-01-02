@@ -29,10 +29,22 @@ interface BudgetAnalysis {
   daysRemaining: number
   dailyRevenueNeeded: number
   dailyRevenueActual: number
-  bookingsNeeded: number // NEW
-  avgPriceNeeded: number // NEW
+  bookingsNeeded: number
+  avgPriceNeeded: number
   performanceStatus: 'excellent' | 'good' | 'warning' | 'critical'
   recommendation: string
+  // Autopilot Forecast Data
+  autopilotForecast?: {
+    forecastedRevenue: number
+    revenueWithAutopilot: number
+    budgetGapWithAutopilot: number
+    budgetGapPercentWithAutopilot: number
+    revenueIncrease: number
+    percentIncrease: number
+    confidence: number
+    summary?: any
+    riskAssessment?: any
+  } | null
 }
 
 interface Props {
@@ -102,71 +114,76 @@ export function BudgetDashboard({ analysis, totalRooms, currentOccupancy, avgRoo
           <CardContent className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="p-3 bg-blue-500/20 rounded-xl">
-                <TargetIcon className="h-6 w-6 text-blue-400" />
+                <DollarSignIcon className="h-6 w-6 text-blue-400" />
               </div>
-              <Badge variant="outline" className="text-xs">יעד חודשי</Badge>
+              <Badge variant="outline" className="text-xs">תקציב</Badge>
             </div>
             <div className="text-3xl font-bold text-white">
               ₪{targetRevenue.toLocaleString()}
             </div>
-            <p className="text-sm text-slate-400 mt-1">תקציב יעד</p>
+            <p className="text-sm text-slate-400 mt-1">הכנסות מתוכננת</p>
           </CardContent>
         </Card>
 
         {/* Actual Revenue */}
-        <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/30">
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-green-500/20 rounded-xl">
-                <DollarSignIcon className="h-6 w-6 text-green-400" />
-              </div>
-              <Badge variant="outline" className="text-xs">בפועל</Badge>
-            </div>
-            <div className="text-3xl font-bold text-white">
-              ₪{actualRevenue.toLocaleString()}
-            </div>
-            <p className="text-sm text-slate-400 mt-1">
-              {progress.toFixed(1)}% מהיעד
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Booked Revenue */}
         <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30">
           <CardContent className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="p-3 bg-purple-500/20 rounded-xl">
                 <CalendarIcon className="h-6 w-6 text-purple-400" />
               </div>
-              <Badge variant="outline" className="text-xs">מאושר</Badge>
+              <Badge variant="outline" className="text-xs">חיזוי</Badge>
             </div>
             <div className="text-3xl font-bold text-white">
-              ₪{bookedRevenue.toLocaleString()}
+              ₪{analysis.autopilotForecast ? analysis.autopilotForecast.revenueWithAutopilot.toLocaleString() : totalExpectedRevenue.toLocaleString()}
             </div>
-            <p className="text-sm text-slate-400 mt-1">הזמנות מאושרות</p>
+            <p className="text-sm text-slate-400 mt-1">
+              {analysis.autopilotForecast ? 'עם Autopilot' : 'צפי ללא AI'}
+            </p>
           </CardContent>
         </Card>
 
-        {/* Budget Gap */}
-        <Card className={`bg-gradient-to-br ${budgetGap > 0 ? 'from-red-500/10 to-orange-500/10 border-red-500/30' : 'from-green-500/10 to-teal-500/10 border-green-500/30'}`}>
+        {/* Revenue Increase */}
+        <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/30">
           <CardContent className="p-6">
             <div className="flex items-start justify-between mb-4">
-              <div className={`p-3 ${budgetGap > 0 ? 'bg-red-500/20' : 'bg-green-500/20'} rounded-xl`}>
-                {budgetGap > 0 ? (
-                  <TrendingDownIcon className="h-6 w-6 text-red-400" />
-                ) : (
-                  <TrendingUpIcon className="h-6 w-6 text-green-400" />
-                )}
+              <div className="p-3 bg-green-500/20 rounded-xl">
+                <TrendingUpIcon className="h-6 w-6 text-green-400" />
               </div>
-              <Badge variant="outline" className="text-xs">
-                {budgetGap > 0 ? 'חסר' : 'עודף'}
-              </Badge>
+              <Badge variant="outline" className="text-xs">עלייה</Badge>
             </div>
-            <div className={`text-3xl font-bold ${budgetGap > 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {budgetGap > 0 ? '-' : '+'}₪{Math.abs(budgetGap).toLocaleString()}
+            <div className="text-3xl font-bold text-green-400">
+              {analysis.autopilotForecast ? (
+                <>+₪{analysis.autopilotForecast.revenueIncrease.toLocaleString()}</>
+              ) : (
+                <>₪{totalExpectedRevenue.toLocaleString()}</>
+              )}
             </div>
             <p className="text-sm text-slate-400 mt-1">
-              {Math.abs(budgetGapPercent).toFixed(1)}% {budgetGap > 0 ? 'מתחת ליעד' : 'מעל יעד'}
+              {analysis.autopilotForecast ? `+${analysis.autopilotForecast.percentIncrease.toFixed(1)}%` : 'צפי נוכחי'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Risk Assessment */}
+        <Card className="bg-gradient-to-br from-slate-500/10 to-slate-600/10 border-slate-500/30">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="p-3 bg-slate-500/20 rounded-xl">
+                <svg className="h-6 w-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <Badge variant="outline" className="text-xs">סיכון</Badge>
+            </div>
+            <div className="text-3xl font-bold text-white">
+              {analysis.autopilotForecast?.riskAssessment ? (
+                analysis.autopilotForecast.riskAssessment.level === 'low' ? 'נמוך' :
+                analysis.autopilotForecast.riskAssessment.level === 'medium' ? 'בינוני' : 'גבוה'
+              ) : 'לא ידוע'}
+            </div>
+            <p className="text-sm text-slate-400 mt-1">
+              {daysRemaining > 0 ? `יימי ${daysRemaining}` : 'החודש הסתיים'}
             </p>
           </CardContent>
         </Card>

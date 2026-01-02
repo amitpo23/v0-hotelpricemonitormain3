@@ -123,6 +123,48 @@ export async function GET(request: Request) {
       ? recentDays.reduce((sum, d) => sum + Number(d.occupancy_rate || 0), 0) / recentDays.length
       : 65
 
+    // ========================================
+    // AUTOPILOT FORECAST - AI-POWERED PREDICTION
+    // ========================================
+    // Get AI forecast if following Autopilot recommendations
+    let autopilotForecast = null
+    let forecastedRevenue = totalExpectedRevenue
+    let revenueWithAutopilot = totalExpectedRevenue
+
+    if (daysRemaining > 0) {
+      try {
+        // Calculate remaining period
+        const remainingStart = new Date()
+        remainingStart.setDate(remainingStart.getDate() + 1)
+        const remainingStartStr = remainingStart.toISOString().split('T')[0]
+        const monthEndStr = monthEnd.toISOString().split('T')[0]
+
+        // Call Autopilot Forecast API
+        const forecastUrl = new URL(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/autopilot/forecast`)
+        forecastUrl.searchParams.set('hotelId', hotelId)
+        forecastUrl.searchParams.set('startDate', remainingStartStr)
+        forecastUrl.searchParams.set('endDate', monthEndStr)
+
+        const forecastRes = await fetch(forecastUrl.toString(), {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+        if (forecastRes.ok) {
+          autopilotForecast = await forecastRes.json()
+          forecastedRevenue = autopilotForecast.forecastedRevenue || 0
+          revenueWithAutopilot = actualRevenue + bookedRevenue + forecastedRevenue
+        }
+      } catch (error) {
+        console.error('[Budget Analysis] Autopilot forecast failed:', error)
+        // Continue without forecast
+      }
+    }
+
+    // Calculate gaps with Autopilot
+    const budgetGapWithAutopilot = revenueWithAutopilot > 0 ? targetRevenue - revenueWithAutopilot : budgetGap
+    const budgetGapPercentWithAutopilot = revenueWithAutopilot > 0 ? (budgetGapWithAutopilot / targetRevenue) * 100 : budgetGapPercent
+
     // Determine performance status
     let performanceStatus: 'excellent' | 'good' | 'warning' | 'critical'
     if (budgetGapPercent <= -5) {
@@ -170,7 +212,19 @@ export async function GET(request: Request) {
       recommendation,
       totalRooms: hotel.total_rooms || 50,
       currentOccupancy,
-      avgRoomPrice
+      avgRoomPrice,
+      // Autopilot Forecast Data
+      autopilotForecast: autopilotForecast ? {
+        forecastedRevenue,
+        revenueWithAutopilot,
+        budgetGapWithAutopilot,
+        budgetGapPercentWithAutopilot,
+        revenueIncrease: autopilotForecast.revenueIncrease,
+        percentIncrease: autopilotForecast.percentIncrease,
+        confidence: autopilotForecast.summary?.avgConfidence || 0,
+        summary: autopilotForecast.summary,
+        riskAssessment: autopilotForecast.riskAssessment
+      } : null
     })
 
   } catch (error) {
