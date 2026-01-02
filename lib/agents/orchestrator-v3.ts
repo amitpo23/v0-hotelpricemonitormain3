@@ -8,8 +8,8 @@
  * - Historical, Statistics, Trends, Competitors
  */
 
-import { analyzeBookingVelocityV2 } from './velocity-agent-v2'
-import { fetchCBSData, analyzeCBSMarketTrends } from './cbs-agent'
+import { analyzeEnhancedVelocity } from './velocity-agent-v2'
+import { analyzeCBSMarketTrends, getCBSPricingRecommendation } from './cbs-agent'
 import { getWeatherForecast } from './weather-agent'
 import { getEnhancedEvents } from './events-agent-v2'
 import { getHistoricalComparison } from './historical-agent'
@@ -188,7 +188,7 @@ export async function orchestrateComprehensiveDataV3(
         try {
           console.log('🚀 [Velocity V2] Starting...')
           const result = await withTimeout(
-            analyzeBookingVelocityV2(hotelId, 30),
+            analyzeEnhancedVelocity(hotelId, 30),
             8000,
             'Velocity V2'
           )
@@ -212,32 +212,17 @@ export async function orchestrateComprehensiveDataV3(
         try {
           console.log('📊 [CBS Agent] Starting...')
           const currentDate = new Date(firstDate)
-          const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
           
-          const [current, previous, yearOverYear] = await Promise.all([
-            fetchCBSData(period, 'tel_aviv'),
-            fetchCBSData(
-              `${currentDate.getFullYear()}-${String(currentDate.getMonth()).padStart(2, '0')}`,
-              'tel_aviv'
-            ),
-            fetchCBSData(
-              `${currentDate.getFullYear() - 1}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`,
-              'tel_aviv'
-            )
-          ])
-          
-          const trends = await analyzeCBSMarketTrends(firstDate, 'tel_aviv')
+          const trends = await analyzeCBSMarketTrends(currentDate, 'tel_aviv')
+          const recommendation = await getCBSPricingRecommendation(trends, hotelBasePrice)
           
           cbsResult = {
-            current,
-            previous,
-            yearOverYear,
             trends,
-            recommendation: trends.recommendation
+            recommendation
           }
           cbsConfidence = 0.85
           dataSources.push('cbs_tourism')
-          console.log(`✅ [CBS Agent] Complete - YoY Growth: ${trends.yearOverYearGrowth?.toFixed(1)}%`)
+          console.log(`✅ [CBS Agent] Complete - Market analyzed`)
         } catch (error) {
           console.warn('⚠️  [CBS Agent] Failed:', (error as Error).message)
         }
@@ -256,16 +241,16 @@ export async function orchestrateComprehensiveDataV3(
             8000,
             'Weather Agent'
           )
-          if (result) {
-            const avgScore = result.forecast.reduce((sum, f) => sum + f.score, 0) / result.forecast.length
-            const avgImpact = result.forecast.reduce((sum, f) => sum + f.demandImpact, 0) / result.forecast.length
+          if (result && result.forecastDays) {
+            const avgScore = result.forecastDays.reduce((sum: number, f: any) => sum + f.weatherScore, 0) / result.forecastDays.length
+            const avgImpact = result.forecastDays.reduce((sum: number, f: any) => sum + f.demandImpact, 0) / result.forecastDays.length
             
             weatherResult = {
-              forecast: result.forecast,
+              forecast: result.forecastDays,
               averageScore: avgScore,
               averageDemandImpact: avgImpact
             }
-            weatherConfidence = result.confidence
+            weatherConfidence = 0.9
             dataSources.push('weather_forecast')
             console.log(`✅ [Weather Agent] Complete - Avg Score: ${avgScore.toFixed(0)}/100, Impact: ${avgImpact.toFixed(2)}x`)
           }
@@ -316,7 +301,13 @@ export async function orchestrateComprehensiveDataV3(
         try {
           console.log('📅 [Historical Agent] Starting...')
           for (const dateStr of dateStrings.slice(0, 10)) {
-            const result = await getHistoricalComparison(hotelId, dateStr, location)
+            const result = await getHistoricalComparison(
+              hotelId,
+              hotelName,
+              location,
+              dateStr,
+              hotelBasePrice
+            )
             if (result) {
               historicalData.set(dateStr, result)
             }
@@ -340,7 +331,7 @@ export async function orchestrateComprehensiveDataV3(
         try {
           console.log('📈 [Statistics Agent] Starting...')
           const result = await withTimeout(
-            gatherMarketStatistics(location, 'hotel'),
+            gatherMarketStatistics(location, firstDate),
             8000,
             'Statistics Agent'
           )
@@ -348,7 +339,7 @@ export async function orchestrateComprehensiveDataV3(
             statisticsData = result
             statisticsConfidence = result.confidence
             dataSources.push('market_statistics')
-            console.log(`✅ [Statistics Agent] Complete - Avg: ₪${result.averagePrice?.toFixed(0)}`)
+            console.log(`✅ [Statistics Agent] Complete - Sentiment: ${result.marketSentiment}`)
           }
         } catch (error) {
           console.warn('⚠️  [Statistics Agent] Failed:', (error as Error).message)
