@@ -108,6 +108,7 @@ function NavContent({ children }: { children: React.ReactNode }) {
             <NavLink href="/scans" icon={<IconSearch className="h-4 w-4" />} label="Radar" />
             <NavLink href="/autopilot" icon={<IconBot className="h-4 w-4" />} label="Autopilot" highlight />
             <NavLink href="/predictions" icon={<IconChart className="h-4 w-4" />} label="Predictions" />
+            <NavLink href="/learning" icon={<IconChart className="h-4 w-4" />} label="Learning" />
             <NavLink href="/alerts" icon={<IconBell className="h-4 w-4" />} label="Alerts" />
             {user?.is_admin && (
               <NavLink
