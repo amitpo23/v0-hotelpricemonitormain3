@@ -262,6 +262,12 @@ curl http://localhost:3000/api/learning/accuracy?days=30
 }
 ```
 
+**⚠️ חשוב לפרודקשן:**
+- Vercel Cron דורש **Pro plan** ומעלה
+- כל ה-Cron endpoints מאומתים עם `CRON_SECRET`
+- יש להגדיר `CRON_SECRET` ב-Vercel Environment Variables
+- קרא את `VERCEL_DEPLOYMENT.md` להדרכה מלאה
+
 ## 🔍 טיפולוגיית שגיאות
 
 המערכת מזהה דפוסים:

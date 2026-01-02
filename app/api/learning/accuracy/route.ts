@@ -11,6 +11,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes for batch processing
@@ -44,8 +45,20 @@ function calculateAccuracy(predicted: number, actual: number): {
  * Check and update prediction accuracy
  * This should run daily via CRON
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Verify Vercel Cron authentication (production security)
+    const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
+    
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      console.warn('⚠️ Unauthorized cron request to /api/learning/accuracy')
+      // Allow in development/testing, but log warning
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    }
+    
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
     const daysBack = parseInt(searchParams.get('daysBack') || '7')
