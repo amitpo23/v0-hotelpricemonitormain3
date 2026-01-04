@@ -1,12 +1,6 @@
 "use client"
 
 import { HelpCircle, CheckCircle, AlertTriangle, XCircle, TrendingUp } from "lucide-react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import type { ConfidenceResult } from "@/lib/calculations/revenue-calculator"
 
 interface ConfidenceBadgeProps {
