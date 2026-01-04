@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Initialize Supabase client with proper error handling
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+let supabase: ReturnType<typeof createClient> | null = null;
+
+try {
+  supabase = getSupabaseClient();
+} catch (error) {
+  console.error('[Apify Webhook] Failed to initialize Supabase:', error);
+}
 
 /**
  * Apify Webhook Handler
@@ -54,6 +69,15 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
+    // Check if Supabase is initialized
+    if (!supabase) {
+      console.error('❌ Supabase not initialized - missing environment variables');
+      return NextResponse.json(
+        { error: 'Service unavailable - configuration error' },
+        { status: 503 }
+      );
+    }
+    
     console.log('🔔 Apify webhook received');
     
     // Parse payload

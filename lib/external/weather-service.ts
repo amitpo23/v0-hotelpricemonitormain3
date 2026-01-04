@@ -46,9 +46,7 @@ export class WeatherService {
 
   constructor() {
     this.apiKey = process.env.OPENWEATHER_API_KEY || '';
-    if (!this.apiKey) {
-      console.warn('⚠️ OPENWEATHER_API_KEY not set - using fallback weather data');
-    }
+    // Silently use fallback data if API key not available
   }
 
   /**

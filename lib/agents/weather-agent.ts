@@ -52,7 +52,7 @@ async function fetchOpenWeather(
   const apiKey = process.env.OPENWEATHER_API_KEY
 
   if (!apiKey) {
-    console.warn('[WeatherAgent] OPENWEATHER_API_KEY not set')
+    // Silently return null if API key not available
     return null
   }
 
