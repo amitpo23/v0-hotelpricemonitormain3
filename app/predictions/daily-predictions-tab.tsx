@@ -21,8 +21,7 @@ interface DailyPredictionsTabProps {
   competitorPrices: any[]
   recommendations: any[]
   predictionsByHotel: Record<string, any>
-  getOccupancyForHotel: (hotelId: string) => any
-  getDemandColor: (demand: string | null) => string
+  bookings: any[]
 }
 
 /**
@@ -35,8 +34,7 @@ export function DailyPredictionsTab({
   competitorPrices,
   recommendations,
   predictionsByHotel,
-  getOccupancyForHotel,
-  getDemandColor,
+  bookings,
 }: DailyPredictionsTabProps) {
   const [filteredPredictions, setFilteredPredictions] = useState(predictions)
   const [filteredRecommendations, setFilteredRecommendations] = useState(recommendations)
@@ -165,6 +163,44 @@ export function DailyPredictionsTab({
       setRequestedInfo(null)
     }
   }, [predictions, recommendations, predictionsByHotel])
+
+  // Helper function to get occupancy for a hotel
+  const getOccupancyForHotel = (hotelId: string) => {
+    const hotelBookings = bookings?.filter((b: any) => b.hotel_id === hotelId) || []
+    const hotel = hotels?.find((h: any) => h.id === hotelId)
+    const totalRooms = hotel?.total_rooms || 50
+    const today = new Date().toISOString().split("T")[0]
+
+    let bookedToday = 0
+    hotelBookings.forEach((b: any) => {
+      if (b.check_in_date <= today && b.check_out_date > today) {
+        bookedToday += b.room_count || 1
+      }
+    })
+
+    return {
+      bookedToday,
+      totalRooms,
+      occupancyRate: Math.round((bookedToday / totalRooms) * 100),
+      futureBookings: hotelBookings.length,
+    }
+  }
+
+  // Helper function to get demand color
+  const getDemandColor = (demand: string | null) => {
+    switch (demand) {
+      case "very_high":
+        return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700"
+      case "high":
+        return "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700"
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700"
+      case "low":
+        return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700"
+      default:
+        return "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+    }
+  }
 
   return (
     <div className="space-y-6">

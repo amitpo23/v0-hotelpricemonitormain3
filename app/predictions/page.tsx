@@ -370,8 +370,7 @@ export default async function PredictionsPage() {
             competitorPrices={competitorPrices || []}
             recommendations={recommendations}
             predictionsByHotel={predictionsByHotel}
-            getOccupancyForHotel={getOccupancyForHotel}
-            getDemandColor={getDemandColor}
+            bookings={bookings || []}
           />
         </TabsContent>
 
