@@ -13,6 +13,7 @@ import { analyzeBookingVelocity, analyzeBookingVelocityBatch } from './velocity-
 import { getCompetitorPrices, getCompetitorPricesBatch } from './competitor-agent'
 import { getIsraeliHolidays } from './holidays-agent'
 import { analyzeCBSTourism } from './cbs-tourism-agent'
+import { analyzeNewsSentiment } from './news-sentiment-agent'
 import { getCachedData } from '@/lib/cache/external-data-cache'
 import { errorCoordinator } from '@/lib/coordination/error-coordinator'
 import { performanceMonitor } from '@/lib/coordination/performance-monitor'
@@ -56,6 +57,10 @@ interface ComprehensiveExternalData {
   cbsTourism: any
   cbsTourismConfidence: number
   
+  // News Sentiment data (Phase 2 - NEW)
+  newsSentiment: any
+  newsSentimentConfidence: number
+  
   // Overall metrics
   overallConfidence: number
   dataQuality: 'excellent' | 'good' | 'fair' | 'poor'
@@ -87,6 +92,7 @@ interface OrchestratorOptions {
   includeCompetitors?: boolean
   includeHolidays?: boolean
   includeCBSTourism?: boolean // Phase 2 - NEW
+  includeNewsSentiment?: boolean // Phase 2 - NEW
   batchOptimization?: boolean
   realTimeCompetitors?: boolean
   maxConcurrent?: number
@@ -113,6 +119,7 @@ export async function orchestrateComprehensiveData(
     includeCompetitors = true,
     includeHolidays = true,
     includeCBSTourism = true, // Phase 2 - NEW
+    includeNewsSentiment = true, // Phase 2 - NEW
     batchOptimization = true,
     realTimeCompetitors = false,
     maxConcurrent = 5,
@@ -128,6 +135,7 @@ export async function orchestrateComprehensiveData(
   console.log(`⚙️  Options: Events=${includeEvents}, Historical=${includeHistorical}, Stats=${includeStatistics}`)
   console.log(`⚙️  Trends=${includeTrends}, Budget=${includeBudget}, Velocity=${includeVelocity}`)
   console.log(`⚙️  Competitors=${includeCompetitors}, Holidays=${includeHolidays}, CBSTourism=${includeCBSTourism}`)
+  console.log(`⚙️  NewsSentiment=${includeNewsSentiment}`)
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   const startTime = Date.now()
@@ -150,6 +158,7 @@ export async function orchestrateComprehensiveData(
   let competitorsData = new Map<string, any>()
   let holidaysData = new Map<string, any>()
   let cbsTourismData: any = null // Phase 2 - NEW
+  let newsSentimentData: any = null // Phase 2 - NEW
   
   let eventsConfidence = 0
   let historicalConfidence = 0
@@ -160,6 +169,7 @@ export async function orchestrateComprehensiveData(
   let competitorsConfidence = 0
   let holidaysConfidence = 0
   let cbsTourismConfidence = 0 // Phase 2 - NEW
+  let newsSentimentConfidence = 0 // Phase 2 - NEW
 
   // Helper: Wrap agent execution with monitoring and error handling
   const executeAgent = async <T>(
@@ -388,6 +398,33 @@ export async function orchestrateComprehensiveData(
     )
   }
 
+  // Task 8: News Sentiment Analysis (Phase 2 - NEW)
+  if (includeNewsSentiment) {
+    stage2Tasks.push(
+      (async () => {
+        try {
+          console.log('📰 [News Sentiment Agent] Starting...')
+          const result = await executeAgent<AgentOutput>(
+            'News Sentiment Agent',
+            () => getCachedData(
+              'news_sentiment',
+              `${location}_${firstDate.substring(0, 10)}`,
+              () => analyzeNewsSentiment(location, new Date(firstDate)),
+              { ttl: 12 * 60 * 60 } // Cache for 12 hours (news changes faster)
+            ),
+            10000
+          )
+          newsSentimentData = result
+          newsSentimentConfidence = result.confidence || 0.6
+          dataSources.push('news_sentiment')
+          console.log(`✅ [News Sentiment Agent] Complete - Sentiment: ${result.dataPoints?.dominantSentiment}, ${result.dataPoints?.articleCount} articles`)
+        } catch (error) {
+          console.log('⚠️  [News Sentiment Agent] Failed:', (error as Error).message)
+        }
+      })()
+    )
+  }
+
   await Promise.all(stage2Tasks)
   console.log(`✨ Stage 2 complete in ${Date.now() - startTime}ms`)
 
@@ -592,6 +629,18 @@ export async function orchestrateComprehensiveData(
       })
     }
     
+    // Phase 2 - NEW: News Sentiment
+    if (newsSentimentData) {
+      agentOutputs.push({
+        agentName: 'News Sentiment Agent',
+        recommendation: newsSentimentData.recommendation,
+        confidence: newsSentimentConfidence,
+        suggestedMultiplier: newsSentimentData.suggestedMultiplier,
+        reasoning: newsSentimentData.reasoning,
+        dataPoints: newsSentimentData.dataPoints
+      })
+    }
+    
     // Calculate days ahead for context
     const daysAhead = Math.ceil((new Date(firstDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     
@@ -656,6 +705,8 @@ export async function orchestrateComprehensiveData(
     holidaysConfidence,
     cbsTourism: cbsTourismData, // Phase 2 - NEW
     cbsTourismConfidence, // Phase 2 - NEW
+    newsSentiment: newsSentimentData, // Phase 2 - NEW
+    newsSentimentConfidence, // Phase 2 - NEW
     overallConfidence,
     dataQuality,
     dataSources,
@@ -683,6 +734,7 @@ export function getRecommendedOptions(
       includeCompetitors: true,
       includeHolidays: true,
       includeCBSTourism: true, // Phase 2 - NEW
+      includeNewsSentiment: true, // Phase 2 - NEW
       batchOptimization: false,
       realTimeCompetitors: true,
       maxConcurrent: 5,
@@ -701,6 +753,7 @@ export function getRecommendedOptions(
       includeCompetitors: true,
       includeHolidays: true,
       includeCBSTourism: true, // Phase 2 - NEW
+      includeNewsSentiment: true, // Phase 2 - NEW
       batchOptimization: true,
       realTimeCompetitors: false,
       maxConcurrent: 5,
@@ -717,8 +770,7 @@ export function getRecommendedOptions(
     includeVelocity: false, // Velocity less relevant for long term
     includeCompetitors: false, // Competitors too variable long term
     includeHolidays: true,
-    includeCBSTourism: true, // Phase 2 - NEW - Tourism patterns relevant long term
-    batchOptimization: true,
+    includeCBSTourism: true, // Phase 2 - NEW - Tourism patterns relevant long term      includeNewsSentiment: true, // Phase 2 - NEW - News trends relevant long term    batchOptimization: true,
     realTimeCompetitors: false,
     maxConcurrent: 4,
   }
