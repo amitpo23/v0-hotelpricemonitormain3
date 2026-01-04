@@ -632,3 +632,92 @@ export async function predictPriceWithAI(
     return algorithmicPrediction
   }
 }
+
+/**
+ * 🎯 NEW: Enhanced prediction using Decision Agent for dynamic weighting
+ * This is the future-proof version that adapts to changing conditions
+ */
+export interface DecisionAgentPredictionInput extends PredictionInput {
+  decisionData?: {
+    recommendation: 'increase' | 'decrease' | 'maintain'
+    suggestedPriceMultiplier: number
+    confidence: number
+    reasoning: string[]
+    dominantFactors: Array<{
+      factor: string
+      weight: number
+      impact: string
+    }>
+  }
+}
+
+export function predictPriceWithDecisionAgent(input: DecisionAgentPredictionInput): PredictionOutput {
+  // If we have Decision Agent data, use it as the primary source
+  if (input.decisionData) {
+    const { decisionData } = input
+    const basePrediction = predictPrice(input) // Get traditional prediction
+    
+    // Combine Decision Agent wisdom with traditional algorithm
+    const decisionWeight = decisionData.confidence
+    const traditionalWeight = 1 - decisionWeight
+    
+    // Calculate Decision Agent suggested price
+    const decisionPrice = input.currentPrice * decisionData.suggestedPriceMultiplier
+    
+    // Weighted average
+    const finalPrice = (decisionPrice * decisionWeight) + (basePrediction.predictedPrice * traditionalWeight)
+    
+    // Build enhanced factors from Decision Agent
+    const enhancedFactors: PredictionFactor[] = [
+      {
+        name: "Decision Agent Recommendation",
+        impact: Math.round((decisionData.suggestedPriceMultiplier - 1) * 100),
+        description: `${decisionData.recommendation.toUpperCase()}: ${decisionData.reasoning[0] || 'Intelligent multi-agent analysis'}`
+      },
+      ...decisionData.dominantFactors.map(f => ({
+        name: f.factor,
+        impact: Math.round((parseFloat(f.impact) - 1) * 100),
+        description: `Weight: ${(f.weight * 100).toFixed(0)}% - ${f.impact}`
+      })),
+      ...basePrediction.factors.slice(0, 3) // Keep top 3 traditional factors for context
+    ]
+    
+    // Calculate enhanced confidence
+    const baseConfidence = basePrediction.confidenceScore
+    const decisionConfidence = decisionData.confidence * 100
+    const enhancedConfidence = Math.min(
+      Math.round((decisionConfidence * 0.7) + (baseConfidence * 0.3)),
+      95 // Cap at 95% to avoid overconfidence
+    )
+    
+    // Determine demand level based on price movement
+    let demandLevel: "low" | "medium" | "high" | "very_high"
+    if (decisionData.recommendation === 'increase' && decisionData.suggestedPriceMultiplier > 1.2) {
+      demandLevel = 'very_high'
+    } else if (decisionData.recommendation === 'increase') {
+      demandLevel = 'high'
+    } else if (decisionData.recommendation === 'decrease') {
+      demandLevel = 'low'
+    } else {
+      demandLevel = 'medium'
+    }
+    
+    return {
+      date: input.date,
+      predictedPrice: Math.round(finalPrice),
+      confidenceScore: enhancedConfidence,
+      demandLevel,
+      recommendation: decisionData.recommendation,
+      recommendedPrice: Math.round(finalPrice),
+      priceRange: {
+        min: Math.round(finalPrice * 0.92),
+        max: Math.round(finalPrice * 1.08)
+      },
+      factors: enhancedFactors
+    }
+  }
+  
+  // Fallback to traditional algorithm if no Decision Agent data
+  console.log('[Prediction] No Decision Agent data available, using traditional algorithm')
+  return predictPrice(input)
+}

@@ -15,6 +15,8 @@ import { getIsraeliHolidays } from './holidays-agent'
 import { getCachedData } from '@/lib/cache/external-data-cache'
 import { errorCoordinator } from '@/lib/coordination/error-coordinator'
 import { performanceMonitor } from '@/lib/coordination/performance-monitor'
+import { DecisionAgent } from './decision-agent'
+import type { AgentOutput } from './decision-agent'
 
 interface ComprehensiveExternalData {
   // Events data
@@ -54,6 +56,20 @@ interface ComprehensiveExternalData {
   dataQuality: 'excellent' | 'good' | 'fair' | 'poor'
   dataSources: string[]
   timestamp: string
+  
+  // Decision Agent - NEW: Intelligent decision making
+  decision?: {
+    recommendation: 'increase' | 'decrease' | 'maintain'
+    suggestedPriceMultiplier: number
+    confidence: number
+    reasoning: string[]
+    warnings: string[]
+    dominantFactors: Array<{
+      factor: string
+      weight: number
+      impact: string
+    }>
+  }
 }
 
 interface OrchestratorOptions {
@@ -432,6 +448,147 @@ export async function orchestrateComprehensiveData(
   console.log(`⭐ Data quality: ${dataQuality}`)
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
+  // 🎯 NEW: Run Decision Agent for intelligent decision making
+  let decision
+  try {
+    console.log('🧠 [Decision Agent] Analyzing all agent outputs...')
+    const decisionAgent = new DecisionAgent()
+    
+    // Prepare agent outputs
+    const agentOutputs: AgentOutput[] = []
+    
+    if (eventsData.size > 0) {
+      const avgEventImpact = Array.from(eventsData.values())
+        .map(e => e.impact || 1.0)
+        .reduce((a, b) => a + b, 0) / eventsData.size
+      
+      agentOutputs.push({
+        agentName: 'Events Agent',
+        recommendation: avgEventImpact > 1.2 ? 'increase' : avgEventImpact < 0.9 ? 'decrease' : 'maintain',
+        confidence: eventsConfidence,
+        suggestedMultiplier: avgEventImpact,
+        reasoning: [`Events impact: ${avgEventImpact.toFixed(2)}x`],
+        dataPoints: { eventCount: eventsData.size, avgImpact: avgEventImpact }
+      })
+    }
+    
+    if (historicalData.size > 0) {
+      const avgHistoricalTrend = Array.from(historicalData.values())
+        .map(h => h.trend || 1.0)
+        .reduce((a, b) => a + b, 0) / historicalData.size
+      
+      agentOutputs.push({
+        agentName: 'Historical Agent',
+        recommendation: avgHistoricalTrend > 1.1 ? 'increase' : avgHistoricalTrend < 0.9 ? 'decrease' : 'maintain',
+        confidence: historicalConfidence,
+        suggestedMultiplier: avgHistoricalTrend,
+        reasoning: [`Historical trend: ${avgHistoricalTrend.toFixed(2)}x`],
+        dataPoints: { dataCount: historicalData.size, avgTrend: avgHistoricalTrend }
+      })
+    }
+    
+    if (budgetData) {
+      const budgetMultiplier = budgetData.pricingPressure || 1.0
+      agentOutputs.push({
+        agentName: 'Budget Agent',
+        recommendation: budgetMultiplier > 1.05 ? 'increase' : budgetMultiplier < 0.95 ? 'decrease' : 'maintain',
+        confidence: budgetConfidence,
+        suggestedMultiplier: budgetMultiplier,
+        reasoning: [`Budget pressure: ${budgetMultiplier.toFixed(2)}x`, `Gap: ₪${Math.round(budgetData.budgetGap)}`],
+        dataPoints: { budgetGap: budgetData.budgetGap, pressure: budgetMultiplier }
+      })
+    }
+    
+    if (velocityData) {
+      const velocityMultiplier = velocityData.pricingImpact || 1.0
+      agentOutputs.push({
+        agentName: 'Velocity Agent',
+        recommendation: velocityMultiplier > 1.05 ? 'increase' : velocityMultiplier < 0.95 ? 'decrease' : 'maintain',
+        confidence: velocityConfidence,
+        suggestedMultiplier: velocityMultiplier,
+        reasoning: [`Velocity impact: ${velocityMultiplier.toFixed(2)}x`, `Trend: ${velocityData.trend}`],
+        dataPoints: { trend: velocityData.trend, impact: velocityMultiplier }
+      })
+    }
+    
+    if (competitorsData.size > 0) {
+      const competitors = Array.from(competitorsData.values()).filter(c => c.averagePrice > 0)
+      if (competitors.length > 0) {
+        const avgCompetitorPrice = competitors.reduce((sum, c) => sum + c.averagePrice, 0) / competitors.length
+        const competitorMultiplier = avgCompetitorPrice / hotelBasePrice
+        
+        agentOutputs.push({
+          agentName: 'Competitor Agent',
+          recommendation: competitorMultiplier > 1.1 ? 'increase' : competitorMultiplier < 0.9 ? 'decrease' : 'maintain',
+          confidence: competitorsConfidence,
+          suggestedMultiplier: competitorMultiplier,
+          reasoning: [`Avg competitor: ₪${Math.round(avgCompetitorPrice)} vs base ₪${hotelBasePrice}`],
+          dataPoints: { avgPrice: avgCompetitorPrice, multiplier: competitorMultiplier }
+        })
+      }
+    }
+    
+    if (holidaysData.size > 0) {
+      const avgHolidayImpact = Array.from(holidaysData.values())
+        .flat()
+        .map((h: any) => h.tourismImpact || 1.0)
+        .reduce((a, b) => a + b, 0) / Array.from(holidaysData.values()).flat().length
+      
+      agentOutputs.push({
+        agentName: 'Holidays Agent',
+        recommendation: avgHolidayImpact > 1.2 ? 'increase' : 'maintain',
+        confidence: holidaysConfidence,
+        suggestedMultiplier: avgHolidayImpact,
+        reasoning: [`Holiday impact: ${avgHolidayImpact.toFixed(2)}x`],
+        dataPoints: { holidayCount: Array.from(holidaysData.values()).flat().length, avgImpact: avgHolidayImpact }
+      })
+    }
+    
+    // Calculate days ahead for context
+    const daysAhead = Math.ceil((new Date(firstDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    
+    // Make decision
+    const decisionResult = await decisionAgent.makeDecision({
+      hotelId,
+      hotelName,
+      location,
+      targetDate: firstDate,
+      currentPrice: hotelBasePrice,
+      agentOutputs,
+      context: {
+        daysUntilTarget: Math.max(0, daysAhead),
+        isHighSeason: new Date(firstDate).getMonth() >= 5 && new Date(firstDate).getMonth() <= 8,
+        isWeekend: [5, 6].includes(new Date(firstDate).getDay()),
+        marketCondition: dataQuality === 'excellent' ? 'normal' : dataQuality === 'poor' ? 'volatile' : 'normal',
+        competitivePosition: 'average',
+        budgetStatus: budgetData?.pricingPressure > 1.1 ? 'below' : budgetData?.pricingPressure < 0.9 ? 'above' : 'on_track',
+        recentPerformance: velocityData?.trend || 'stable'
+      },
+      historicalAccuracy: new Map()
+    })
+    
+    decision = {
+      recommendation: decisionResult.recommendation,
+      suggestedPriceMultiplier: decisionResult.suggestedPrice / hotelBasePrice,
+      confidence: decisionResult.confidence,
+      reasoning: decisionResult.reasoning,
+      warnings: decisionResult.warnings,
+      dominantFactors: decisionResult.dominantFactors.map(f => ({
+        factor: f.agentName,
+        weight: f.weight,
+        impact: `${f.impact.toFixed(2)}x`
+      }))
+    }
+    
+    console.log(`✅ [Decision Agent] Complete - Recommendation: ${decisionResult.recommendation.toUpperCase()}`)
+    console.log(`   💰 Suggested multiplier: ${decision.suggestedPriceMultiplier.toFixed(3)}x`)
+    console.log(`   🎯 Confidence: ${(decisionResult.confidence * 100).toFixed(0)}%`)
+    console.log(`   📝 Key reasoning: ${decisionResult.reasoning[0]}`)
+  } catch (error) {
+    console.log('⚠️  [Decision Agent] Failed:', (error as Error).message)
+    decision = undefined
+  }
+
   return {
     events: eventsData,
     eventsConfidence,
@@ -452,6 +609,7 @@ export async function orchestrateComprehensiveData(
     overallConfidence,
     dataQuality,
     dataSources,
+    decision,
     timestamp: new Date().toISOString(),
   }
 }
