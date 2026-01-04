@@ -112,36 +112,141 @@ export function PredictionLogViewer({
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-lg border p-4">
-                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-lg border p-4 bg-blue-50">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2 text-blue-700">
                     <DollarSign className="w-4 h-4" />
-                    מחיר מחויה
+                    המחיר הנוכחי שלך
                   </h3>
-                  <div className="text-3xl font-bold text-primary">
-                    ₪{log.result?.predictedPrice?.toLocaleString()}
+                  <div className="text-3xl font-bold text-blue-600">
+                    ₪{log.input_data?.basePrice?.toLocaleString() || log.result?.basePrice?.toLocaleString() || "N/A"}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    מחיר בסיס: ₪{log.result?.basePrice?.toLocaleString()}
+                    המחיר הנוכחי במלון
                   </div>
                 </div>
 
-                <div className="rounded-lg border p-4">
-                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                <div className="rounded-lg border p-4 bg-purple-50">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2 text-purple-700">
+                    <TrendingUp className="w-4 h-4" />
+                    ממוצע המתחרים
+                  </h3>
+                  <div className="text-3xl font-bold text-purple-600">
+                    {log.input_data?.competitorAvg 
+                      ? `₪${Math.round(log.input_data.competitorAvg).toLocaleString()}` 
+                      : "N/A"}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {log.input_data?.competitorPrices || 0} מתחרים
+                  </div>
+                </div>
+                
+                <div className="rounded-lg border p-4 bg-green-50">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2 text-green-700">
                     <Target className="w-4 h-4" />
-                    Confidence
+                    המחיר המומלץ
                   </h3>
                   <div className="text-3xl font-bold text-green-600">
+                    ₪{log.result?.predictedPrice?.toLocaleString() || "N/A"}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {log.result?.priceVsBase !== undefined && (
+                      <span className={log.result.priceVsBase >= 0 ? "text-green-600" : "text-red-600"}>
+                        {log.result.priceVsBase >= 0 ? "+" : ""}{log.result.priceVsBase.toFixed(1)}% מהמחיר הנוכחי
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Confidence Score
+                  </h3>
+                  <div className="text-2xl font-bold text-primary">
                     {(log.result?.confidence * 100).toFixed(1)}%
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
                     רמת ביקוש: {log.result?.demand}
                   </div>
                 </div>
+                
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <Brain className="w-4 h-4" />
+                    סטטוס המלון
+                  </h3>
+                  <div className="text-sm space-y-1">
+                    <div>
+                      <span className="text-muted-foreground">תפוסה:</span>
+                      <span className="font-semibold mr-2">
+                        {log.input_data?.bookedRooms}/{log.input_data?.totalRooms} חדרים
+                        {log.input_data?.bookedRooms && log.input_data?.totalRooms && 
+                          ` (${Math.round((log.input_data.bookedRooms / log.input_data.totalRooms) * 100)}%)`
+                        }
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">סריקה אחרונה:</span>
+                      <span className="font-semibold mr-2">
+                        {log.input_data?.lastScanHoursAgo
+                          ? `${Math.round(log.input_data.lastScanHoursAgo)} שעות`
+                          : "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-lg border p-4">
-                <h3 className="font-semibold mb-2">נתוני קלט</h3>
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-blue-500" />
+                  סיבות להמלצת המחיר
+                </h3>
+                <div className="space-y-2 text-sm">
+                  {log.factors?.seasonality && (
+                    <div className="flex items-start gap-2 p-2 rounded bg-gray-50">
+                      <span className="font-semibold text-gray-700 min-w-[100px]">עונתיות:</span>
+                      <span className="text-gray-600">{log.factors.seasonality.reasoning}</span>
+                    </div>
+                  )}
+                  {log.factors?.weekendPremium && (
+                    <div className="flex items-start gap-2 p-2 rounded bg-gray-50">
+                      <span className="font-semibold text-gray-700 min-w-[100px]">סוף שבוע:</span>
+                      <span className="text-gray-600">{log.factors.weekendPremium.reasoning}</span>
+                    </div>
+                  )}
+                  {log.factors?.leadTime && (
+                    <div className="flex items-start gap-2 p-2 rounded bg-gray-50">
+                      <span className="font-semibold text-gray-700 min-w-[100px]">זמן הזמנה:</span>
+                      <span className="text-gray-600">{log.factors.leadTime.reasoning}</span>
+                    </div>
+                  )}
+                  {log.factors?.occupancy && (
+                    <div className="flex items-start gap-2 p-2 rounded bg-gray-50">
+                      <span className="font-semibold text-gray-700 min-w-[100px]">תפוסה:</span>
+                      <span className="text-gray-600">{log.factors.occupancy.reasoning}</span>
+                    </div>
+                  )}
+                  {log.factors?.competitor && (
+                    <div className="flex items-start gap-2 p-2 rounded bg-gray-50">
+                      <span className="font-semibold text-gray-700 min-w-[100px]">מתחרים:</span>
+                      <span className="text-gray-600">{log.factors.competitor.reasoning}</span>
+                    </div>
+                  )}
+                  {log.factors?.events && log.factors.events.eventsList?.length > 0 && (
+                    <div className="flex items-start gap-2 p-2 rounded bg-yellow-50 border border-yellow-200">
+                      <span className="font-semibold text-yellow-800 min-w-[100px]">אירועים:</span>
+                      <span className="text-yellow-700">{log.factors.events.reasoning}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <h3 className="font-semibold mb-2">נתוני קלט נוספים</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <span className="text-muted-foreground">תוצאות סריקה:</span>
@@ -152,28 +257,8 @@ export function PredictionLogViewer({
                     <span className="font-semibold mr-2">{log.input_data?.bookings || 0}</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">מחירי מתחרים:</span>
+                    <span className="text-muted-foreground">מקורות מחיר:</span>
                     <span className="font-semibold mr-2">{log.input_data?.competitorPrices || 0}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">חדרים תפוסים:</span>
-                    <span className="font-semibold mr-2">
-                      {log.input_data?.bookedRooms}/{log.input_data?.totalRooms}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">מתחרים ממוצע:</span>
-                    <span className="font-semibold mr-2">
-                      {log.input_data?.competitorAvg ? `₪${Math.round(log.input_data.competitorAvg)}` : "N/A"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">סריקה אחרונה:</span>
-                    <span className="font-semibold mr-2">
-                      {log.input_data?.lastScanHoursAgo
-                        ? `${Math.round(log.input_data.lastScanHoursAgo)} שעות`
-                        : "N/A"}
-                    </span>
                   </div>
                 </div>
               </div>

@@ -42,12 +42,20 @@ export default async function PredictionsPage() {
       .single()
 
     // Fetch predictions from the latest session only
-    const { data: predictions, error: predError } = await supabase
-      .from("price_predictions")
-      .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, created_at, session_id")
-      .eq("session_id", latestSession?.session_id || "none")
-      .order("prediction_date", { ascending: false })
-      .limit(500)
+    let predictions = null
+    let predError = null
+    
+    if (latestSession?.session_id) {
+      const result = await supabase
+        .from("price_predictions")
+        .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, created_at, session_id")
+        .eq("session_id", latestSession.session_id)
+        .order("prediction_date", { ascending: false })
+        .limit(500)
+      
+      predictions = result.data
+      predError = result.error
+    }
 
     // Get session info for display
     const sessionInfo: SessionInfo | null = latestSession ? {

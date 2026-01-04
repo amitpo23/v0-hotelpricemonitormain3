@@ -323,8 +323,20 @@ export default function PredictionsClient({ initialPredictions, hotels, sessionI
           <tbody>
             {filteredPredictions.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-8 text-gray-400">
-                  No predictions found. Try adjusting your filters or generate new predictions.
+                <td colSpan={6} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="text-6xl">📊</div>
+                    <div className="text-xl font-semibold text-gray-300">
+                      {predictions.length === 0 
+                        ? "אין חיזויים זמינים"
+                        : "לא נמצאו תוצאות התואמות את הפילטרים"}
+                    </div>
+                    <div className="text-gray-400 max-w-md">
+                      {predictions.length === 0 
+                        ? "צור חיזויים חדשים על ידי בחירת שנה וחודשים למעלה ולחיצה על כפתור 'ייצר חיזויים'"
+                        : "נסה לשנות את הפילטרים או לנקות אותם כדי לראות חיזויים נוספים"}
+                    </div>
+                  </div>
                 </td>
               </tr>
             ) : (
