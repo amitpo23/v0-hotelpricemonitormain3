@@ -303,7 +303,7 @@ export default function PredictionsClient({ initialPredictions, hotels, sessionI
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <Calendar className="w-3 h-3" />
                 <span>Session:</span>
-                <span className="font-mono">{sessionInfo.session_id.slice(0, 12)}...</span>
+                <span className="font-mono">{sessionInfo?.session_id?.slice(0, 12) || 'N/A'}...</span>
               </div>
             </div>
           )}

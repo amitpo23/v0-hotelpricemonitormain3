@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import PredictionsClient from "./predictions-client"
+
+// Force dynamic rendering - don't prerender at build time
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // Types for predictions
 export type Prediction = {
   id: string
