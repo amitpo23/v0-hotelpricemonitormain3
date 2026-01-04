@@ -120,6 +120,13 @@ export function GeneratePredictionsButton({ hotels }: { hotels: Hotel[] }) {
         const now = new Date()
         setLastGenerated(now)
         localStorage.setItem("predictions_last_generated", now.toISOString())
+        // Store the requested parameters so the page can filter appropriately
+        localStorage.setItem("predictions_requested_params", JSON.stringify({
+          selectedMonths,
+          selectedYear,
+          daysAhead: Number.parseInt(daysAhead),
+          generatedAt: now.toISOString()
+        }))
         router.refresh()
       } else {
         console.error("[v0] Failed to generate predictions:", data.error)
