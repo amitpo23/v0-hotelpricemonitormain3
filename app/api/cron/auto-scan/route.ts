@@ -205,7 +205,8 @@ async function scanDate(date: string): Promise<{ success: boolean; prices: numbe
   try {
     console.log(`  🔍 Scanning ${date}...`);
     
-    const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
     const response = await fetch(`${apiUrl}/api/scans/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -252,8 +253,10 @@ async function scanFull90Days() {
   const today = new Date();
   const startDate = today.toISOString().split('T')[0];
 
+  const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                 (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   const scanResponse = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/scans/execute`,
+    `${apiUrl}/api/scans/execute`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

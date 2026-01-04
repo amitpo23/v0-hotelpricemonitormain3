@@ -68,7 +68,9 @@ export async function POST(request: Request) {
 
       // Call the main predictions API for this batch
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/predictions/generate`, {
+        const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+        const response = await fetch(`${apiUrl}/api/predictions/generate`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

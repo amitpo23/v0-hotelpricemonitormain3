@@ -86,8 +86,25 @@ export async function GET(request: NextRequest) {
     if (hoursSinceUpdate > 1) {
       console.log("🚨 Scan appears stuck - triggering restart");
       
-      const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const response = await fetch(`${apiUrl}/api/cron/auto-scan`, {
+      // Use VERCEL_URL if available (for deployed environments), otherwise localhost
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+      
+      if (!baseUrl) {
+        console.log("⚠️ No app URL configured - skipping restart trigger");
+        return NextResponse.json({
+          success: true,
+          message: "Scan appears stuck but no app URL configured",
+          action: "no_url",
+          progress: {
+            completed: completedDates,
+            total: totalDates,
+            percentage: progress,
+          }
+        });
+      }
+      
+      const response = await fetch(`${baseUrl}/api/cron/auto-scan`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.CRON_SECRET}`,

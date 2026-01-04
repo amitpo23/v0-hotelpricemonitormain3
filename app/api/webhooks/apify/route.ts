@@ -82,13 +82,8 @@ export async function POST(request: NextRequest) {
     
     // Parse payload
     const payload: ApifyWebhookPayload = await request.json();
-    console.log('📦 Webhook payload:', {
-      eventType: payload.eventType,
-      status: payload.resource.status,
-      runId: payload.resource.id,
-    });
-
-    // Validate payload
+    
+    // Validate payload structure first
     if (!payload.eventData || !payload.resource) {
       console.error('❌ Invalid webhook payload - missing required fields');
       return NextResponse.json(
@@ -96,6 +91,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    
+    console.log('📦 Webhook payload:', {
+      eventType: payload.eventType,
+      status: payload.resource?.status,
+      runId: payload.resource?.id,
+    });
 
     const { eventType, resource } = payload;
     const { id: runId, status, defaultDatasetId, actId } = resource;
