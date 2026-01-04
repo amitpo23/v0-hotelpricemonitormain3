@@ -3,17 +3,23 @@
 import * as React from "react"
 
 // Tooltip stub components for build compatibility
-export const TooltipProvider = ({ children }: { children: React.ReactNode }) => <>{children}</>
+function TooltipProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
+}
 
-export const Tooltip = ({ children }: { children: React.ReactNode }) => <>{children}</>
+function Tooltip({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
+}
 
-export const TooltipTrigger = React.forwardRef<
+const TooltipTrigger = React.forwardRef<
   HTMLButtonElement,
   React.HTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
->(({ children, asChild, ...props }, ref) => {
-  const Comp = asChild ? React.Fragment : "button"
+>(function TooltipTrigger({ children, asChild, ...props }, ref) {
   return asChild ? <>{children}</> : <button ref={ref} {...props}>{children}</button>
 })
-TooltipTrigger.displayName = "TooltipTrigger"
 
-export const TooltipContent = ({ children }: { children: React.ReactNode }) => null
+function TooltipContent({ children }: { children: React.ReactNode }) {
+  return null
+}
+
+export { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent }
