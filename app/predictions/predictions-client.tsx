@@ -1,19 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import type { Prediction, Hotel } from "./page"
+import type { Prediction, Hotel, SessionInfo } from "./page"
 import { PredictionLogViewer } from "@/components/prediction-log-viewer"
 import { GenerationLogsViewer } from "@/components/generation-logs-viewer"
 import { ConfidenceBadge } from "@/components/confidence-badge"
 import { MetricsGlossary } from "@/components/metrics-glossary"
-import { FileText, ScrollText } from "lucide-react"
+import { FileText, ScrollText, Clock, Calendar } from "lucide-react"
 
 interface Props {
   initialPredictions: Prediction[]
   hotels: Hotel[]
+  sessionInfo: SessionInfo | null
 }
 
-export default function PredictionsClient({ initialPredictions, hotels }: Props) {
+export default function PredictionsClient({ initialPredictions, hotels, sessionInfo }: Props) {
   const [predictions, setPredictions] = useState(initialPredictions)
   const [selectedYear, setSelectedYear] = useState(2026)
   const [selectedMonths, setSelectedMonths] = useState<number[]>([1])
@@ -278,9 +279,35 @@ export default function PredictionsClient({ initialPredictions, hotels }: Props)
 
       {/* Predictions Table */}
       <div className="bg-gray-800 rounded-lg p-6 shadow-xl overflow-x-auto">
-        <h2 className="text-2xl font-bold mb-6 text-white">
-          Predictions ({filteredPredictions.length})
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white">
+            Predictions ({filteredPredictions.length})
+          </h2>
+          
+          {/* Session Info with Timestamp */}
+          {sessionInfo && (
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2 text-sm text-gray-300">
+                <Clock className="w-4 h-4" />
+                <span>חיזוי אחרון:</span>
+                <span className="font-mono text-blue-400">
+                  {new Date(sessionInfo.created_at).toLocaleString('he-IL', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <Calendar className="w-3 h-3" />
+                <span>Session:</span>
+                <span className="font-mono">{sessionInfo.session_id.slice(0, 12)}...</span>
+              </div>
+            </div>
+          )}
+        </div>
         
         <table className="w-full">
           <thead>

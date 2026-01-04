@@ -10,6 +10,13 @@ export type Prediction = {
   predicted_demand: string | null
   recommendation: string | null
   created_at: string | null
+  session_id: string | null
+}
+
+export type SessionInfo = {
+  session_id: string
+  created_at: string
+  total_predictions: number
 }
 
 export type Hotel = {
@@ -21,12 +28,28 @@ export default async function PredictionsPage() {
   try {
     const supabase = await createClient()
 
-    // Fetch predictions with proper null handling
+    // Get the latest session_id to show only the most recent predictions
+    const { data: latestSession, error: sessionError } = await supabase
+      .from("price_predictions")
+      .select("session_id, created_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
+
+    // Fetch predictions from the latest session only
     const { data: predictions, error: predError } = await supabase
       .from("price_predictions")
-      .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, created_at")
+      .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, created_at, session_id")
+      .eq("session_id", latestSession?.session_id || "none")
       .order("prediction_date", { ascending: false })
       .limit(500)
+
+    // Get session info for display
+    const sessionInfo: SessionInfo | null = latestSession ? {
+      session_id: latestSession.session_id,
+      created_at: latestSession.created_at,
+      total_predictions: predictions?.length || 0
+    } : null
 
     // Fetch hotels for filter
     const { data: hotels, error: hotelError } = await supabase
@@ -98,6 +121,7 @@ export default async function PredictionsPage() {
           <PredictionsClient 
             initialPredictions={predictions || []} 
             hotels={hotels || []}
+            sessionInfo={sessionInfo}
           />
         </div>
       </div>
