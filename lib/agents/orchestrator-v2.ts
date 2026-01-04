@@ -1,6 +1,7 @@
 /**
  * Enhanced Multi-Agent Orchestrator v2
  * Integrates ALL data sources for comprehensive pricing predictions
+ * With Error Coordination and Performance Monitoring
  */
 
 import { discoverEvents, discoverEventsBatch } from './events-agent'
@@ -12,6 +13,8 @@ import { analyzeBookingVelocity, analyzeBookingVelocityBatch } from './velocity-
 import { getCompetitorPrices, getCompetitorPricesBatch } from './competitor-agent'
 import { getIsraeliHolidays } from './holidays-agent'
 import { getCachedData } from '@/lib/cache/external-data-cache'
+import { errorCoordinator } from '@/lib/coordination/error-coordinator'
+import { performanceMonitor } from '@/lib/coordination/performance-monitor'
 
 interface ComprehensiveExternalData {
   // Events data
@@ -133,14 +136,41 @@ export async function orchestrateComprehensiveData(
   let competitorsConfidence = 0
   let holidaysConfidence = 0
 
-  // Helper: Add timeout to promises
-  const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, taskName: string): Promise<T> => {
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error(`${taskName} timeout after ${timeoutMs}ms`)), timeoutMs)
-      ),
-    ])
+  // Helper: Wrap agent execution with monitoring and error handling
+  const executeAgent = async <T>(
+    agentName: string,
+    fn: () => Promise<T>,
+    timeoutMs: number
+  ): Promise<T> => {
+    // Check circuit breaker
+    const { allowed, reason } = errorCoordinator.shouldAllowExecution(agentName)
+    if (!allowed) {
+      console.warn(`⚠️  [${agentName}] Skipped: ${reason}`)
+      throw new Error(`Circuit breaker open: ${reason}`)
+    }
+
+    // Track performance and execute
+    try {
+      const result = await performanceMonitor.trackExecution(agentName, async () => {
+        // Race with timeout
+        return await Promise.race([
+          fn(),
+          new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs)
+          ),
+        ])
+      })
+      
+      // Log success to error coordinator
+      errorCoordinator.logError(agentName, 'success', undefined, 'low', true)
+      
+      return result
+    } catch (error) {
+      // Log error
+      const severity = error instanceof Error && error.message.includes('timeout') ? 'high' : 'medium'
+      errorCoordinator.logError(agentName, error as Error, undefined, severity, false)
+      throw error
+    }
   }
 
   // === STAGE 1: Quick Data (Budget, Velocity, Holidays) ===
@@ -153,10 +183,10 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('💰 [Budget Agent] Starting...')
-          const result = await withTimeout(
-            analyzeBudget(hotelId, new Date(firstDate)),
-            5000,
-            'Budget Agent'
+          const result = await executeAgent(
+            'Budget Agent',
+            () => analyzeBudget(hotelId, new Date(firstDate)),
+            5000
           )
           if (result) {
             budgetData = result
@@ -177,10 +207,10 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('🚀 [Velocity Agent] Starting...')
-          const result = await withTimeout(
-            analyzeBookingVelocity(hotelId, 30),
-            5000,
-            'Velocity Agent'
+          const result = await executeAgent(
+            'Velocity Agent',
+            () => analyzeBookingVelocity(hotelId),
+            5000
           )
           if (result) {
             velocityData = result
@@ -201,15 +231,15 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('🕎 [Holidays Agent] Starting...')
-          const result = await withTimeout(
-            getCachedData(
+          const result = await executeAgent(
+            'Holidays Agent',
+            () => getCachedData(
               'israeli_holidays',
               `${firstDate}_${lastDate}`,
               () => getIsraeliHolidays(firstDate, lastDate),
               { ttl: 24 * 60 * 60 } // Cache for 24 hours
             ),
-            5000,
-            'Holidays Agent'
+            5000
           )
           holidaysData = result
           holidaysConfidence = 0.95
@@ -235,16 +265,16 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('📜 [Historical Agent] Starting...')
-          const result = await withTimeout(
-            batchOptimization && dateStrings.length > 5
+          const result = await executeAgent(
+            'Historical Agent',
+            () => batchOptimization && dateStrings.length > 5
               ? getHistoricalComparisonBatch(hotelId, hotelName, location, dateStrings, hotelBasePrice)
               : Promise.all(dateStrings.map(d => getHistoricalComparison(hotelId, hotelName, location, d, hotelBasePrice))).then(results => {
                   const map = new Map()
                   results.forEach((r, i) => r && map.set(dateStrings[i], r))
                   return map
                 }),
-            15000,
-            'Historical Agent'
+            15000
           )
           historicalData = result
           historicalConfidence = result.size > 0 ? 0.8 : 0.3
@@ -263,15 +293,15 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('📊 [Statistics Agent] Starting...')
-          const result = await withTimeout(
-            getCachedData(
+          const result = await executeAgent<any>(
+            'Statistics Agent',
+            () => getCachedData(
               'market_statistics',
               `${location}_${firstDate.substring(0, 7)}`,
               () => gatherMarketStatistics(location),
               { ttl: 60 * 60 } // Cache for 1 hour
             ),
-            10000,
-            'Statistics Agent'
+            10000
           )
           statisticsData = result
           statisticsConfidence = result.confidence || 0.7
@@ -290,10 +320,10 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('📈 [Trends Agent] Starting...')
-          const result = await withTimeout(
-            getTrendsForDateRange(firstDate, lastDate, 'hotels tel aviv', 'IL'),
-            10000,
-            'Trends Agent'
+          const result = await executeAgent<Map<string, any>>(
+            'Trends Agent',
+            () => getTrendsForDateRange(firstDate, lastDate, 'hotels tel aviv', 'IL'),
+            10000
           )
           trendsData = result
           trendsConfidence = result.size > 0 ? (result.values().next().value?.confidence || 0.7) : 0.4
@@ -319,8 +349,9 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('🎉 [Events Agent] Starting...')
-          const result = await withTimeout(
-            batchOptimization && dateStrings.length > 5
+          const result = await executeAgent<Map<string, any>>(
+            'Events Agent',
+            () => batchOptimization && dateStrings.length > 5
               ? getCachedData(
                   'tavily_events_batch',
                   `${location}_${firstDate}_${lastDate}`,
@@ -329,11 +360,10 @@ export async function orchestrateComprehensiveData(
                 )
               : Promise.all(dateStrings.map(d => discoverEvents(location, d, 7))).then(results => {
                   const map = new Map()
-                  results.forEach((r, i) => map.set(dateStrings[i], r))
+                  results.forEach((r: any, i: number) => map.set(dateStrings[i], r))
                   return map
                 }),
-            20000,
-            'Events Agent'
+            20000
           )
           eventsData = result
           eventsConfidence = result.size > 0 ? 0.75 : 0.3
@@ -352,10 +382,10 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('🏨 [Competitor Agent] Starting...')
-          const result = await withTimeout(
-            getCompetitorPricesBatch(hotelId, location, dateStrings, hotelBasePrice, realTimeCompetitors),
-            realTimeCompetitors ? 60000 : 10000,
-            'Competitor Agent'
+          const result = await executeAgent<Map<string, any>>(
+            'Competitor Agent',
+            () => getCompetitorPricesBatch(hotelId, location, dateStrings, hotelBasePrice, realTimeCompetitors),
+            realTimeCompetitors ? 60000 : 10000
           )
           competitorsData = result
           competitorsConfidence = result.size > 0 ? (result.values().next().value?.confidence || 0.7) : 0.3

@@ -42,31 +42,32 @@ async function searchEventsWithTavily(location: string, dateRange: string, retri
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
     }
     
+    let timeoutId: NodeJS.Timeout | null = null
+    
     try {
       const query = `אירועים כנסים קונצרטים פסטיבלים ב${location} ${dateRange} events conferences concerts festivals`
       
       // Add timeout to fetch call (20 seconds for complex searches)
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 20000)
+      timeoutId = setTimeout(() => controller.abort(), 20000)
       
-      try {
-        const response = await fetch('https://api.tavily.com/search', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            api_key: apiKey,
-            query,
-            search_depth: 'advanced',
-            include_answer: true,
-            include_raw_content: true,
-            max_results: 10,
-            include_domains: [
-              'timeout.com',
-              'eventbrite.com',
-              'ticketmaster.co.il',
+      const response = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          api_key: apiKey,
+          query,
+          search_depth: 'advanced',
+          include_answer: true,
+          include_raw_content: true,
+          max_results: 10,
+          include_domains: [
+            'timeout.com',
+            'eventbrite.com',
+            'ticketmaster.co.il',
             'leaan.co.il',
             'itraveljerusalem.com',
             'events.themarker.com',
@@ -89,7 +90,7 @@ async function searchEventsWithTavily(location: string, dateRange: string, retri
       return result
       
     } catch (fetchError) {
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       lastError = fetchError
       
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
