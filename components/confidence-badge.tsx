@@ -2,6 +2,7 @@
 
 import { HelpCircle, CheckCircle, AlertTriangle, XCircle, TrendingUp } from "lucide-react"
 import type { ConfidenceResult } from "@/lib/calculations/revenue-calculator"
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface ConfidenceBadgeProps {
   confidence: number | ConfidenceResult
