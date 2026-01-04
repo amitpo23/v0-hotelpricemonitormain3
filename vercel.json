@@ -23,12 +23,10 @@
     {
       "path": "/api/learning/accuracy",
       "schedule": "0 3 * * *",
-      "description": "Check prediction accuracy vs actuals - Daily at 3 AM"
     },
     {
       "path": "/api/learning/refresh-predictions",
       "schedule": "0 2 * * *",
-      "description": "Refresh predictions for next 90 days - Daily at 2 AM"
     }
   ]
 }
