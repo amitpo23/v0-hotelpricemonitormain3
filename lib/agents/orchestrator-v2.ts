@@ -12,6 +12,7 @@ import { analyzeBudget, analyzeBudgetBatch } from './budget-agent'
 import { analyzeBookingVelocity, analyzeBookingVelocityBatch } from './velocity-agent'
 import { getCompetitorPrices, getCompetitorPricesBatch } from './competitor-agent'
 import { getIsraeliHolidays } from './holidays-agent'
+import { analyzeCBSTourism } from './cbs-tourism-agent'
 import { getCachedData } from '@/lib/cache/external-data-cache'
 import { errorCoordinator } from '@/lib/coordination/error-coordinator'
 import { performanceMonitor } from '@/lib/coordination/performance-monitor'
@@ -51,6 +52,10 @@ interface ComprehensiveExternalData {
   holidays: Map<string, any>
   holidaysConfidence: number
   
+  // CBS Tourism data (Phase 2 - NEW)
+  cbsTourism: any
+  cbsTourismConfidence: number
+  
   // Overall metrics
   overallConfidence: number
   dataQuality: 'excellent' | 'good' | 'fair' | 'poor'
@@ -81,6 +86,7 @@ interface OrchestratorOptions {
   includeVelocity?: boolean
   includeCompetitors?: boolean
   includeHolidays?: boolean
+  includeCBSTourism?: boolean // Phase 2 - NEW
   batchOptimization?: boolean
   realTimeCompetitors?: boolean
   maxConcurrent?: number
@@ -106,6 +112,7 @@ export async function orchestrateComprehensiveData(
     includeVelocity = true,
     includeCompetitors = true,
     includeHolidays = true,
+    includeCBSTourism = true, // Phase 2 - NEW
     batchOptimization = true,
     realTimeCompetitors = false,
     maxConcurrent = 5,
@@ -120,7 +127,7 @@ export async function orchestrateComprehensiveData(
   console.log(`💰 Base price: ₪${hotelBasePrice}`)
   console.log(`⚙️  Options: Events=${includeEvents}, Historical=${includeHistorical}, Stats=${includeStatistics}`)
   console.log(`⚙️  Trends=${includeTrends}, Budget=${includeBudget}, Velocity=${includeVelocity}`)
-  console.log(`⚙️  Competitors=${includeCompetitors}, Holidays=${includeHolidays}`)
+  console.log(`⚙️  Competitors=${includeCompetitors}, Holidays=${includeHolidays}, CBSTourism=${includeCBSTourism}`)
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   const startTime = Date.now()
@@ -142,6 +149,7 @@ export async function orchestrateComprehensiveData(
   let velocityData: any = null
   let competitorsData = new Map<string, any>()
   let holidaysData = new Map<string, any>()
+  let cbsTourismData: any = null // Phase 2 - NEW
   
   let eventsConfidence = 0
   let historicalConfidence = 0
@@ -151,6 +159,7 @@ export async function orchestrateComprehensiveData(
   let velocityConfidence = 0
   let competitorsConfidence = 0
   let holidaysConfidence = 0
+  let cbsTourismConfidence = 0 // Phase 2 - NEW
 
   // Helper: Wrap agent execution with monitoring and error handling
   const executeAgent = async <T>(
@@ -352,6 +361,33 @@ export async function orchestrateComprehensiveData(
     )
   }
 
+  // Task 7: CBS Tourism Statistics (Phase 2 - NEW)
+  if (includeCBSTourism) {
+    stage2Tasks.push(
+      (async () => {
+        try {
+          console.log('🏖️  [CBS Tourism Agent] Starting...')
+          const result = await executeAgent<AgentOutput>(
+            'CBS Tourism Agent',
+            () => getCachedData(
+              'cbs_tourism',
+              `${location}_${firstDate.substring(0, 7)}`,
+              () => analyzeCBSTourism(location, new Date(firstDate)),
+              { ttl: 24 * 60 * 60 } // Cache for 24 hours
+            ),
+            8000
+          )
+          cbsTourismData = result
+          cbsTourismConfidence = result.confidence || 0.75
+          dataSources.push('cbs_tourism')
+          console.log(`✅ [CBS Tourism Agent] Complete - Tourism multiplier: ${result.suggestedMultiplier?.toFixed(2)}x`)
+        } catch (error) {
+          console.log('⚠️  [CBS Tourism Agent] Failed:', (error as Error).message)
+        }
+      })()
+    )
+  }
+
   await Promise.all(stage2Tasks)
   console.log(`✨ Stage 2 complete in ${Date.now() - startTime}ms`)
 
@@ -544,6 +580,18 @@ export async function orchestrateComprehensiveData(
       })
     }
     
+    // Phase 2 - NEW: CBS Tourism Statistics
+    if (cbsTourismData) {
+      agentOutputs.push({
+        agentName: 'CBS Tourism Agent',
+        recommendation: cbsTourismData.recommendation,
+        confidence: cbsTourismConfidence,
+        suggestedMultiplier: cbsTourismData.suggestedMultiplier,
+        reasoning: cbsTourismData.reasoning,
+        dataPoints: cbsTourismData.dataPoints
+      })
+    }
+    
     // Calculate days ahead for context
     const daysAhead = Math.ceil((new Date(firstDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     
@@ -606,6 +654,8 @@ export async function orchestrateComprehensiveData(
     competitorsConfidence,
     holidays: holidaysData,
     holidaysConfidence,
+    cbsTourism: cbsTourismData, // Phase 2 - NEW
+    cbsTourismConfidence, // Phase 2 - NEW
     overallConfidence,
     dataQuality,
     dataSources,
@@ -632,6 +682,7 @@ export function getRecommendedOptions(
       includeVelocity: true,
       includeCompetitors: true,
       includeHolidays: true,
+      includeCBSTourism: true, // Phase 2 - NEW
       batchOptimization: false,
       realTimeCompetitors: true,
       maxConcurrent: 5,
@@ -649,6 +700,7 @@ export function getRecommendedOptions(
       includeVelocity: true,
       includeCompetitors: true,
       includeHolidays: true,
+      includeCBSTourism: true, // Phase 2 - NEW
       batchOptimization: true,
       realTimeCompetitors: false,
       maxConcurrent: 5,
@@ -665,6 +717,7 @@ export function getRecommendedOptions(
     includeVelocity: false, // Velocity less relevant for long term
     includeCompetitors: false, // Competitors too variable long term
     includeHolidays: true,
+    includeCBSTourism: true, // Phase 2 - NEW - Tourism patterns relevant long term
     batchOptimization: true,
     realTimeCompetitors: false,
     maxConcurrent: 4,
