@@ -37,16 +37,6 @@ export default async function PredictionsPage() {
     let predictions = null
     let predError = null
     
-// Show all predictions - removed session_id filter to display all historical predictions
-// const result = await supabase
-.from("price_predictions")
-    .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, base_price, recommendation_type, session_id, created_at")
-        .order("prediction_date", { ascending: true })
-            .limit(500)
-
-              predictions = result.data
-                predError = result.error
-    } : null
 
     // Fetch hotels for filter
     const { data: hotels, error: hotelError } = await supabase
@@ -118,7 +108,7 @@ export default async function PredictionsPage() {
           <PredictionsClient 
             initialPredictions={predictions || []} 
             hotels={hotels || []}
-            sessionInfo={sessionInfo}
+            sessionInfo={null}
           />
         </div>
       </div>
