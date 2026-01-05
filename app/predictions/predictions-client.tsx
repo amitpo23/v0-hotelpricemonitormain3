@@ -6,6 +6,7 @@ import { PredictionLogViewer } from "@/components/prediction-log-viewer"
 import { GenerationLogsViewer } from "@/components/generation-logs-viewer"
 import { ConfidenceBadge } from "@/components/confidence-badge"
 import { MetricsGlossary } from "@/components/metrics-glossary"
+import { QuickAgentSummary } from "@/components/quick-agent-summary"
 import { FileText, ScrollText, Clock, Calendar } from "lucide-react"
 
 interface Props {
@@ -317,13 +318,14 @@ export default function PredictionsClient({ initialPredictions, hotels, sessionI
               <th className="text-left py-3 px-4 text-gray-300 font-semibold">Predicted Price</th>
               <th className="text-left py-3 px-4 text-gray-300 font-semibold">Confidence</th>
               <th className="text-left py-3 px-4 text-gray-300 font-semibold">Demand</th>
+              <th className="text-left py-3 px-4 text-gray-300 font-semibold">AI Agents</th>
               <th className="text-left py-3 px-4 text-gray-300 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredPredictions.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-12">
+                <td colSpan={7} className="text-center py-12">
                   <div className="flex flex-col items-center gap-4">
                     <div className="text-6xl">📊</div>
                     <div className="text-xl font-semibold text-gray-300">
@@ -359,6 +361,16 @@ export default function PredictionsClient({ initialPredictions, hotels, sessionI
                   </td>
                   <td className="py-3 px-4 text-gray-300">
                     {pred.predicted_demand || "N/A"}
+                  </td>
+                  <td className="py-3 px-4">
+                    {pred.hotel_id && pred.prediction_date && (
+                      <QuickAgentSummary
+                        hotelId={pred.hotel_id}
+                        predictionDate={pred.prediction_date}
+                        predictedPrice={pred.predicted_price || 0}
+                        basePrice={hotels.find(h => h.id === pred.hotel_id)?.base_price || 0}
+                      />
+                    )}
                   </td>
                   <td className="py-3 px-4">
                     <button

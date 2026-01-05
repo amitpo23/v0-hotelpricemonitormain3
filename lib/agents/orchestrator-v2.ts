@@ -336,7 +336,7 @@ export async function orchestrateComprehensiveData(
               () => gatherMarketStatistics(location),
               { ttl: 60 * 60 } // Cache for 1 hour
             ),
-            10000
+            15000  // Increased from 10s to 15s to handle slow Tavily responses
           )
           statisticsData = result
           statisticsConfidence = result.confidence || 0.7
@@ -438,6 +438,10 @@ export async function orchestrateComprehensiveData(
       (async () => {
         try {
           console.log('🎉 [Events Agent] Starting...')
+          // Calculate dynamic timeout based on number of dates (31 dates * ~2s per search + buffer)
+          const eventsTimeout = Math.max(60000, dateStrings.length * 2000 + 10000)
+          console.log(`[Events Agent] Using timeout: ${eventsTimeout}ms for ${dateStrings.length} dates`)
+          
           const result = await executeAgent<Map<string, any>>(
             'Events Agent',
             () => batchOptimization && dateStrings.length > 5
@@ -452,7 +456,7 @@ export async function orchestrateComprehensiveData(
                   results.forEach((r: any, i: number) => map.set(dateStrings[i], r))
                   return map
                 }),
-            20000
+            eventsTimeout
           )
           eventsData = result
           eventsConfidence = result.size > 0 ? 0.75 : 0.3

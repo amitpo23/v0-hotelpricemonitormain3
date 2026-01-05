@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileText, TrendingUp, DollarSign, Target, Brain, CheckCircle2 } from "lucide-react"
+import { FileText, TrendingUp, DollarSign, Target, Brain, CheckCircle2, Sparkles } from "lucide-react"
+import { AgentDecisionViewer } from "./agent-decision-viewer"
 
 interface PredictionLog {
   id: string
@@ -63,11 +64,11 @@ export function PredictionLogViewer({
   }
 
   // Fetch log when dialog opens
-  useState(() => {
+  useEffect(() => {
     if (open) {
       fetchLog()
     }
-  })
+  }, [open])
 
   if (!log && !loading) {
     return (
@@ -98,10 +99,14 @@ export function PredictionLogViewer({
         </DialogHeader>
 
         {loading ? (
-          <div className="text-center py-8">טוען...</div>
+          <div className="text-center py-8 text-muted-foreground">טוען...</div>
         ) : log ? (
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-6">
+          <Tabs defaultValue="agents" className="w-full">
+            <TabsList className="grid w-full grid-cols-7">
+              <TabsTrigger value="agents">
+                <Sparkles className="w-4 h-4 ml-1" />
+                סוכנים
+              </TabsTrigger>
               <TabsTrigger value="overview">סקירה</TabsTrigger>
               <TabsTrigger value="multiagent">Multi-Agent</TabsTrigger>
               <TabsTrigger value="factors">פקטורים</TabsTrigger>
@@ -109,6 +114,26 @@ export function PredictionLogViewer({
               <TabsTrigger value="confidence">Confidence</TabsTrigger>
               <TabsTrigger value="result">תוצאה</TabsTrigger>
             </TabsList>
+
+            {/* NEW: Agents Tab - Shows full decision process */}
+            <TabsContent value="agents" className="space-y-4">
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-4">
+                <div className="flex items-center gap-2 text-primary font-semibold mb-2">
+                  <Brain className="w-5 h-5" />
+                  תהליך קבלת החלטה מבוסס AI Multi-Agent
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  כל חיזוי מבוסס על {log.multi_agent_data ? '8+' : '5+'} סוכני AI עצמאיים שמנתחים היבטים שונים של השוק.
+                  כל סוכן מביא את הידע המקצועי שלו, והמחיר הסופי מחושב על ידי שילוב משוקלל של כל ההמלצות.
+                </p>
+              </div>
+
+              <AgentDecisionViewer 
+                hotelId={log.input_data?.hotelId || ""} 
+                predictionDate={log.prediction_date}
+                sessionId={log.id}
+              />
+            </TabsContent>
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="space-y-4">

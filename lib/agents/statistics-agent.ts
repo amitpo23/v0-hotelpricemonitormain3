@@ -5,7 +5,7 @@
  */
 
 // Helper: Fetch with timeout
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 8000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 12000): Promise<Response> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   
@@ -91,7 +91,7 @@ async function searchTourismStats(period: string): Promise<TourismStatistics | n
           'themarker.com'
         ]
       }),
-    }, 7000)
+    }, 10000)  // Increased from 7s to 10s
 
     if (!response.ok) {
       return null
