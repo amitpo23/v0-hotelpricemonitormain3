@@ -15,9 +15,9 @@ export async function GET() {
     // Get accuracy data - predictions vs actual results
     const { data: accuracyData, error: accError } = await supabase
       .from('price_predictions')
-      .select('predicted_price, date')
+      .select('predicted_price, prediction_date')
       .not('predicted_price', 'is', null)
-      .order('date', { ascending: false })
+      .order('prediction_date', { ascending: false })
       .limit(100);
 
     if (accError) throw accError;
