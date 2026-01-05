@@ -33,35 +33,19 @@ export default async function PredictionsPage() {
   try {
     const supabase = await createClient()
 
-    // Get the latest session_id to show only the most recent predictions
-    const { data: latestSession, error: sessionError } = await supabase
-      .from("price_predictions")
-      .select("session_id, created_at")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single()
-
     // Fetch predictions from the latest session only
     let predictions = null
     let predError = null
     
-    if (latestSession?.session_id) {
-      const result = await supabase
-        .from("price_predictions")
-        .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, created_at, session_id")
-        .eq("session_id", latestSession.session_id)
-        .order("prediction_date", { ascending: false })
-        .limit(500)
-      
-      predictions = result.data
-      predError = result.error
-    }
+// Show all predictions - removed session_id filter to display all historical predictions
+// const result = await supabase
+.from("price_predictions")
+    .select("id, hotel_id, prediction_date, predicted_price, confidence_score, predicted_demand, recommendation, base_price, recommendation_type, session_id, created_at")
+        .order("prediction_date", { ascending: true })
+            .limit(500)
 
-    // Get session info for display
-    const sessionInfo: SessionInfo | null = latestSession ? {
-      session_id: latestSession.session_id,
-      created_at: latestSession.created_at,
-      total_predictions: predictions?.length || 0
+              predictions = result.data
+                predError = result.error
     } : null
 
     // Fetch hotels for filter
