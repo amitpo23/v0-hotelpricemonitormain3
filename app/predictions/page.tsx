@@ -34,8 +34,15 @@ export default async function PredictionsPage() {
     const supabase = await createClient()
 
     // Fetch predictions from the latest session only
-    let predictions = null
-    let predError = null
+
+
+
+        // Fetch all predictions - no session filter
+    const { data: predictionsData, error: predictionError } = await supabase
+      .from('price_predictions')
+      .select('*')
+      .order('prediction_date', { ascending: true })
+      .limit(500)
     
 
     // Fetch hotels for filter
@@ -44,7 +51,7 @@ export default async function PredictionsPage() {
       .select("id, name")
       .order("name", { ascending: true })
 
-    const error = predError || hotelError
+    const error = predictionError || hotelError
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
@@ -106,7 +113,7 @@ export default async function PredictionsPage() {
 
           {/* Client Component with Filters and Generate Form */}
           <PredictionsClient 
-            initialPredictions={predictions || []} 
+            initialPredictions={predictionsData || []} 
             hotels={hotels || []}
             sessionInfo={null}
           />
