@@ -11,6 +11,68 @@ import { yoyService } from "./analytics/year-over-year"
 import { featureEngineer } from "./features/feature-engineering"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+// Weight cache to avoid DB queries on every prediction
+const weightCache = new Map<string, Map<string, number>>()
+const CACHE_TTL = 3600000 // 1 hour
+let lastCacheUpdate = 0
+
+/**
+ * Get optimized weight for a factor from cache or database
+ */
+async function getWeight(
+  supabase: SupabaseClient | null,
+  hotelId: string | null,
+  factorName: string,
+  defaultValue: number
+): Promise<number> {
+  // If no hotel ID or supabase client, use default
+  if (!hotelId || !supabase) return defaultValue
+  
+  // Check cache
+  const now = Date.now()
+  if (now - lastCacheUpdate < CACHE_TTL && weightCache.has(hotelId)) {
+    const hotelWeights = weightCache.get(hotelId)!
+    if (hotelWeights.has(factorName)) {
+      return hotelWeights.get(factorName)!
+    }
+  }
+  
+  // Load from database if cache miss or expired
+  try {
+    const { data, error } = await supabase
+      .from('factor_weights')
+      .select('factor_name, weight_value, confidence')
+      .eq('hotel_id', hotelId)
+      .eq('is_active', true)
+      .gte('confidence', 0.6) // Only use confident weights
+    
+    if (!error && data) {
+      // Update cache for this hotel
+      const hotelWeights = new Map<string, number>()
+      data.forEach(w => hotelWeights.set(w.factor_name, w.weight_value))
+      weightCache.set(hotelId, hotelWeights)
+      lastCacheUpdate = now
+      
+      // Return weight if found
+      const weight = hotelWeights.get(factorName)
+      if (weight !== undefined) return weight
+    }
+  } catch (err) {
+    console.error(`[Weight Loading] Error for ${factorName}:`, err)
+  }
+  
+  // Fallback to default
+  return defaultValue
+}
+
+/**
+ * Clear weight cache (call after optimization)
+ */
+export function clearWeightCache() {
+  weightCache.clear()
+  lastCacheUpdate = 0
+}
+
 export interface PredictionInput {
   date: string
   dayOfWeek: number
@@ -60,42 +122,50 @@ export interface PredictionFactor {
 
 /**
  * Main prediction algorithm using weighted multi-factor analysis
+ * Now supports dynamic weights from database
  */
-export function predictPrice(input: PredictionInput): PredictionOutput {
+export async function predictPrice(
+  input: PredictionInput,
+  supabase?: SupabaseClient,
+  hotelId?: string
+): Promise<PredictionOutput> {
   const factors: PredictionFactor[] = []
   let priceMultiplier = 1.0
   let confidenceScore = 75
 
-  // 1. Day of week factor (weekends typically higher)
-  const weekendFactor = input.isWeekend ? 1.15 : 1.0
-  const weekendImpact = input.isWeekend ? 15 : 0
+  // 1. Day of week factor (weekends typically higher) - DYNAMIC WEIGHT
+  const weekendWeight = await getWeight(supabase || null, hotelId || null, 'weekend_multiplier', 1.15)
+  const weekendFactor = input.isWeekend ? weekendWeight : 1.0
+  const weekendImpact = input.isWeekend ? Math.round((weekendWeight - 1) * 100) : 0
   factors.push({
     name: "Day of Week",
     impact: weekendImpact,
-    description: input.isWeekend ? "Weekend - higher demand expected" : "Weekday - normal demand",
+    description: input.isWeekend ? `Weekend - higher demand (×${weekendWeight.toFixed(2)})` : "Weekday - normal demand",
   })
   priceMultiplier *= weekendFactor
 
-  // 2. Holiday factor
+  // 2. Holiday factor - DYNAMIC WEIGHT
   if (input.isHoliday) {
-    priceMultiplier *= 1.25
+    const holidayWeight = await getWeight(supabase || null, hotelId || null, 'holiday_multiplier', 1.25)
+    priceMultiplier *= holidayWeight
     factors.push({
       name: "Holiday",
-      impact: 25,
-      description: "Holiday period - significantly higher demand",
+      impact: Math.round((holidayWeight - 1) * 100),
+      description: `Holiday period - high demand (×${holidayWeight.toFixed(2)})`,
     })
     confidenceScore += 5
   }
 
-  // 3. Days until date factor (closer = more certain pricing)
+  // 3. Days until date factor (closer = more certain pricing) - DYNAMIC WEIGHT
   let urgencyFactor = 1.0
   if (input.daysUntilDate <= 3) {
-    urgencyFactor = 1.2 // Last minute pricing
+    const lastMinuteWeight = await getWeight(supabase || null, hotelId || null, 'last_minute_multiplier', 1.20)
+    urgencyFactor = lastMinuteWeight
     confidenceScore += 10
     factors.push({
       name: "Last Minute",
-      impact: 20,
-      description: "Very close date - premium pricing opportunity",
+      impact: Math.round((lastMinuteWeight - 1) * 100),
+      description: `Very close date - premium pricing (×${lastMinuteWeight.toFixed(2)})`,
     })
   } else if (input.daysUntilDate <= 7) {
     urgencyFactor = 1.1
@@ -116,28 +186,31 @@ export function predictPrice(input: PredictionInput): PredictionOutput {
   }
   priceMultiplier *= urgencyFactor
 
-  // 4. Occupancy-based dynamic pricing
+  // 4. Occupancy-based dynamic pricing - DYNAMIC WEIGHT
   let occupancyFactor = 1.0
   if (input.currentOccupancy >= 90) {
-    occupancyFactor = 1.3
+    const highOccWeight = await getWeight(supabase || null, hotelId || null, 'high_occupancy_multiplier', 1.30)
+    occupancyFactor = highOccWeight
     factors.push({
       name: "High Occupancy",
-      impact: 30,
-      description: `${input.currentOccupancy}% occupancy - premium pricing recommended`,
+      impact: Math.round((highOccWeight - 1) * 100),
+      description: `${input.currentOccupancy}% occupancy - premium pricing (×${highOccWeight.toFixed(2)})`,
     })
   } else if (input.currentOccupancy >= 75) {
-    occupancyFactor = 1.15
+    const goodOccWeight = await getWeight(supabase || null, hotelId || null, 'good_occupancy_multiplier', 1.15)
+    occupancyFactor = goodOccWeight
     factors.push({
       name: "Good Occupancy",
-      impact: 15,
-      description: `${input.currentOccupancy}% occupancy - moderate price increase`,
+      impact: Math.round((goodOccWeight - 1) * 100),
+      description: `${input.currentOccupancy}% occupancy - moderate increase (×${goodOccWeight.toFixed(2)})`,
     })
   } else if (input.currentOccupancy < 50) {
-    occupancyFactor = 0.9
+    const lowOccWeight = await getWeight(supabase || null, hotelId || null, 'low_occupancy_multiplier', 0.90)
+    occupancyFactor = lowOccWeight
     factors.push({
       name: "Low Occupancy",
-      impact: -10,
-      description: `${input.currentOccupancy}% occupancy - consider discounts to fill rooms`,
+      impact: Math.round((lowOccWeight - 1) * 100),
+      description: `${input.currentOccupancy}% occupancy - discount to fill rooms (×${lowOccWeight.toFixed(2)})`,
     })
   }
   priceMultiplier *= occupancyFactor
