@@ -25,20 +25,53 @@ interface AccuracyResult {
 }
 
 /**
- * Calculate accuracy for a single prediction
+ * Calculate accuracy with weighted MAPE (gives more weight to important dates)
  */
-function calculateAccuracy(predicted: number, actual: number): {
+function calculateAccuracy(
+  predicted: number, 
+  actual: number, 
+  weight: number = 1.0
+): {
   errorPercent: number
   accuracyScore: number
+  weightedError: number
 } {
   if (!actual || actual === 0) {
-    return { errorPercent: 0, accuracyScore: 0 }
+    return { errorPercent: 0, accuracyScore: 0, weightedError: 0 }
   }
   
+  // MAPE: Mean Absolute Percentage Error
   const errorPercent = Math.abs((predicted - actual) / actual) * 100
   const accuracyScore = Math.max(0, 100 - errorPercent)
   
-  return { errorPercent, accuracyScore }
+  // Weighted error (for calculating overall weighted MAPE)
+  const weightedError = errorPercent * weight
+  
+  return { errorPercent, accuracyScore, weightedError }
+}
+
+/**
+ * Calculate weight for date (higher weight for important dates)
+ */
+function calculateDateWeight(date: string, demandLevel?: string, occupancyRate?: number): number {
+  let weight = 1.0
+  
+  // High-demand dates get more weight (we care more about accuracy here)
+  if (demandLevel === 'high' || (occupancyRate && occupancyRate > 75)) {
+    weight = 1.5
+  } else if (demandLevel === 'very_high' || (occupancyRate && occupancyRate > 90)) {
+    weight = 2.0
+  } else if (demandLevel === 'low' || (occupancyRate && occupancyRate < 30)) {
+    weight = 0.7 // Low occupancy days are less critical
+  }
+  
+  // Weekends get slightly more weight
+  const dayOfWeek = new Date(date).getDay()
+  if (dayOfWeek === 5 || dayOfWeek === 6) { // Friday or Saturday
+    weight *= 1.2
+  }
+  
+  return weight
 }
 
 /**
@@ -84,7 +117,15 @@ export async function POST(request: NextRequest) {
     
     console.log(`[Learning System] Found ${predictions.length} predictions to check`)
     
-    // Get actual bookings for these dates
+    // Get actual prices (ground truth) - PRIMARY SOURCE
+    const { data: actualPrices } = await supabase
+      .from('daily_actual_prices')
+      .select('*')
+      .gte('date', checkDate.toISOString().split('T')[0])
+      .lt('date', today.toISOString().split('T')[0])
+      .gte('data_quality', 0.5) // Only use reliable data
+    
+    // Fallback: Get bookings if no actual prices available
     const { data: bookings } = await supabase
       .from('bookings')
       .select('*')
@@ -99,7 +140,14 @@ export async function POST(request: NextRequest) {
     
     const hotelRoomsMap = new Map(hotels?.map(h => [h.id, h.total_rooms]) || [])
     
-    // Group bookings by hotel and date
+    // Index actual prices by hotel+date
+    const actualPricesByHotelDate = new Map<string, any>()
+    actualPrices?.forEach(ap => {
+      const key = `${ap.hotel_id}-${ap.date}`
+      actualPricesByHotelDate.set(key, ap)
+    })
+    
+    // Group bookings by hotel and date (fallback)
     const bookingsByHotelDate = new Map<string, any[]>()
     bookings?.forEach(booking => {
       const key = `${booking.hotel_id}-${booking.check_in_date}`
@@ -117,33 +165,65 @@ export async function POST(request: NextRequest) {
       alerts: []
     }
     
-    let totalAccuracy = 0
+    let totalWeightedError = 0
+    let totalWeight = 0
     let accuracyCount = 0
     
     // Process each prediction
     for (const pred of predictions) {
       const key = `${pred.hotel_id}-${pred.prediction_date}`
+      
+      // Try to get actual price data first (ground truth)
+      const actualPriceData = actualPricesByHotelDate.get(key)
       const dayBookings = bookingsByHotelDate.get(key) || []
       
-      if (dayBookings.length === 0) {
-        // No bookings = no actual data yet
+      let actualPrice: number | null = null
+      let actualOccupancy: number | null = null
+      let actualRevenue: number | null = null
+      let dataSource = 'none'
+      let dataQuality = 0
+      
+      if (actualPriceData && actualPriceData.actual_price) {
+        // Use actual price data (most reliable)
+        actualPrice = parseFloat(actualPriceData.actual_price)
+        const totalRooms = hotelRoomsMap.get(pred.hotel_id) || 35
+        actualOccupancy = actualPriceData.rooms_sold ? (actualPriceData.rooms_sold / totalRooms) * 100 : null
+        actualRevenue = parseFloat(actualPriceData.total_revenue || 0)
+        dataSource = actualPriceData.source || 'actual_prices'
+        dataQuality = parseFloat(actualPriceData.data_quality || 1.0)
+      } else if (dayBookings.length > 0) {
+        // Fallback to bookings (less reliable - may not reflect actual selling price)
+        actualPrice = dayBookings.reduce((sum, b) => sum + parseFloat(b.total_price || 0), 0) / dayBookings.length
+        const totalRooms = hotelRoomsMap.get(pred.hotel_id) || 35
+        actualOccupancy = (dayBookings.length / totalRooms) * 100
+        actualRevenue = actualPrice * dayBookings.length
+        dataSource = 'bookings_fallback'
+        dataQuality = 0.6 // Lower quality - bookings may not reflect final price
+      } else {
+        // No data available yet
         continue
       }
       
+      if (!actualPrice || actualPrice === 0) continue
+      
       results.predictionsChecked++
       
-      // Calculate actuals
-      const actualPrice = dayBookings.reduce((sum, b) => sum + parseFloat(b.total_price || 0), 0) / dayBookings.length
-      const actualBookings = dayBookings.length
-      const totalRooms = hotelRoomsMap.get(pred.hotel_id) || 35
-      const actualOccupancy = (actualBookings / totalRooms) * 100
-      const actualRevenue = actualPrice * actualBookings
+      // Calculate date weight (higher for important dates)
+      const dateWeight = calculateDateWeight(
+        pred.prediction_date,
+        pred.predicted_demand,
+        actualOccupancy || undefined
+      )
       
-      // Calculate accuracy
-      const priceAccuracy = calculateAccuracy(pred.predicted_price, actualPrice)
-      const occupancyAccuracy = pred.predicted_occupancy 
-        ? calculateAccuracy(pred.predicted_occupancy, actualOccupancy)
-        : { errorPercent: 0, accuracyScore: 0 }
+      // Calculate accuracy with weights
+      const priceAccuracy = calculateAccuracy(pred.predicted_price, actualPrice, dateWeight)
+      const occupancyAccuracy = (pred.predicted_occupancy && actualOccupancy)
+        ? calculateAccuracy(pred.predicted_occupancy, actualOccupancy, dateWeight)
+        : { errorPercent: 0, accuracyScore: 0, weightedError: 0 }
+      
+      // Weighted MAPE for overall system accuracy
+      totalWeightedError += priceAccuracy.weightedError
+      totalWeight += dateWeight
       
       // Overall accuracy (weighted average)
       const overallAccuracy = (priceAccuracy.accuracyScore * 0.6 + occupancyAccuracy.accuracyScore * 0.4)
@@ -163,7 +243,7 @@ export async function POST(request: NextRequest) {
           
           actual_price: actualPrice,
           actual_occupancy: actualOccupancy,
-          actual_bookings: actualBookings,
+          actual_bookings: dayBookings.length,
           actual_revenue: actualRevenue,
           
           price_error_percent: priceAccuracy.errorPercent,
@@ -174,6 +254,11 @@ export async function POST(request: NextRequest) {
           factors_used: pred.factors_used || {},
           days_before_date: Math.floor((new Date(pred.prediction_date).getTime() - new Date(pred.created_at).getTime()) / (1000 * 60 * 60 * 24)),
           
+          // NEW: Track data source and quality
+          data_source: dataSource,
+          data_quality: dataQuality,
+          date_weight: dateWeight,
+          
           actual_data_updated_at: new Date().toISOString()
         }, {
           onConflict: 'hotel_id,prediction_date,prediction_made_at'
@@ -181,19 +266,21 @@ export async function POST(request: NextRequest) {
       
       if (!insertError) {
         results.accuracyUpdated++
-        totalAccuracy += overallAccuracy
         accuracyCount++
         
-        // Track significant errors
+        // Track significant errors (especially on high-weight dates)
         if (priceAccuracy.errorPercent > 20) {
+          const severityFlag = dateWeight > 1.2 ? '🔴' : '🟡'
           results.alerts.push(
-            `High price error on ${pred.prediction_date}: predicted ₪${pred.predicted_price}, actual ₪${actualPrice.toFixed(0)} (${priceAccuracy.errorPercent.toFixed(1)}% off)`
+            `${severityFlag} High price error on ${pred.prediction_date}: predicted ₪${pred.predicted_price}, actual ₪${actualPrice!.toFixed(0)} (${priceAccuracy.errorPercent.toFixed(1)}% off, weight: ${dateWeight.toFixed(2)}, source: ${dataSource})`
           )
         }
       }
     }
     
-    results.avgAccuracy = accuracyCount > 0 ? totalAccuracy / accuracyCount : 0
+    // Calculate weighted MAPE accuracy (better metric than simple average)
+    const weightedMAPE = totalWeight > 0 ? totalWeightedError / totalWeight : 0
+    results.avgAccuracy = Math.max(0, 100 - weightedMAPE)
     
     // Generate improvement recommendations based on patterns
     if (results.avgAccuracy < 70) {
