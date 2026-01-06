@@ -9,8 +9,8 @@ function validateEnvironment() {
   const missing = []
   
   if (!process.env.APIFY_API_KEY) missing.push("APIFY_API_KEY")
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL")
-  if (!process.env.SUPABASE_SERVICE_KEY) missing.push("SUPABASE_SERVICE_KEY")
+  // Note: NEXT_PUBLIC_SUPABASE_URL and service key have hardcoded fallbacks in lib/supabase/server.ts
+  // So we only require APIFY_API_KEY for scans to work
   
   if (missing.length > 0) {
     return {

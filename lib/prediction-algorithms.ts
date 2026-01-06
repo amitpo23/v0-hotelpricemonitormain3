@@ -721,3 +721,98 @@ export function predictPriceWithDecisionAgent(input: DecisionAgentPredictionInpu
   console.log('[Prediction] No Decision Agent data available, using traditional algorithm')
   return predictPrice(input)
 }
+/**
+ * Calculate demand forecast based on date and price statistics
+ * Used by the cron job for automated predictions
+ */
+export function calculateDemandForecast(
+  date: Date,
+  priceStats: { avgPrice: number; minPrice: number; maxPrice: number; dataPoints: number }
+): number {
+  const dayOfWeek = date.getDay()
+  const month = date.getMonth() + 1
+  
+  // Base demand factor
+  let demandMultiplier = 1.0
+  
+  // Weekend boost
+  if (dayOfWeek === 5 || dayOfWeek === 6) {
+    demandMultiplier *= 1.15
+  }
+  
+  // Seasonal adjustment
+  const seasonalFactors: Record<number, number> = {
+    1: 0.85, 2: 0.90, 3: 1.00, 4: 1.15,
+    5: 1.10, 6: 1.25, 7: 1.30, 8: 1.30,
+    9: 1.10, 10: 1.00, 11: 0.95, 12: 1.20
+  }
+  demandMultiplier *= seasonalFactors[month] || 1.0
+  
+  // Check for holidays
+  const { isHoliday, eventFactor } = isHolidayOrEvent(date)
+  if (isHoliday) {
+    demandMultiplier *= eventFactor
+  }
+  
+  return demandMultiplier
+}
+
+/**
+ * Calculate seasonal multiplier for a given date
+ */
+export function calculateSeasonalMultiplier(date: Date): number {
+  const month = date.getMonth() + 1
+  
+  const seasonalMultipliers: Record<number, number> = {
+    1: 0.85,  // January - low season
+    2: 0.90,  // February
+    3: 1.00,  // March
+    4: 1.15,  // April - Passover, spring break
+    5: 1.10,  // May
+    6: 1.25,  // June - summer start
+    7: 1.30,  // July - peak summer
+    8: 1.30,  // August - peak summer
+    9: 1.15,  // September - Jewish holidays
+    10: 1.05, // October - Sukkot
+    11: 0.95, // November
+    12: 1.20  // December - Christmas, New Year
+  }
+  
+  return seasonalMultipliers[month] || 1.0
+}
+
+/**
+ * Calculate competitor influence on pricing
+ */
+export function calculateCompetitorInfluence(
+  ourAvgPrice: number,
+  competitorMinPrice: number,
+  competitorMaxPrice: number
+): number {
+  if (!competitorMinPrice || !competitorMaxPrice) {
+    return 0
+  }
+  
+  const competitorAvgPrice = (competitorMinPrice + competitorMaxPrice) / 2
+  
+  // Calculate price position relative to competitors
+  const priceDiff = (competitorAvgPrice - ourAvgPrice) / ourAvgPrice
+  
+  // Clamp influence between -0.2 and 0.2
+  return Math.max(-0.2, Math.min(0.2, priceDiff))
+}
+
+/**
+ * Apply pricing strategy with min/max bounds
+ */
+export function applyPricingStrategy(
+  recommendedPrice: number,
+  basePrice: number,
+  minMultiplier: number = 0.7,
+  maxMultiplier: number = 2.0
+): number {
+  const minPrice = basePrice * minMultiplier
+  const maxPrice = basePrice * maxMultiplier
+  
+  return Math.max(minPrice, Math.min(maxPrice, recommendedPrice))
+}

@@ -288,3 +288,41 @@ export class WeatherService {
 
 // Singleton instance
 export const weatherService = new WeatherService();
+/**
+ * Helper function to get weather forecast for a specific location and date
+ * This is the function that AI Insights route expects
+ */
+export async function getWeatherForecast(
+  location: string,
+  date: string | Date
+): Promise<{
+  condition: string;
+  temp: number;
+  humidity?: number;
+  windSpeed?: number;
+  impactScore: number;
+  reasoning: string;
+}> {
+  try {
+    const impact = await weatherService.getWeatherImpact(location, date);
+    
+    return {
+      condition: impact.condition,
+      temp: impact.temp,
+      humidity: 50, // Default value when not available
+      windSpeed: 10, // Default value when not available
+      impactScore: impact.score,
+      reasoning: impact.reasoning
+    };
+  } catch (error) {
+    console.error('getWeatherForecast error:', error);
+    return {
+      condition: 'unknown',
+      temp: 20,
+      humidity: 50,
+      windSpeed: 10,
+      impactScore: 0,
+      reasoning: 'Weather data unavailable'
+    };
+  }
+}

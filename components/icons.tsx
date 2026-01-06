@@ -633,6 +633,15 @@ export function FilterIcon({ className }: { className?: string }) {
   )
 }
 
+export function IconLineChart({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l4-4 4 4 5-6" />
+    </svg>
+  )
+}
+
 export function IconPencil({ className }: { className?: string }) {
   return (
     <svg
@@ -726,6 +735,7 @@ export {
   IconChevronDown as ChevronDownIcon,
   IconUpload as UploadIcon,
   IconPencil as PencilIcon,
+  IconLineChart as LineChartIcon,
 }
 
 // Icons namespace export for compatibility
