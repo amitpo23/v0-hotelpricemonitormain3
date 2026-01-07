@@ -101,6 +101,11 @@ export interface PredictionInput {
   competitorPriceStd?: number
   pricePositionVsCompetitors?: number
   dataQualityScore?: number
+  
+  // NEW: CBS Tourism integration
+  cbsOccupancyRate?: number      // National occupancy from CBS
+  cbsSeasonalIndex?: number      // CBS seasonal multiplier
+  cbsGrowthRate?: number         // YoY tourism growth %
 }
 
 export interface PredictionOutput {
@@ -132,6 +137,36 @@ export async function predictPrice(
   const factors: PredictionFactor[] = []
   let priceMultiplier = 1.0
   let confidenceScore = 75
+  
+  // NEW: Track data quality from all agents
+  let dataQualityScore = input.dataQualityScore || 0.5
+  const agentDataPresence = {
+    weather: input.weatherScore !== undefined,
+    bookingVelocity: input.bookingVelocity7d !== undefined,
+    yoy: input.yoyPriceChange !== undefined,
+    competitor: input.competitorAvgPrice > 0,
+    events: input.eventFactor > 1.0,
+    cbsTourism: input.cbsSeasonalIndex !== undefined,
+    seasonality: input.seasonalityFactor !== 1.0,
+    occupancy: input.currentOccupancy > 0,
+    demand: input.demandScore > 0
+  }
+  
+  const agentsPresent = Object.values(agentDataPresence).filter(Boolean).length
+  const totalAgents = Object.keys(agentDataPresence).length
+  dataQualityScore = agentsPresent / totalAgents // 0-1 score
+  
+  // Adjust initial confidence based on data quality
+  if (dataQualityScore < 0.4) {
+    confidenceScore = 50 // Low data quality
+    factors.push({
+      name: "Data Quality Warning",
+      impact: -25,
+      description: `Only ${agentsPresent}/${totalAgents} data sources available - prediction may be less accurate`
+    })
+  } else if (dataQualityScore >= 0.75) {
+    confidenceScore = 85 // High data quality
+  }
 
   // 1. Day of week factor (weekends typically higher) - DYNAMIC WEIGHT
   const weekendWeight = await getWeight(supabase || null, hotelId || null, 'weekend_multiplier', 1.15)
@@ -215,35 +250,44 @@ export async function predictPrice(
   }
   priceMultiplier *= occupancyFactor
 
-  // 5. Competitor price positioning
-  const competitorDiff = input.currentPrice - input.competitorAvgPrice
-  const competitorDiffPercent = (competitorDiff / input.competitorAvgPrice) * 100
-  let competitorFactor = 1.0
+  // 5. Competitor price positioning - WITH FALLBACK
+  if (input.competitorAvgPrice > 0) {
+    const competitorDiff = input.currentPrice - input.competitorAvgPrice
+    const competitorDiffPercent = (competitorDiff / input.competitorAvgPrice) * 100
+    let competitorFactor = 1.0
 
-  if (competitorDiffPercent > 20) {
-    // We're significantly more expensive
-    competitorFactor = 0.95
-    factors.push({
-      name: "Competitor Pricing",
-      impact: -5,
-      description: `${competitorDiffPercent.toFixed(0)}% above competitors - consider alignment`,
-    })
-  } else if (competitorDiffPercent < -10) {
-    // We're cheaper than competitors
-    competitorFactor = 1.08
-    factors.push({
-      name: "Competitor Pricing",
-      impact: 8,
-      description: `${Math.abs(competitorDiffPercent).toFixed(0)}% below competitors - room to increase`,
-    })
+    if (competitorDiffPercent > 20) {
+      competitorFactor = 0.95
+      factors.push({
+        name: "Competitor Pricing",
+        impact: -5,
+        description: `${competitorDiffPercent.toFixed(0)}% above competitors - consider alignment`,
+      })
+    } else if (competitorDiffPercent < -10) {
+      competitorFactor = 1.08
+      factors.push({
+        name: "Competitor Pricing",
+        impact: 8,
+        description: `${Math.abs(competitorDiffPercent).toFixed(0)}% below competitors - room to increase`,
+      })
+    } else {
+      factors.push({
+        name: "Competitor Pricing",
+        impact: 0,
+        description: "Price aligned with market",
+      })
+    }
+    priceMultiplier *= competitorFactor
+    confidenceScore += 5
   } else {
+    // FALLBACK: Use historical prices as proxy
     factors.push({
-      name: "Competitor Pricing",
+      name: "Market Position (estimated)",
       impact: 0,
-      description: "Price aligned with market",
+      description: "Competitor data unavailable - using historical pricing"
     })
+    confidenceScore -= 10
   }
-  priceMultiplier *= competitorFactor
 
   // 6. Demand score factor
   const demandFactor = 1 + (input.demandScore - 0.5) * 0.3 // -15% to +15%
@@ -275,9 +319,38 @@ export async function predictPrice(
       description: "Events in area driving demand",
     })
     priceMultiplier *= input.eventFactor
+    confidenceScore += 5
+  } else if (input.eventFactor === 1.0) {
+    // FALLBACK: No major events identified (neutral assumption)
+    factors.push({
+      name: "Events Status",
+      impact: 0,
+      description: "No major events detected - baseline demand"
+    })
+    // No confidence penalty - absence of events is valid data
   }
 
-  // 9. Weather factor (NEW!)
+  // 9. CBS Tourism Statistics (Israeli Central Bureau of Statistics)
+  if (input.cbsSeasonalIndex && input.cbsSeasonalIndex !== 1.0) {
+    const cbsImpact = Math.round((input.cbsSeasonalIndex - 1) * 100)
+    factors.push({
+      name: "CBS Tourism Index",
+      impact: cbsImpact,
+      description: `National tourism: ${input.cbsSeasonalIndex > 1 ? 'above' : 'below'} average (${(input.cbsSeasonalIndex * 100).toFixed(0)}%)`,
+    })
+    priceMultiplier *= input.cbsSeasonalIndex
+    confidenceScore += 8 // CBS data is highly reliable
+  } else {
+    // FALLBACK: CBS data unavailable, rely on local seasonality
+    factors.push({
+      name: "Tourism Forecast",
+      impact: 0,
+      description: "CBS data unavailable - using local patterns"
+    })
+    confidenceScore -= 5
+  }
+
+  // 9. Weather factor - WITH FALLBACK
   if (input.weatherScore !== undefined && input.weatherFactor !== undefined) {
     const weatherImpact = Math.round(input.weatherScore * 15)
     if (Math.abs(weatherImpact) > 3) {
@@ -287,15 +360,22 @@ export async function predictPrice(
         description: weatherImpact > 0 ? "Excellent weather forecast" : "Poor weather expected",
       })
       priceMultiplier *= input.weatherFactor
-      confidenceScore += Math.abs(weatherImpact) / 3 // More confident with weather data
+      confidenceScore += Math.abs(weatherImpact) / 3
     }
+  } else {
+    // FALLBACK: Assume neutral weather if data unavailable
+    factors.push({
+      name: "Weather (estimated)",
+      impact: 0,
+      description: "Weather data unavailable - assuming neutral conditions"
+    })
+    confidenceScore -= 3
   }
 
-  // 10. Booking velocity (NEW!)
+  // 10. Booking velocity - WITH FALLBACK
   if (input.bookingVelocity7d !== undefined && input.bookingVelocity30d !== undefined) {
     const velocityTrend = input.bookingVelocity7d - input.bookingVelocity30d
     if (velocityTrend > 0.2) {
-      // Accelerating bookings
       const velocityImpact = Math.min(Math.round(velocityTrend * 25), 15)
       factors.push({
         name: "Booking Acceleration",
@@ -305,7 +385,6 @@ export async function predictPrice(
       priceMultiplier *= 1 + velocityImpact / 100
       confidenceScore += 8
     } else if (velocityTrend < -0.2) {
-      // Slowing bookings
       const velocityImpact = Math.max(Math.round(velocityTrend * 25), -10)
       factors.push({
         name: "Booking Slowdown",
@@ -315,6 +394,19 @@ export async function predictPrice(
       priceMultiplier *= 1 + velocityImpact / 100
       confidenceScore -= 3
     }
+  } else {
+    // FALLBACK: Use historical occupancy as proxy
+    if (input.historicalOccupancy !== undefined && input.currentOccupancy !== undefined) {
+      const occupancyTrend = input.currentOccupancy - input.historicalOccupancy
+      if (Math.abs(occupancyTrend) > 10) {
+        factors.push({
+          name: "Occupancy Trend (proxy)",
+          impact: Math.round(occupancyTrend / 2),
+          description: `Using occupancy as booking velocity proxy (${occupancyTrend > 0 ? 'rising' : 'falling'})`
+        })
+      }
+    }
+    confidenceScore -= 5
   }
 
   // 11. Booking momentum (NEW!)
@@ -329,9 +421,8 @@ export async function predictPrice(
     confidenceScore += 5
   }
 
-  // 12. Year-over-Year patterns (NEW!)
+  // 12. Year-over-Year patterns - WITH FALLBACK
   if (input.yoyPriceChange !== undefined && input.yoySeasonalIndex !== undefined) {
-    // Apply seasonal index
     if (Math.abs(input.yoySeasonalIndex - 1) > 0.1) {
       const seasonalImpact = Math.round((input.yoySeasonalIndex - 1) * 100)
       factors.push({
@@ -340,7 +431,17 @@ export async function predictPrice(
         description: `Historical seasonal pattern: ${seasonalImpact > 0 ? 'high' : 'low'} season`,
       })
       priceMultiplier *= input.yoySeasonalIndex
-      confidenceScore += 10 // YoY data is very reliable
+      confidenceScore += 10
+    }
+  } else {
+    // FALLBACK: Use generic seasonality if YoY unavailable
+    if (input.seasonalityFactor !== 1.0) {
+      factors.push({
+        name: "Generic Seasonality (fallback)",
+        impact: Math.round((input.seasonalityFactor - 1) * 100),
+        description: "Using generic seasonal patterns (YoY data unavailable)"
+      })
+      confidenceScore -= 5
     }
   }
 
