@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server"
 import { weatherService } from "@/lib/external/weather-service"
 import { bookingVelocityTracker } from "@/lib/analytics/booking-velocity"
 import { yoyService } from "@/lib/analytics/year-over-year"
-import { cbsTourismAgent } from "@/lib/agents/cbs-tourism-agent"
-import { EventsAgent } from "@/lib/agents/events-agent"
-import { CompetitorAgent } from "@/lib/agents/competitor-agent"
+import { analyzeCBSTourism } from "@/lib/agents/cbs-tourism-agent"
+import { discoverEvents } from "@/lib/agents/events-agent"
+import { getCompetitorPrices } from "@/lib/agents/competitor-agent"
 
 /**
  * Agent Health Check API
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
 
     // 4. CBS Tourism Agent
     try {
-      const cbs = await cbsTourismAgent.getTourismOutlook(
+      const cbs = await analyzeCBSTourism(
         new Date(checkInDate),
         hotel.city || "Tel Aviv"
       )
@@ -147,18 +147,16 @@ export async function GET(request: NextRequest) {
 
     // 5. Events Agent
     try {
-      const eventsAgent = new EventsAgent()
-      const events = await eventsAgent.analyzeEvents({
-        hotelId: parseInt(hotelId),
-        city: hotel.city || "Tel Aviv",
-        dates: [new Date(checkInDate)],
-      })
+      const events = await discoverEvents(
+        hotel.city || "Tel Aviv",
+        new Date(checkInDate)
+      )
       agentResults.push({
         name: "Events Discovery",
         status: events ? "healthy" : "degraded",
-        dataAvailable: events.length > 0,
-        dataQuality: events.length > 0 ? 0.8 : 1.0, // No events is valid data
-        message: events.length > 0
+        dataAvailable: events && events.length > 0,
+        dataQuality: events && events.length > 0 ? 0.8 : 1.0, // No events is valid data
+        message: events && events.length > 0
           ? `${events.length} event(s) found`
           : "No major events detected - baseline demand",
       })
@@ -174,8 +172,7 @@ export async function GET(request: NextRequest) {
 
     // 6. Competitor Agent
     try {
-      const competitorAgent = new CompetitorAgent()
-      const competitors = await competitorAgent.getCompetitorPrices(
+      const competitors = await getCompetitorPrices(
         parseInt(hotelId),
         new Date(checkInDate)
       )
