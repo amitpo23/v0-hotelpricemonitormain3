@@ -1,13 +1,32 @@
 import { createClient } from "@supabase/supabase-js"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { signupSchema, validateRequest, validationErrorResponse } from "@/lib/validations/schemas"
+import { rateLimitCheck } from "@/lib/rate-limit"
+import { logger } from "@/lib/logger"
 
-const SUPABASE_URL = "https://dqhmraeyisoigxzsitiz.supabase.co"
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxaG1yYWV5aXNvaWd4enNpdGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNTcxODEsImV4cCI6MjA3OTYzMzE4MX0.gOmmQBEpT2GJw97dFmlVBX1CtGpfAhARX71K3NlIx8I"
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // Rate limit check
+  const rateLimitResponse = rateLimitCheck(request, 'auth')
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
-    const { email, password, fullName } = await request.json()
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      logger.error('Missing Supabase configuration')
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
+
+    const body = await request.json()
+
+    // Validate input
+    const validation = validateRequest(signupSchema, body)
+    if (!validation.success) {
+      return NextResponse.json(validationErrorResponse(validation.errors), { status: 400 })
+    }
+
+    const { email, password, name: fullName } = validation.data
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
@@ -42,8 +61,8 @@ export async function POST(request: Request) {
       message: "Account created! Please wait for admin approval.",
       user: data.user,
     })
-  } catch (err: any) {
-    console.error("Signup error:", err)
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 })
+  } catch (err) {
+    logger.error("Signup error", err as Error)
+    return NextResponse.json({ error: "Registration failed" }, { status: 500 })
   }
 }

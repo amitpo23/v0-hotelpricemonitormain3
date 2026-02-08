@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { logger } from "@/lib/logger"
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -13,11 +14,24 @@ export async function GET() {
       return NextResponse.json({ authenticated: false, isAdmin: false })
     }
 
-    // Parse token to get user id
-    const tokenData = JSON.parse(authToken)
+    // Safely parse token with validation
+    let tokenData: { user?: { id?: string } }
+    try {
+      tokenData = JSON.parse(authToken)
+      // Validate token structure
+      if (typeof tokenData !== 'object' || tokenData === null) {
+        throw new Error('Invalid token structure')
+      }
+    } catch (parseError) {
+      logger.warn('Invalid auth token format', { error: String(parseError) })
+      return NextResponse.json({ authenticated: false, isAdmin: false })
+    }
+
     const userId = tokenData.user?.id
 
-    if (!userId) {
+    // Validate userId format (should be UUID)
+    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      logger.warn('Invalid user ID in token')
       return NextResponse.json({ authenticated: false, isAdmin: false })
     }
 
@@ -38,7 +52,7 @@ export async function GET() {
       userId,
     })
   } catch (error) {
-    console.error("Auth check error:", error)
+    logger.error("Auth check error", error as Error)
     return NextResponse.json({ authenticated: false, isAdmin: false })
   }
 }
