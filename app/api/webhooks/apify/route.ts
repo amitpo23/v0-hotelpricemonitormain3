@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 
 // Initialize Supabase client lazily with proper error handling
 function getSupabaseClient() {
@@ -14,7 +15,8 @@ function getSupabaseClient() {
 }
 
 // Lazy initialization - only create client when needed
-let _supabase: ReturnType<typeof createClient> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _supabase: any = null;
 
 function getSupabase() {
   if (!_supabase) {
@@ -69,35 +71,37 @@ interface ApifyWebhookPayload {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  
-  let supabase;
+
+  // Get Supabase client first
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let supabase: any;
   try {
-    // Get Supabase client
-    try {
-      supabase = getSupabase();
-    } catch (error) {
-      console.error('❌ Supabase not initialized - missing environment variables');
-      return NextResponse.json(
-        { error: 'Service unavailable - configuration error' },
-        { status: 503 }
-      );
-    }
+    supabase = getSupabase();
+  } catch (error) {
+    logger.error('Supabase not initialized - missing environment variables', error instanceof Error ? error : new Error(String(error)));
+    return NextResponse.json(
+      { error: 'Service unavailable - configuration error' },
+      { status: 503 }
+    );
+  }
+
+  try {
     
-    console.log('🔔 Apify webhook received');
+    logger.info('Apify webhook received');
     
     // Parse payload
     const payload: ApifyWebhookPayload = await request.json();
     
     // Validate payload structure first
     if (!payload.eventData || !payload.resource) {
-      console.error('❌ Invalid webhook payload - missing required fields');
+      logger.error('Invalid webhook payload - missing required fields');
       return NextResponse.json(
         { error: 'Invalid webhook payload' },
         { status: 400 }
       );
     }
     
-    console.log('📦 Webhook payload:', {
+    logger.info('Webhook payload', {
       eventType: payload.eventType,
       status: payload.resource?.status,
       runId: payload.resource?.id,
@@ -108,10 +112,10 @@ export async function POST(request: NextRequest) {
 
     // Handle successful run
     if (eventType === 'ACTOR.RUN.SUCCEEDED' && status === 'SUCCEEDED') {
-      console.log('✅ Processing successful actor run:', runId);
+      logger.info('Processing successful actor run', { runId });
 
       if (!defaultDatasetId) {
-        console.warn('⚠️ No dataset ID in webhook payload');
+        logger.warn('No dataset ID in webhook payload');
         return NextResponse.json(
           { message: 'No dataset to process' },
           { status: 200 }
@@ -121,7 +125,7 @@ export async function POST(request: NextRequest) {
       // Fetch results from Apify dataset
       const apifyToken = process.env.APIFY_API_TOKEN;
       if (!apifyToken) {
-        console.error('❌ APIFY_API_TOKEN not configured');
+        logger.error('APIFY_API_TOKEN not configured');
         return NextResponse.json(
           { error: 'Server configuration error' },
           { status: 500 }
@@ -129,7 +133,7 @@ export async function POST(request: NextRequest) {
       }
 
       const datasetUrl = `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${apifyToken}`;
-      console.log('📥 Fetching dataset from Apify...');
+      logger.info('Fetching dataset from Apify...');
       
       const datasetResponse = await fetch(datasetUrl);
       if (!datasetResponse.ok) {
@@ -137,12 +141,12 @@ export async function POST(request: NextRequest) {
       }
 
       const results = await datasetResponse.json();
-      console.log(`📊 Retrieved ${results.length} results from dataset`);
+      logger.info(`Retrieved ${results.length} results from dataset`, { count: results.length });
 
       // Process and save results
       if (results.length > 0) {
-        const processedResults = await processApifyResults(results, runId);
-        console.log(`✅ Processed ${processedResults.saved} results, ${processedResults.errors} errors`);
+        const processedResults = await processApifyResults(results, runId, supabase);
+        logger.info(`Processed ${processedResults.saved} results, ${processedResults.errors} errors`, { saved: processedResults.saved, errors: processedResults.errors });
 
         return NextResponse.json({
           success: true,
@@ -155,7 +159,7 @@ export async function POST(request: NextRequest) {
           },
         });
       } else {
-        console.log('⚠️ Dataset is empty');
+        logger.info('Dataset is empty');
         return NextResponse.json({
           success: true,
           message: 'Dataset is empty',
@@ -165,7 +169,7 @@ export async function POST(request: NextRequest) {
 
     // Handle failed run
     if (eventType === 'ACTOR.RUN.FAILED' || status === 'FAILED') {
-      console.error('❌ Actor run failed:', runId);
+      logger.error('Actor run failed', undefined, { runId });
       
       // Log the failure
       await supabase.from('scan_logs').insert({
@@ -184,14 +188,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle other event types
-    console.log(`ℹ️ Unhandled event type: ${eventType}`);
+    logger.info(`Unhandled event type: ${eventType}`, { eventType });
     return NextResponse.json({
       success: true,
       message: `Event ${eventType} acknowledged`,
     });
 
   } catch (error) {
-    console.error('💥 Webhook processing error:', error);
+    logger.error('Webhook processing error', error instanceof Error ? error : new Error(String(error)));
     
     // Log error to database
     await supabase.from('scan_logs').insert({
@@ -215,7 +219,8 @@ export async function POST(request: NextRequest) {
 /**
  * Process Apify results and save to database
  */
-async function processApifyResults(results: any[], runId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function processApifyResults(results: any[], runId: string, supabaseClient: any) {
   let saved = 0;
   let errors = 0;
 
@@ -237,13 +242,13 @@ async function processApifyResults(results: any[], runId: string) {
 
       // Validate required fields
       if (!hotelName || !checkIn || !price) {
-        console.warn('⚠️ Skipping result - missing required fields:', result);
+        logger.warn('Skipping result - missing required fields', { result });
         errors++;
         continue;
       }
 
       // Find or create hotel
-      let { data: hotel, error: hotelError } = await supabase
+      let { data: hotel, error: hotelError } = await supabaseClient
         .from('hotels')
         .select('id')
         .eq('name', hotelName)
@@ -251,14 +256,14 @@ async function processApifyResults(results: any[], runId: string) {
 
       if (hotelError || !hotel) {
         // Create new hotel
-        const { data: newHotel, error: createError } = await supabase
+        const { data: newHotel, error: createError } = await supabaseClient
           .from('hotels')
           .insert({ name: hotelName, location: 'Unknown' })
           .select('id')
           .single();
 
         if (createError) {
-          console.error('❌ Failed to create hotel:', createError);
+          logger.error('Failed to create hotel', createError instanceof Error ? createError : new Error(String(createError)));
           errors++;
           continue;
         }
@@ -266,7 +271,7 @@ async function processApifyResults(results: any[], runId: string) {
       }
 
       // Save scan result
-      const { error: scanError } = await supabase
+      const { error: scanError } = await supabaseClient
         .from('scans')
         .insert({
           hotel_id: hotel.id,
@@ -286,14 +291,14 @@ async function processApifyResults(results: any[], runId: string) {
         });
 
       if (scanError) {
-        console.error('❌ Failed to save scan:', scanError);
+        logger.error('Failed to save scan', scanError instanceof Error ? scanError : new Error(String(scanError)));
         errors++;
       } else {
         saved++;
       }
 
     } catch (err) {
-      console.error('❌ Error processing result:', err);
+      logger.error('Error processing result', err instanceof Error ? err : new Error(String(err)));
       errors++;
     }
   }

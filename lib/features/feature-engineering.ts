@@ -288,9 +288,9 @@ export class FeatureEngineer {
   }
 
   private calculateDemandFeatures(
-    bookingVelocity: any,
-    bookingMomentum: any,
-    occupancyData: any
+    bookingVelocity: { velocity7d: number; velocity30d: number; trend: string; demandScore: number; totalBookings: number },
+    bookingMomentum: { score: number },
+    occupancyData: { current: number; historical: number }
   ) {
     const trendMap = {
       accelerating: 1,
@@ -302,7 +302,7 @@ export class FeatureEngineer {
     return {
       bookingVelocity7d: bookingVelocity.velocity7d,
       bookingVelocity30d: bookingVelocity.velocity30d,
-      bookingVelocityTrend: trendMap[bookingVelocity.trend] || 0,
+      bookingVelocityTrend: trendMap[bookingVelocity.trend as keyof typeof trendMap] || 0,
       bookingMomentumScore: bookingMomentum.score,
       currentOccupancy: occupancyData.current,
       historicalOccupancy: occupancyData.historical,
@@ -345,8 +345,8 @@ export class FeatureEngineer {
         return this.createDefaultCompetitorFeatures();
       }
 
-      const prices = data.map(d => d.price);
-      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+      const prices = data.map((d: { price: number }) => d.price);
+      const avg = prices.reduce((a: number, b: number) => a + b, 0) / prices.length;
       const min = Math.min(...prices);
       const max = Math.max(...prices);
       const std = this.calculateStandardDeviation(prices);

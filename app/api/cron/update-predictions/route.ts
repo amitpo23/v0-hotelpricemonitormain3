@@ -12,12 +12,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { 
-  calculateDemandForecast, 
+import {
+  calculateDemandForecast,
   calculateSeasonalMultiplier,
   calculateCompetitorInfluence,
-  applyPricingStrategy 
+  applyPricingStrategy
 } from "@/lib/prediction-algorithms";
+import { logger } from "@/lib/logger";
 
 // Create Supabase client at runtime, not at module load time
 function getSupabaseClient() {
@@ -36,7 +37,7 @@ function verifyCronAuth(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
   
   if (!cronSecret) {
-    console.warn('⚠️ CRON_SECRET לא מוגדר - מריץ בכל מקרה');
+    logger.warn('CRON_SECRET לא מוגדר - מריץ בכל מקרה');
     return true;
   }
   
@@ -44,13 +45,13 @@ function verifyCronAuth(request: NextRequest): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  console.log('🔄 Update Predictions Cron - התחלה');
+  logger.info('Update Predictions Cron - התחלה');
   
   const supabase = getSupabaseClient();
   
   // Verify auth
   if (!verifyCronAuth(request)) {
-    console.error('❌ אימות נכשל');
+    logger.error('אימות נכשל');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
       throw new Error('לא נמצא מלון');
     }
 
-    console.log(`🏨 מעבד תחזיות עבור: ${hotels.name}`);
+    logger.info(`מעבד תחזיות עבור: ${hotels.name}`);
 
     // 2. Get competitor data for last 30 days
     const thirtyDaysAgo = new Date();
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
       throw new Error(`שגיאה בטעינת מחירים: ${pricesError.message}`);
     }
 
-    console.log(`📊 נטענו ${recentPrices?.length || 0} מחירי מתחרים`);
+    logger.info(`נטענו ${recentPrices?.length || 0} מחירי מתחרים`);
 
     // 3. Calculate statistics from recent data
     const priceStats = calculatePriceStatistics(recentPrices || []);
@@ -149,12 +150,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log(`📈 נוצרו ${predictions.length} תחזיות יומיות`);
+    logger.info(`נוצרו ${predictions.length} תחזיות יומיות`);
 
     // 5. Calculate monthly aggregates
     const monthlyData = aggregateToMonthly(predictions, hotels.id);
     
-    console.log(`📅 נוצרו ${monthlyData.length} תחזיות חודשיות`);
+    logger.info(`נוצרו ${monthlyData.length} תחזיות חודשיות`);
 
     // 6. Delete old predictions and insert new ones
     const { error: deleteError } = await supabase
@@ -163,7 +164,7 @@ export async function GET(request: NextRequest) {
       .eq('hotel_id', hotels.id);
 
     if (deleteError) {
-      console.warn('⚠️ שגיאה במחיקת תחזיות ישנות:', deleteError);
+      logger.warn('שגיאה במחיקת תחזיות ישנות:', { error: String(deleteError) });
     }
 
     // Insert in batches of 100
@@ -177,13 +178,13 @@ export async function GET(request: NextRequest) {
         .insert(batch);
 
       if (insertError) {
-        console.error(`❌ שגיאה בהכנסת batch ${i / batchSize + 1}:`, insertError);
+        logger.error(`שגיאה בהכנסת batch ${i / batchSize + 1}:`, insertError instanceof Error ? insertError : new Error(String(insertError)));
       } else {
         inserted += batch.length;
       }
     }
 
-    console.log(`✅ הוכנסו ${inserted} תחזיות יומיות`);
+    logger.info(`הוכנסו ${inserted} תחזיות יומיות`);
 
     // 7. Update monthly forecasts
     const { error: deleteMonthlyError } = await supabase
@@ -192,7 +193,7 @@ export async function GET(request: NextRequest) {
       .eq('hotel_id', hotels.id);
 
     if (deleteMonthlyError) {
-      console.warn('⚠️ שגיאה במחיקת תחזיות חודשיות:', deleteMonthlyError);
+      logger.warn('שגיאה במחיקת תחזיות חודשיות:', { error: String(deleteMonthlyError) });
     }
 
     const { error: insertMonthlyError } = await supabase
@@ -200,9 +201,9 @@ export async function GET(request: NextRequest) {
       .insert(monthlyData);
 
     if (insertMonthlyError) {
-      console.error('❌ שגיאה בהכנסת תחזיות חודשיות:', insertMonthlyError);
+      logger.error('שגיאה בהכנסת תחזיות חודשיות:', insertMonthlyError instanceof Error ? insertMonthlyError : new Error(String(insertMonthlyError)));
     } else {
-      console.log(`✅ הוכנסו ${monthlyData.length} תחזיות חודשיות`);
+      logger.info(`הוכנסו ${monthlyData.length} תחזיות חודשיות`);
     }
 
     const duration = Date.now() - startTime;
@@ -218,7 +219,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('❌ שגיאה בעדכון תחזיות:', error);
+    logger.error('שגיאה בעדכון תחזיות:', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { 
         success: false, 

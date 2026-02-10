@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/logger"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     const cronSecret = process.env.CRON_SECRET
     
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('⚠️ Unauthorized cron request to /api/learning/refresh-predictions')
+      logger.warn('Unauthorized cron request to /api/learning/refresh-predictions')
       // Allow in development/testing, but log warning
       if (process.env.NODE_ENV === 'production') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     const hotelId = searchParams.get('hotelId') // Optional: refresh specific hotel
     const daysAhead = parseInt(searchParams.get('daysAhead') || '90')
     
-    console.log('[Prediction Refresh] Starting automatic refresh', { hotelId, daysAhead })
+    logger.info('[Prediction Refresh] Starting automatic refresh', { hotelId, daysAhead })
     
     // Get hotels to refresh
     let hotelQuery = supabase.from('hotels').select('*')
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No hotels found' }, { status: 404 })
     }
     
-    console.log(`[Prediction Refresh] Refreshing predictions for ${hotels.length} hotel(s)`)
+    logger.info(`[Prediction Refresh] Refreshing predictions for ${hotels.length} hotel(s)`)
     
     const results = {
       hotelsProcessed: 0,
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
     // Process each hotel
     for (const hotel of hotels) {
       try {
-        console.log(`[Prediction Refresh] Processing hotel ${hotel.name} (${hotel.id})`)
+        logger.info(`[Prediction Refresh] Processing hotel ${hotel.name} (${hotel.id})`)
         
         // Call the prediction generation API
         const generateUrl = new URL('/api/predictions/generate', 
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
         if (!response.ok) {
           const error = await response.text()
           results.errors.push(`Hotel ${hotel.name}: ${error}`)
-          console.error(`[Prediction Refresh] Failed for ${hotel.name}:`, error)
+          logger.error(`[Prediction Refresh] Failed for ${hotel.name}:`, error instanceof Error ? error : new Error(String(error)))
           continue
         }
         
@@ -94,35 +95,37 @@ export async function POST(request: NextRequest) {
         results.hotelsProcessed++
         results.predictionsGenerated += data.predictions?.length || 0
         
-        console.log(`[Prediction Refresh] ✓ ${hotel.name}: ${data.predictions?.length || 0} predictions`)
+        logger.info(`[Prediction Refresh] ${hotel.name}: ${data.predictions?.length || 0} predictions`)
         
       } catch (error) {
         results.errors.push(`Hotel ${hotel.name}: ${error instanceof Error ? error.message : 'Unknown error'}`)
-        console.error(`[Prediction Refresh] Error processing ${hotel.name}:`, error)
+        logger.error(`[Prediction Refresh] Error processing ${hotel.name}:`, error instanceof Error ? error : new Error(String(error)))
       }
     }
     
     results.duration = Date.now() - startTime
     
     // Log refresh event
-    await supabase.from('prediction_generation_logs').insert({
-      hotel_id: hotelId || null,
-      session_id: `refresh-${Date.now()}`,
-      status: results.errors.length === 0 ? 'completed' : 'partial',
-      predictions_generated: results.predictionsGenerated,
-      logs: {
-        type: 'automatic_refresh',
-        hotels_processed: results.hotelsProcessed,
-        total_predictions: results.predictionsGenerated,
-        errors: results.errors,
-        duration_ms: results.duration
-      },
-      completed_at: new Date().toISOString()
-    }).catch(err => {
-      console.error('[Prediction Refresh] Failed to log event:', err)
-    })
+    try {
+      await supabase.from('prediction_generation_logs').insert({
+        hotel_id: hotelId || null,
+        session_id: `refresh-${Date.now()}`,
+        status: results.errors.length === 0 ? 'completed' : 'partial',
+        predictions_generated: results.predictionsGenerated,
+        logs: {
+          type: 'automatic_refresh',
+          hotels_processed: results.hotelsProcessed,
+          total_predictions: results.predictionsGenerated,
+          errors: results.errors,
+          duration_ms: results.duration
+        },
+        completed_at: new Date().toISOString()
+      })
+    } catch (err) {
+      logger.error('[Prediction Refresh] Failed to log event:', err instanceof Error ? err : new Error(String(err)))
+    }
     
-    console.log('[Prediction Refresh] Complete:', results)
+    logger.info('[Prediction Refresh] Complete:', { results })
     
     return NextResponse.json({
       success: results.errors.length === 0,
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('[Prediction Refresh] Fatal error:', error)
+    logger.error('[Prediction Refresh] Fatal error:', error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }
@@ -184,7 +187,7 @@ export async function GET(request: Request) {
     })
     
   } catch (error) {
-    console.error('[Prediction Refresh GET] Error:', error)
+    logger.error('[Prediction Refresh GET] Error:', error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

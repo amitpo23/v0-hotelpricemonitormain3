@@ -1,17 +1,18 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
+import { logger } from "@/lib/logger"
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
     const body = await request.json()
 
-    console.log("[v0] Budget save request body:", JSON.stringify(body))
+    logger.info("[v0] Budget save request body:", { body })
 
     const { hotelId, year, month, targetRevenue, targetOccupancy, targetAdr } = body
 
     if (!hotelId || !year || !month || targetRevenue === undefined) {
-      console.log("[v0] Missing required fields:", { hotelId, year, month, targetRevenue })
+      logger.info("[v0] Missing required fields:", { hotelId, year, month, targetRevenue })
       return NextResponse.json(
         {
           error: "Missing required fields: hotelId, year, month, targetRevenue",
@@ -31,11 +32,11 @@ export async function POST(request: NextRequest) {
       .eq("month", month)
       .maybeSingle()
 
-    console.log("[v0] Existing budget:", existing)
+    logger.info("[v0] Existing budget:", { existing })
 
     let result
     if (existing) {
-      console.log("[v0] Updating existing budget id:", existing.id)
+      logger.info("[v0] Updating existing budget id:", { budgetId: existing.id })
       const { data, error } = await supabase
         .from("revenue_budgets")
         .update({
@@ -50,12 +51,12 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (error) {
-        console.log("[v0] Update error:", error)
+        logger.error("[v0] Update error:", error instanceof Error ? error : new Error(String(error)))
         throw error
       }
       result = data
     } else {
-      console.log("[v0] Creating new budget")
+      logger.info("[v0] Creating new budget")
       const { data, error } = await supabase
         .from("revenue_budgets")
         .insert({
@@ -71,16 +72,16 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (error) {
-        console.log("[v0] Insert error:", error)
+        logger.error("[v0] Insert error:", error instanceof Error ? error : new Error(String(error)))
         throw error
       }
       result = data
     }
 
-    console.log("[v0] Budget saved successfully:", result)
+    logger.info("[v0] Budget saved successfully:", { result })
     return NextResponse.json({ success: true, budget: result })
   } catch (error) {
-    console.error("[v0] Budget save error:", error)
+    logger.error("[v0] Budget save error:", error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Failed to save budget",
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ budgets: data })
   } catch (error) {
-    console.error("Budget fetch error:", error)
+    logger.error("Budget fetch error:", error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json({ error: "Failed to fetch budgets" }, { status: 500 })
   }
 }

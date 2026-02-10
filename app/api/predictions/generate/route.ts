@@ -1,13 +1,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { 
-  orchestrateComprehensiveData, 
-  extractDateImpactFactors, 
+import {
+  orchestrateComprehensiveData,
+  extractDateImpactFactors,
   getRecommendedOptions,
-  checkExternalDataAvailability 
+  checkExternalDataAvailability
 } from "@/lib/agents/orchestrator-v2"
 import { getPredictionLogger } from "@/lib/logging/prediction-logger"
 import { savePredictionLog } from "@/lib/logging/prediction-logger-db"
+import { logger } from "@/lib/logger"
 
 // Route segment config - set max duration to 50 seconds
 export const maxDuration = 50
@@ -58,7 +59,7 @@ async function fetchExternalData(baseUrl: string) {
 
     return { holidays, trends, marketIntel }
   } catch (error) {
-    console.error("Error fetching external data:", error)
+    logger.error("Error fetching external data:", error instanceof Error ? error : new Error(String(error)))
     return { holidays: null, trends: null, marketIntel: null }
   }
 }
@@ -211,7 +212,7 @@ async function getDynamicBasePrice(hotelId: string, supabase: any): Promise<numb
     // Fallback
     return 550
   } catch (error) {
-    console.error('Error calculating dynamic base price:', error)
+    logger.error('Error calculating dynamic base price:', error instanceof Error ? error : new Error(String(error)))
     return 550 // Return fallback on error
   }
 }
@@ -265,7 +266,7 @@ export async function POST(request: Request) {
     let startDate: Date
     let predictionDays: number
 
-    console.log(
+    logger.info(
       `[v0] Input: selectedYear=${selectedYear}, selectedMonths=${JSON.stringify(selectedMonths)}, currentYear=${currentYear}, currentMonth=${currentMonth}`,
     )
 
@@ -283,14 +284,14 @@ export async function POST(request: Request) {
       // Ensure reasonable range
       predictionDays = Math.max(28, Math.min(400, predictionDays))
 
-      console.log(`[v0] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}, days=${predictionDays}`)
+      logger.info(`[v0] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}, days=${predictionDays}`)
     } else {
       // No specific months - use daysAhead from today
       startDate = new Date(today)
       predictionDays = daysAhead
     }
 
-    console.log(
+    logger.info(
       `[v0] Predictions: startDate=${startDate.toISOString()}, predictionDays=${predictionDays}, selectedYear=${selectedYear}, selectedMonths=${JSON.stringify(selectedMonths)}, hotelIds=${JSON.stringify(hotelIds)}`,
     )
 
@@ -309,7 +310,7 @@ export async function POST(request: Request) {
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:3000"
 
-    console.log('[v0] 📊 Fetching data from Supabase and external sources...')
+    logger.info('[v0] Fetching data from Supabase and external sources...')
     
     // Add log entry
     await supabase.rpc('add_generation_log_entry', {
@@ -372,12 +373,12 @@ export async function POST(request: Request) {
       { data: competitorPrices },
     ] = await Promise.race([dataFetchPromise, dataFetchTimeout]) as any
     
-    console.log('[v0] ✅ Data fetched successfully')
+    logger.info('[v0] Data fetched successfully')
 
     // Initialize prediction logger (enable with query param ?debug=true)
     const predictionLogger = getPredictionLogger(debugMode)
     if (debugMode) {
-      console.log('[v0] 🔍 Debug mode enabled - detailed logging active')
+      logger.info('[v0] Debug mode enabled - detailed logging active')
     }
 
     const holidayMap = buildHolidayMap(externalData.holidays)
@@ -387,18 +388,13 @@ export async function POST(request: Request) {
     const bookingVelocity = marketIntel?.bookingVelocity?.trend || "stable"
 
     // NEW: Orchestrate enhanced external data using multi-agent system
-    console.log('[v0] 🤖 Activating Multi-Agent System...')
+    logger.info('[v0] Activating Multi-Agent System...')
     const dataAvailability = await checkExternalDataAvailability()
-    console.log(`[v0] External data sources: Tavily=${dataAvailability.tavily}, DB=${dataAvailability.database}`)
+    logger.info(`[v0] External data sources: Tavily=${dataAvailability.tavily}, DB=${dataAvailability.database}`)
     
     // Collect all prediction dates
     const allPredictionDates: Date[] = []
-      console.log('[DEBUG] 🔍 Environment Check:')
-  console.log('[DEBUG] - TAVILY_API_KEY exists:', !!process.env.TAVILY_API_KEY)
-  console.log('[DEBUG] - TAVILY_API_KEY length:', process.env.TAVILY_API_KEY?.length || 0)
-  console.log('[DEBUG] - TAVILY_API_KEY first 10 chars:', process.env.TAVILY_API_KEY?.substring(0, 10) || 'N/A')
-  console.log('[DEBUG] - dataAvailability.tavily:', dataAvailability.tavily)
-  console.log('[DEBUG] - dataAvailability.overall:', dataAvailability.overall)
+      logger.info('[DEBUG] Environment Check:', { tavilyKeyExists: !!process.env.TAVILY_API_KEY, tavilyKeyLength: process.env.TAVILY_API_KEY?.length || 0, tavilyAvailability: dataAvailability.tavily, overallAvailability: dataAvailability.overall })
     for (let i = 0; i < predictionDays; i++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + i)
@@ -411,7 +407,7 @@ export async function POST(request: Request) {
       Math.ceil((allPredictionDates[0]?.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     )
 
-    console.log(`[v0] Orchestrator options:`, orchestratorOptions)
+    logger.info(`[v0] Orchestrator options:`, { orchestratorOptions })
 
     // Run orchestrator for the first hotel to gather general market data
     // (Events and statistics are same for all hotels in same location)
@@ -441,19 +437,20 @@ export async function POST(request: Request) {
           
           enhancedExternalData = await Promise.race([orchestratorPromise, timeoutPromise])
           
-          console.log(`[v0] 🎉 Enhanced Multi-Agent System completed:`)
-          console.log(`[v0]   - Events: ${enhancedExternalData.events.size} dates, confidence ${(enhancedExternalData.eventsConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Historical: ${enhancedExternalData.historical.size} dates, confidence ${(enhancedExternalData.historicalConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Holidays: ${enhancedExternalData.holidays.size} dates, confidence ${(enhancedExternalData.holidaysConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Trends: ${enhancedExternalData.trends.size} dates, confidence ${(enhancedExternalData.trendsConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Competitors: ${enhancedExternalData.competitors.size} dates, confidence ${(enhancedExternalData.competitorsConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Budget: ${enhancedExternalData.budget ? 'Available' : 'N/A'}, confidence ${(enhancedExternalData.budgetConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Velocity: ${enhancedExternalData.velocity ? enhancedExternalData.velocity.trend : 'N/A'}, confidence ${(enhancedExternalData.velocityConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Statistics: confidence ${(enhancedExternalData.statisticsConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Overall Confidence: ${(enhancedExternalData.overallConfidence * 100).toFixed(0)}%`)
-          console.log(`[v0]   - Data Quality: ${enhancedExternalData.dataQuality}`)
-          console.log(`[v0]   - Data Sources: ${enhancedExternalData.dataSources.join(', ')}`)
-          console.log(`[v0]   - Timestamp: ${enhancedExternalData.timestamp}`)
+          logger.info(`[v0] Enhanced Multi-Agent System completed`, {
+            events: `${enhancedExternalData.events.size} dates, confidence ${(enhancedExternalData.eventsConfidence * 100).toFixed(0)}%`,
+            historical: `${enhancedExternalData.historical.size} dates, confidence ${(enhancedExternalData.historicalConfidence * 100).toFixed(0)}%`,
+            holidays: `${enhancedExternalData.holidays.size} dates, confidence ${(enhancedExternalData.holidaysConfidence * 100).toFixed(0)}%`,
+            trends: `${enhancedExternalData.trends.size} dates, confidence ${(enhancedExternalData.trendsConfidence * 100).toFixed(0)}%`,
+            competitors: `${enhancedExternalData.competitors.size} dates, confidence ${(enhancedExternalData.competitorsConfidence * 100).toFixed(0)}%`,
+            budget: `${enhancedExternalData.budget ? 'Available' : 'N/A'}, confidence ${(enhancedExternalData.budgetConfidence * 100).toFixed(0)}%`,
+            velocity: `${enhancedExternalData.velocity ? enhancedExternalData.velocity.trend : 'N/A'}, confidence ${(enhancedExternalData.velocityConfidence * 100).toFixed(0)}%`,
+            statistics: `confidence ${(enhancedExternalData.statisticsConfidence * 100).toFixed(0)}%`,
+            overallConfidence: `${(enhancedExternalData.overallConfidence * 100).toFixed(0)}%`,
+            dataQuality: enhancedExternalData.dataQuality,
+            dataSources: enhancedExternalData.dataSources.join(', '),
+            timestamp: enhancedExternalData.timestamp
+          })
           
           // Log to prediction logger
           predictionLogger.logMultiAgent(
@@ -484,29 +481,29 @@ export async function POST(request: Request) {
           
           // Log market pricing floor if available
           if (enhancedExternalData.statistics?.tourism?.avgNightlyRate) {
-            console.log(`[v0]   - Market Avg Price: ₪${enhancedExternalData.statistics.tourism.avgNightlyRate} (Tel Aviv)`)
+            logger.info(`[v0] Market Avg Price: ₪${enhancedExternalData.statistics.tourism.avgNightlyRate} (Tel Aviv)`)
           }
           
           // Log budget insights if available
           if (enhancedExternalData.budget) {
-            console.log(`[v0]   - Budget Gap: ₪${Math.round(enhancedExternalData.budget.budgetGap)}, Pressure: ${enhancedExternalData.budget.pricingPressure.toFixed(2)}x`)
+            logger.info(`[v0] Budget Gap: ₪${Math.round(enhancedExternalData.budget.budgetGap)}, Pressure: ${enhancedExternalData.budget.pricingPressure.toFixed(2)}x`)
           }
           
           // Log velocity insights if available
           if (enhancedExternalData.velocity) {
-            console.log(`[v0]   - Booking Velocity: ${enhancedExternalData.velocity.trend} (${enhancedExternalData.velocity.bookingsLast7Days} bookings/7d), Impact: ${enhancedExternalData.velocity.pricingImpact.toFixed(2)}x`)
+            logger.info(`[v0] Booking Velocity: ${enhancedExternalData.velocity.trend} (${enhancedExternalData.velocity.bookingsLast7Days} bookings/7d), Impact: ${enhancedExternalData.velocity.pricingImpact.toFixed(2)}x`)
           }
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-        console.error('[v0] Enhanced Multi-Agent System failed:', errorMsg)
+        logger.error('[v0] Enhanced Multi-Agent System failed:', error instanceof Error ? error : new Error(String(error)))
         if (errorMsg.includes('timeout')) {
-          console.error('[v0] ⏱️  Orchestrator timed out after 30 seconds - continuing without external data')
+          logger.error('[v0] Orchestrator timed out after 30 seconds - continuing without external data', new Error('Orchestrator timeout'))
         }
         enhancedExternalData = null
       }
     } else {
-      console.log('[v0] ⚠️  Multi-Agent System skipped - external data sources unavailable')
+      logger.info('[v0] Multi-Agent System skipped - external data sources unavailable')
     }
 
     const lastScanDate = scans?.[0]?.created_at ? new Date(scans[0].created_at) : null
@@ -772,7 +769,7 @@ export async function POST(request: Request) {
         if (enhancedExternalData) {
           const dateImpact = extractDateImpactFactors(dateStr, enhancedExternalData)
           if (dateImpact.eventImpact > eventFactor) {
-            console.log(`[v0] ${dateStr}: Upgrading event factor from ${eventFactor.toFixed(2)} to ${dateImpact.eventImpact.toFixed(2)}`)
+            logger.info(`[v0] ${dateStr}: Upgrading event factor from ${eventFactor.toFixed(2)} to ${dateImpact.eventImpact.toFixed(2)}`)
             eventFactor = dateImpact.eventImpact
           }
         }
@@ -813,7 +810,7 @@ export async function POST(request: Request) {
         
         // Debug log for first few dates
         if (i < 5 || debugMode) {
-          console.log(`[v0] 🎯 ${dateStr} Price Debug:`, {
+          logger.info(`[v0] ${dateStr} Price Debug:`, {
             basePrice,
             seasonality: seasonality.toFixed(2),
             weekendFactor: weekendFactor.toFixed(2),
@@ -854,7 +851,7 @@ export async function POST(request: Request) {
         
         // Debug log for floor application
         if (i < 5 || debugMode) {
-          console.log(`[v0] 💰 ${dateStr} Floor Debug:`, {
+          logger.info(`[v0] ${dateStr} Floor Debug:`, {
             rawPrice: Math.round(rawPrice),
             floors: {
               absolute: ABSOLUTE_MINIMUM,
@@ -906,7 +903,7 @@ export async function POST(request: Request) {
         
         const demand = getDemandLevel(demandScore, occupancyRate, trendsScore)
         
-        console.log(`[v0] 🎯 ${dateStr}: Price: ₪${predictedPrice} (floor: ₪${Math.round(minPrice)}, raw: ₪${Math.round(rawPrice)}), Demand: ${demand}`)
+        logger.info(`[v0] ${dateStr}: Price: ₪${predictedPrice} (floor: ₪${Math.round(minPrice)}, raw: ₪${Math.round(rawPrice)}), Demand: ${demand}`)
 
         const confidenceFactors: ConfidenceFactors = {
           dataQuality: marketData ? Math.min(1.0, marketData.count / 20) : 0.3,
@@ -1227,7 +1224,7 @@ export async function POST(request: Request) {
     })
 
     if (error) {
-      console.log("[v0] Supabase insert error:", error)
+      logger.info("[v0] Supabase insert error:", { error })
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
@@ -1254,7 +1251,7 @@ export async function POST(request: Request) {
     // Print logger summary if debug mode
     if (debugMode && predictionLogger) {
       predictionLogger.printSummary()
-      console.log('[v0] 💾 Full logs available via predictionLogger.getLogs()')
+      logger.info('[v0] Full logs available via predictionLogger.getLogs()')
     }
 
     // Complete generation log
@@ -1324,7 +1321,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("[v0] Error generating predictions:", error)
+    logger.error("[v0] Error generating predictions:", error instanceof Error ? error : new Error(String(error)))
     
     // Log error to database
     try {
@@ -1348,7 +1345,7 @@ export async function POST(request: Request) {
         }
       })
     } catch (logError) {
-      console.error("[v0] Failed to log error:", logError)
+      logger.error("[v0] Failed to log error:", logError instanceof Error ? logError : new Error(String(logError)))
     }
     
     return NextResponse.json(

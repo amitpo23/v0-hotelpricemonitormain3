@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 import * as XLSX from "xlsx"
+import { logger } from "@/lib/logger"
 
-const SUPABASE_URL = "https://dqhmraeyisoigxzsitiz.supabase.co"
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxaG1yYWV5aXNvaWd4enNpdGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNTcxODEsImV4cCI6MjA3OTYzMzE4MX0.gOmmQBEpT2GJw97dFmlVBX1CtGpfAhARX71K3NlIx8I"
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 
 const COLUMN_MAPPINGS: Record<string, string[]> = {
   check_in_date: [
@@ -109,7 +109,7 @@ function findColumnMapping(headers: string[]): Record<string, number> {
   const mapping: Record<string, number> = {}
   const usedColumns = new Set<number>() // Track which columns are already used
 
-  console.log("[v0] Headers found:", headers)
+  logger.info("[v0] Headers found:", { headers })
 
   // First pass: exact matches only
   for (const [field, aliases] of Object.entries(COLUMN_MAPPINGS)) {
@@ -124,7 +124,7 @@ function findColumnMapping(headers: string[]): Record<string, number> {
         if (normalized === normalizedAlias) {
           mapping[field] = index
           usedColumns.add(index)
-          console.log(`[v0] Exact match: "${header}" -> ${field} (column ${index})`)
+          logger.info(`[v0] Exact match: "${header}" -> ${field} (column ${index})`)
           break
         }
       }
@@ -147,7 +147,7 @@ function findColumnMapping(headers: string[]): Record<string, number> {
         if (normalized.includes(normalizedAlias) || normalizedAlias.includes(normalized)) {
           mapping[field] = index
           usedColumns.add(index)
-          console.log(`[v0] Partial match: "${header}" -> ${field} (column ${index})`)
+          logger.info(`[v0] Partial match: "${header}" -> ${field} (column ${index})`)
           break
         }
       }
@@ -155,7 +155,7 @@ function findColumnMapping(headers: string[]): Record<string, number> {
     }
   }
 
-  console.log("[v0] Final column mapping:", mapping)
+  logger.info("[v0] Final column mapping:", { mapping })
   return mapping
 }
 
@@ -279,7 +279,7 @@ export async function POST(request: Request) {
     const file = formData.get("file") as File
     const hotelId = formData.get("hotelId") as string
 
-    console.log("[v0] Starting import for hotel:", hotelId)
+    logger.info("[v0] Starting import for hotel:", { hotelId })
 
     if (!file || !hotelId) {
       return NextResponse.json({ error: "Missing file or hotel ID" }, { status: 400 })
@@ -292,7 +292,7 @@ export async function POST(request: Request) {
     const sheet = workbook.Sheets[sheetName]
     const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, dateNF: "yyyy-mm-dd" }) as any[][]
 
-    console.log("[v0] Total rows in file:", rawData.length)
+    logger.info("[v0] Total rows in file:", { totalRows: rawData.length })
 
     if (rawData.length < 2) {
       return NextResponse.json({ error: "הקובץ ריק או חסרות שורות נתונים" }, { status: 400 })
@@ -311,11 +311,11 @@ export async function POST(request: Request) {
     const headers = rawData[headerRowIndex].map((h) => String(h || "").trim())
     const columnMap = findColumnMapping(headers)
 
-    console.log("[v0] First data row:", rawData[headerRowIndex + 1])
-    console.log("[v0] Column map:", columnMap)
+    logger.info("[v0] First data row:", { firstDataRow: rawData[headerRowIndex + 1] })
+    logger.info("[v0] Column map:", { columnMap })
 
     if (columnMap.check_in_date === undefined || columnMap.check_out_date === undefined) {
-      console.log("[v0] Date columns not found by name, searching by content...")
+      logger.info("[v0] Date columns not found by name, searching by content...")
 
       const dateColumns: number[] = []
       // Check first 5 data rows
@@ -328,14 +328,14 @@ export async function POST(request: Request) {
           const parsed = parseDate(testRow[i])
           if (parsed) {
             dateColumns.push(i)
-            console.log(`[v0] Found date in column ${i}: ${testRow[i]} -> ${parsed}`)
+            logger.info(`[v0] Found date in column ${i}: ${testRow[i]} -> ${parsed}`)
           }
         }
       }
 
       // Sort and assign
       dateColumns.sort((a, b) => a - b)
-      console.log("[v0] Date columns found:", dateColumns)
+      logger.info("[v0] Date columns found:", { dateColumns })
 
       if (dateColumns.length >= 2) {
         if (columnMap.check_in_date === undefined) {
@@ -424,11 +424,11 @@ export async function POST(request: Request) {
       })
     }
 
-    console.log(
+    logger.info(
       `[v0] Parsed ${bookingsToInsert.length} valid bookings, ${skipped} skipped, ${parseErrors} parse errors`,
     )
     if (errorSamples.length > 0) {
-      console.log("[v0] Error samples:", errorSamples)
+      logger.info("[v0] Error samples:", { errorSamples })
     }
 
     // Insert bookings in batches
@@ -448,13 +448,13 @@ export async function POST(request: Request) {
           imported += batch.length
         } else {
           const errorText = await insertRes.text()
-          console.error("[v0] Insert error:", errorText)
+          logger.error("[v0] Insert error:", new Error(errorText))
           insertErrors.push(errorText)
         }
       }
     }
 
-    console.log(`[v0] Import complete: ${imported} imported`)
+    logger.info(`[v0] Import complete: ${imported} imported`)
 
     return NextResponse.json({
       success: true,
@@ -471,7 +471,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("[v0] PMS import error:", error)
+    logger.error("[v0] PMS import error:", error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json({ error: error instanceof Error ? error.message : "שגיאה בייבוא הקובץ" }, { status: 500 })
   }
 }

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/logger"
 import { NextResponse } from "next/server"
 
 const SCAN_DAYS = 45 // Scan 45 days forwar
@@ -48,7 +49,7 @@ function calculateRecommendedPrice(ourPrice: number, competitorPrices: number[],
 
 export async function POST(request: Request) {
   const startTime = new Date()
-  console.log("[v0] Booking.com Scraper started at:", startTime.toISOString())
+  logger.info("[v0] Booking.com Scraper started at:", { startedAt: startTime.toISOString() })
 
   let scanRecord: any = null
 
@@ -145,8 +146,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No active competitors found" }, { status: 400 })
     }
 
-    console.log(`[v0] Scanning ${competitors.length} competitors for ${scanDays} days`)
-    console.log(`[v0] Expected results: ${competitors.length} x ${scanDays} = ${competitors.length * scanDays} minimum`)
+    logger.info(`[v0] Scanning ${competitors.length} competitors for ${scanDays} days`)
+    logger.info(`[v0] Expected results: ${competitors.length} x ${scanDays} = ${competitors.length * scanDays} minimum`)
 
     const today = new Date()
     const results: Array<{
@@ -195,7 +196,7 @@ export async function POST(request: Request) {
 
     const activeCompetitors = competitors.filter((c: any) => c.is_active)
 
-    console.log(`[v0] Starting scrape for ${activeCompetitors.length} active competitors over ${scanDays} days`)
+    logger.info(`[v0] Starting scrape for ${activeCompetitors.length} active competitors over ${scanDays} days`)
 
     const datesToScan = []
     for (let i = dayOffset; i < dayOffset + scanDays; i++) {
@@ -204,7 +205,7 @@ export async function POST(request: Request) {
       datesToScan.push(date)
     }
 
-    console.log(
+    logger.info(
       `[v0] Will scan ${datesToScan.length} dates from ${datesToScan[0].toISOString().split("T")[0]} to ${datesToScan[datesToScan.length - 1].toISOString().split("T")[0]}`,
     )
 
@@ -228,7 +229,7 @@ export async function POST(request: Request) {
       if (timeRemaining < 10000) {
         // Need at least 10 seconds remaining
         timedOut = true
-        console.log(`[v0] Timeout approaching at date ${date.toISOString().split("T")[0]}, stopping scan`)
+        logger.info(`[v0] Timeout approaching at date ${date.toISOString().split("T")[0]}, stopping scan`)
         break
       }
 
@@ -237,7 +238,7 @@ export async function POST(request: Request) {
       checkOutDate.setDate(checkOutDate.getDate() + 1)
       const checkOutStr = checkOutDate.toISOString().split("T")[0]
 
-      console.log(`[v0] Scraping date: ${checkInStr} for ${activeCompetitors.length} competitors`)
+      logger.info(`[v0] Scraping date: ${checkInStr} for ${activeCompetitors.length} competitors`)
 
       // Use serial scraping to avoid too many concurrent Chromium processes
       const scrapedResults = await scrapeMultipleCompetitorsWithRetry(
@@ -263,7 +264,7 @@ export async function POST(request: Request) {
             error: competitorResult.errorMessage,
           })
         } else {
-          console.log(`[v0] Competitor ${competitor.competitor_hotel_name} failed: ${competitorResult.errorMessage}`)
+          logger.info(`[v0] Competitor ${competitor.competitor_hotel_name} failed: ${competitorResult.errorMessage}`)
           scrapedData.push({
             competitorId: competitor.id,
             competitorName: competitor.competitor_hotel_name,
@@ -277,24 +278,24 @@ export async function POST(request: Request) {
         }
       }
 
-      console.log(
+      logger.info(
         `[v0] Completed ${checkInStr}: ${scrapedData.filter((r) => r.success).length}/${activeCompetitors.length} successful`,
       )
     }
 
-    console.log(`[v0] Processing ${scrapedData.length} scrape results`)
+    logger.info(`[v0] Processing ${scrapedData.length} scrape results`)
 
     for (const competitorResult of scrapedData) {
       if (Date.now() - startTime.getTime() > maxExecutionTime) {
         timedOut = true
-        console.log(`[v0] Timeout reached after processing competitor ${competitorResult.competitorName}`)
+        logger.info(`[v0] Timeout reached after processing competitor ${competitorResult.competitorName}`)
         break
       }
 
       if (competitorResult.success && competitorResult.rooms.length > 0) {
         successfulScrapes++
         totalRoomsFound += competitorResult.rooms.length
-        console.log(`[v0] SUCCESS: ${competitorResult.competitorName} - ${competitorResult.rooms.length} room types`)
+        logger.info(`[v0] SUCCESS: ${competitorResult.competitorName} - ${competitorResult.rooms.length} room types`)
 
         for (const room of competitorResult.rooms) {
           competitorPriceResults.push({
@@ -314,22 +315,22 @@ export async function POST(request: Request) {
         }
       } else {
         failedScrapes++
-        console.log(
+        logger.info(
           `[v0] FAILED: ${competitorResult.competitorName} for ${competitorResult.date} - ${competitorResult.error}`,
         )
       }
     }
 
-    console.log(`[v0] ========================================`)
-    console.log(`[v0] SCAN COMPLETE`)
-    console.log(`[v0] Successful scrapes: ${successfulScrapes}`)
-    console.log(`[v0] Failed scrapes: ${failedScrapes}`)
-    console.log(`[v0] Total rooms found: ${totalRoomsFound}`)
-    console.log(`[v0] Records to save: ${competitorPriceResults.length}`)
-    console.log(`[v0] ========================================`)
+    logger.info(`[v0] ========================================`)
+    logger.info(`[v0] SCAN COMPLETE`)
+    logger.info(`[v0] Successful scrapes: ${successfulScrapes}`)
+    logger.info(`[v0] Failed scrapes: ${failedScrapes}`)
+    logger.info(`[v0] Total rooms found: ${totalRoomsFound}`)
+    logger.info(`[v0] Records to save: ${competitorPriceResults.length}`)
+    logger.info(`[v0] ========================================`)
 
     if (competitorPriceResults.length > 0) {
-      console.log(`[v0] Sample record:`, JSON.stringify(competitorPriceResults[0]))
+      logger.info(`[v0] Sample record:`, { sampleRecord: JSON.stringify(competitorPriceResults[0]) })
 
       const batchSize = 100
       let savedCount = 0
@@ -360,31 +361,31 @@ export async function POST(request: Request) {
         )
 
         if (competitorError) {
-          console.error(`[v0] Batch ${Math.floor(i / batchSize) + 1} error:`, JSON.stringify(competitorError))
+          logger.error(`[v0] Batch ${Math.floor(i / batchSize) + 1} error:`, new Error(JSON.stringify(competitorError)))
         } else {
           savedCount += batch.length
-          console.log(`[v0] Saved batch ${Math.floor(i / batchSize) + 1}: ${batch.length} records`)
+          logger.info(`[v0] Saved batch ${Math.floor(i / batchSize) + 1}: ${batch.length} records`)
         }
       }
 
-      console.log(`[v0] TOTAL SAVED to competitor_daily_prices: ${savedCount} records`)
+      logger.info(`[v0] TOTAL SAVED to competitor_daily_prices: ${savedCount} records`)
 
-      console.log(`[v0] ========== SCAN_RESULTS DEBUG ==========`)
-      console.log(`[v0] scrapedData length: ${scrapedData.length}`)
+      logger.info(`[v0] ========== SCAN_RESULTS DEBUG ==========`)
+      logger.info(`[v0] scrapedData length: ${scrapedData.length}`)
       if (scrapedData.length > 0) {
-        console.log(`[v0] scrapedData sample:`, JSON.stringify(scrapedData[0], null, 2))
+        logger.info(`[v0] scrapedData sample:`, { scrapedDataSample: JSON.stringify(scrapedData[0], null, 2) })
       }
 
-      console.log(`[v0] Saving to scan_results from ${scrapedData.length} scrape results`)
+      logger.info(`[v0] Saving to scan_results from ${scrapedData.length} scrape results`)
 
       const scanResultsData = []
       for (const competitorResult of scrapedData) {
-        console.log(
+        logger.info(
           `[v0] Processing competitor: ${competitorResult.competitorName}, success: ${competitorResult.success}, rooms: ${competitorResult.rooms?.length || 0}`,
         )
 
         if (!competitorResult.success || !competitorResult.rooms || competitorResult.rooms.length === 0) {
-          console.log(`[v0] Skipping ${competitorResult.competitorName} - no successful data`)
+          logger.info(`[v0] Skipping ${competitorResult.competitorName} - no successful data`)
           continue // Skip failed scrapes
         }
 
@@ -417,9 +418,9 @@ export async function POST(request: Request) {
         }
       }
 
-      console.log(`[v0] Prepared ${scanResultsData.length} scan_results records to save`)
+      logger.info(`[v0] Prepared ${scanResultsData.length} scan_results records to save`)
       if (scanResultsData.length > 0) {
-        console.log(`[v0] Sample scan_results record:`, JSON.stringify(scanResultsData[0], null, 2))
+        logger.info(`[v0] Sample scan_results record:`, { sampleScanResult: JSON.stringify(scanResultsData[0], null, 2) })
       }
 
       if (scanResultsData.length > 0) {
@@ -428,12 +429,12 @@ export async function POST(request: Request) {
           .insert(scanResultsData)
 
         if (scanResultsError) {
-          console.error(`[v0] scan_results error:`, JSON.stringify(scanResultsError))
+          logger.error(`[v0] scan_results error:`, new Error(JSON.stringify(scanResultsError)))
         } else {
-          console.log(`[v0] SUCCESS: Saved ${scanResultsData.length} records to scan_results`)
+          logger.info(`[v0] SUCCESS: Saved ${scanResultsData.length} records to scan_results`)
         }
       } else {
-        console.log(`[v0] WARNING: No successful scrapes to save to scan_results`)
+        logger.info(`[v0] WARNING: No successful scrapes to save to scan_results`)
       }
     }
 
@@ -454,8 +455,8 @@ export async function POST(request: Request) {
         created_at: new Date().toISOString(),
       }))
 
-      console.log(`[v0] Saving ${dailyPricesData.length} daily_prices records`)
-      console.log(`[v0] Sample daily_price:`, JSON.stringify(dailyPricesData[0]))
+      logger.info(`[v0] Saving ${dailyPricesData.length} daily_prices records`)
+      logger.info(`[v0] Sample daily_price:`, { sampleDailyPrice: JSON.stringify(dailyPricesData[0]) })
 
       let savedDailyCount = 0
       for (const record of dailyPricesData) {
@@ -469,13 +470,13 @@ export async function POST(request: Request) {
         const { error: singleError } = await supabase.from("daily_prices").insert(record)
 
         if (singleError) {
-          console.error(`[v0] Single daily_price error:`, JSON.stringify(singleError))
+          logger.error(`[v0] Single daily_price error:`, new Error(JSON.stringify(singleError)))
         } else {
           savedDailyCount++
         }
       }
 
-      console.log(`[v0] Saved ${savedDailyCount}/${dailyPricesData.length} daily_prices individually`)
+      logger.info(`[v0] Saved ${savedDailyCount}/${dailyPricesData.length} daily_prices individually`)
     }
 
     const increases = results.filter((r: any) => r.autopilot_action === "increase").length
@@ -507,7 +508,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("[v0] Scraper error:", error)
+    logger.error("[v0] Scraper error:", error instanceof Error ? error : new Error(String(error)))
 
     if (scanRecord?.id) {
       try {
@@ -520,9 +521,9 @@ export async function POST(request: Request) {
             error_message: error instanceof Error ? error.message : "Unknown error occurred",
           })
           .eq("id", scanRecord.id)
-        console.log("[v0] Updated scan status to failed")
+        logger.info("[v0] Updated scan status to failed")
       } catch (updateError) {
-        console.error("[v0] Failed to update scan status:", updateError)
+        logger.error("[v0] Failed to update scan status:", updateError instanceof Error ? updateError : new Error(String(updateError)))
       }
     }
 

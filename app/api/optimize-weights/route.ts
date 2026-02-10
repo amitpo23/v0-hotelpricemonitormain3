@@ -8,6 +8,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { optimizeWeightsForHotel, applyOptimizedWeights } from "@/lib/ml/weight-optimizer"
 import { clearWeightCache } from "@/lib/prediction-algorithms"
+import { logger } from "@/lib/logger"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes for optimization
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     const cronSecret = process.env.CRON_SECRET
     
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('⚠️ Unauthorized request to /api/optimize-weights')
+      logger.warn('Unauthorized request to /api/optimize-weights')
       if (process.env.NODE_ENV === 'production') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     const minSamples = body.minSamples || 30
     const dryRun = body.dryRun || false
     
-    console.log(`[Weight Optimizer] Starting optimization (hotelId: ${hotelId || 'all'}, minSamples: ${minSamples}, dryRun: ${dryRun})`)
+    logger.info(`[Weight Optimizer] Starting optimization (hotelId: ${hotelId || 'all'}, minSamples: ${minSamples}, dryRun: ${dryRun})`)
     
     // Get hotels to optimize
     let hotelsToOptimize: Array<{ id: string; name: string }> = []
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
     
     // Optimize each hotel
     for (const hotel of hotelsToOptimize) {
-      console.log(`[Weight Optimizer] Processing hotel: ${hotel.name}`)
+      logger.info(`[Weight Optimizer] Processing hotel: ${hotel.name}`)
       
       try {
         // Run optimization
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
         })
         
       } catch (error) {
-        console.error(`[Weight Optimizer] Error for hotel ${hotel.name}:`, error)
+        logger.error(`[Weight Optimizer] Error for hotel ${hotel.name}:`, error instanceof Error ? error : new Error(String(error)))
         results.failed++
         results.hotelResults.push({
           hotelId: hotel.id,
@@ -138,10 +139,10 @@ export async function POST(request: NextRequest) {
     // Clear weight cache so new weights are used immediately
     if (!dryRun && results.totalWeightsUpdated > 0) {
       clearWeightCache()
-      console.log(`[Weight Optimizer] Cleared weight cache after updating ${results.totalWeightsUpdated} weights`)
+      logger.info(`[Weight Optimizer] Cleared weight cache after updating ${results.totalWeightsUpdated} weights`)
     }
     
-    console.log(`[Weight Optimizer] Completed: ${results.optimized} optimized, ${results.failed} failed, ${results.totalWeightsUpdated} weights updated`)
+    logger.info(`[Weight Optimizer] Completed: ${results.optimized} optimized, ${results.failed} failed, ${results.totalWeightsUpdated} weights updated`)
     
     return NextResponse.json({
       success: true,
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('[Weight Optimizer] Error:', error)
+    logger.error('[Weight Optimizer] Error:', error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }
@@ -228,7 +229,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response)
     
   } catch (error) {
-    console.error('[Weight Optimizer GET] Error:', error)
+    logger.error('[Weight Optimizer GET] Error:', error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }
@@ -279,7 +280,7 @@ export async function DELETE(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('[Weight Optimizer DELETE] Error:', error)
+    logger.error('[Weight Optimizer DELETE] Error:', error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }

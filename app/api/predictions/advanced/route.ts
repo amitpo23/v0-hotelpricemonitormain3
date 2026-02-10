@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { z } from "zod/v4"
+import { logger } from "@/lib/logger"
 import {
   predictPrice,
   calculateSeasonalityFactor,
@@ -9,11 +11,27 @@ import {
   type PredictionOutput,
 } from "@/lib/prediction-algorithms"
 
+const advancedPredictionSchema = z.object({
+  hotelId: z.string().uuid("Invalid hotel ID format"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate must be YYYY-MM-DD"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "endDate must be YYYY-MM-DD"),
+  roomTypeId: z.string().optional(),
+})
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const body = await request.json()
-    const { hotelId, startDate, endDate, roomTypeId } = body
+
+    const parsed = advancedPredictionSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request", details: parsed.error.issues },
+        { status: 400 },
+      )
+    }
+
+    const { hotelId, startDate, endDate, roomTypeId } = parsed.data
 
     // Get hotel data
     const { data: hotel } = await supabase.from("hotels").select("*").eq("id", hotelId).single()
@@ -144,7 +162,7 @@ export async function POST(request: Request) {
         priceHistoryTrend,
       }
 
-      const prediction = predictPrice(input)
+      const prediction = await predictPrice(input)
       predictions.push(prediction)
     }
 
@@ -170,7 +188,7 @@ export async function POST(request: Request) {
       generatedAt: new Date().toISOString(),
     })
   } catch (error) {
-    console.error("Advanced prediction error:", error)
+    logger.error("Advanced prediction error", error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       { error: "Failed to generate predictions", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

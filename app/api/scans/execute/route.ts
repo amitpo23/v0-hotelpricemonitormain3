@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { scrapeWithNewApifyActor } from "@/lib/scraper/apify-scraper-integration"
 import { scrapeBookingWithApify } from "@/lib/scraper/apify-booking-scraper"
 import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
+import { logger } from "@/lib/logger"
 
 // Validate required environment variables
 function validateEnvironment() {
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
   // Validate environment variables first
   const envCheck = validateEnvironment()
   if (!envCheck.valid) {
-    console.error("[Scan] Environment validation failed:", envCheck.error)
+    logger.error("[Scan] Environment validation failed:", new Error(String(envCheck.error)))
     return NextResponse.json({ 
       error: envCheck.error,
       hint: "Check Vercel/Railway environment variables settings and redeploy"
@@ -151,7 +152,7 @@ export async function POST(request: Request) {
 
     scan = scanData
 
-    console.log(`[Scan] Starting REAL scan for hotel: ${hotelData.name}`)
+    logger.info(`[Scan] Starting REAL scan for hotel: ${hotelData.name}`)
 
     let competitorsQuery = supabase
       .from("hotel_competitors")
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
     const { data: competitors } = await competitorsQuery
 
     if (!competitors || competitors.length === 0) {
-      console.log("[Scan] No active competitors found")
+      logger.info("[Scan] No active competitors found")
       await supabase
         .from("scans")
         .update({
@@ -193,14 +194,14 @@ export async function POST(request: Request) {
     // Allow custom days to scan, default to 3
     const daysToScan = days_to_scan || 3
 
-    console.log(`[Scan] Found ${competitors.length} active competitors`)
+    logger.info(`[Scan] Found ${competitors.length} active competitors`)
     
     // Check if competitors have booking URLs
     const competitorsWithUrl = competitors.filter(c => c.booking_url && c.booking_url.length > 10)
-    console.log(`[Scan] ${competitorsWithUrl.length} competitors have valid booking URLs`)
+    logger.info(`[Scan] ${competitorsWithUrl.length} competitors have valid booking URLs`)
     
     if (competitorsWithUrl.length === 0) {
-      console.warn("[Scan] ⚠️ WARNING: No competitors with booking URLs! Using fallback data.")
+      logger.warn("[Scan] WARNING: No competitors with booking URLs! Using fallback data.")
     }
 
     for (let dayOffset = 0; dayOffset < daysToScan; dayOffset++) {
@@ -212,13 +213,13 @@ export async function POST(request: Request) {
       nextDay.setDate(nextDay.getDate() + 1)
       const checkOutDate = nextDay.toISOString().split("T")[0]
 
-      console.log(`[Scan] Processing date ${dayOffset + 1}/${daysToScan}: ${checkInDate} - ${checkOutDate}`)
+      logger.info(`[Scan] Processing date ${dayOffset + 1}/${daysToScan}: ${checkInDate} - ${checkOutDate}`)
 
       // STEP 1: Scrape our own hotel first (if has URL)
       if (hotelData.competitor_urls && hotelData.competitor_urls.length > 0 && hotelData.competitor_urls[0]) {
         try {
-          console.log(`[Scan] 🏨 Scraping OUR hotel: ${hotelData.name}`)
-          console.log(`[Scan] URL: ${hotelData.competitor_urls[0].substring(0, 50)}...`)
+          logger.info(`[Scan] Scraping OUR hotel: ${hotelData.name}`)
+          logger.info(`[Scan] URL: ${hotelData.competitor_urls[0].substring(0, 50)}...`)
           
           const ourHotelResult = await scrapeCompetitorAllRooms(
             {
@@ -232,29 +233,29 @@ export async function POST(request: Request) {
           )
 
           if (ourHotelResult.success && ourHotelResult.rooms && ourHotelResult.rooms.length > 0) {
-            console.log(`[Scan] ✅ Got ${ourHotelResult.rooms.length} prices for OUR hotel`)
+            logger.info(`[Scan] Got ${ourHotelResult.rooms.length} prices for OUR hotel`)
             
             // Save our hotel's actual prices to daily_prices
             for (const room of ourHotelResult.rooms) {
               // We'll update daily_prices with actual prices later
               // For now, just log them
-              console.log(`[Scan] 💰 Our price on ${checkInDate}: ${room.price} ${room.currency} (${room.roomType})`)
+              logger.info(`[Scan] Our price on ${checkInDate}: ${room.price} ${room.currency} (${room.roomType})`)
             }
           } else {
-            console.log(`[Scan] ⚠️ Failed to scrape our hotel: ${ourHotelResult.error || 'No results'}`)
+            logger.info(`[Scan] Failed to scrape our hotel: ${ourHotelResult.errorMessage || 'No results'}`)
           }
         } catch (error) {
-          console.error(`[Scan] ❌ Error scraping our hotel:`, error instanceof Error ? error.message : error)
+          logger.error("[Scan] Error scraping our hotel:", error instanceof Error ? error : new Error(String(error)))
         }
       } else {
-        console.log(`[Scan] ⚠️ Our hotel has no Booking.com URL configured`)
+        logger.info("[Scan] Our hotel has no Booking.com URL configured")
       }
 
       // STEP 2: Scrape each competitor using Python scraper (working method)
       for (const competitor of competitorsWithUrl) {
         try {
-          console.log(`[Scan] Scraping ${competitor.competitor_hotel_name}`)
-          console.log(`[Scan] URL: ${competitor.booking_url?.substring(0, 50)}...`)
+          logger.info(`[Scan] Scraping ${competitor.competitor_hotel_name}`)
+          logger.info(`[Scan] URL: ${competitor.booking_url?.substring(0, 50)}...`)
           
           const result = await scrapeCompetitorAllRooms(
             {
@@ -269,7 +270,7 @@ export async function POST(request: Request) {
 
           if (result.success && result.rooms && result.rooms.length > 0) {
             realScrapeCount++
-            console.log(`[Scan] ✅ Got ${result.rooms.length} results for ${competitor.competitor_hotel_name}`)
+            logger.info(`[Scan] Got ${result.rooms.length} results for ${competitor.competitor_hotel_name}`)
             
             for (const room of result.rooms) {
               competitorPrices.push({
@@ -285,11 +286,11 @@ export async function POST(request: Request) {
               })
             }
           } else {
-            console.log(`[Scan] ❌ Failed: ${result.error || 'No results'} - skipping (no fallback)`)
+            logger.info(`[Scan] Failed: ${result.errorMessage || 'No results'} - skipping (no fallback)`)
           }
         } catch (error) {
-          console.error(`[Scan] ⚠️ Error scraping ${competitor.competitor_hotel_name}:`, error instanceof Error ? error.message : error)
-          console.log(`[Scan] Skipping competitor (no fallback data)`)
+          logger.error(`[Scan] Error scraping ${competitor.competitor_hotel_name}:`, error instanceof Error ? error : new Error(String(error)))
+          logger.info("[Scan] Skipping competitor (no fallback data)")
         }
       }
 
@@ -327,7 +328,7 @@ export async function POST(request: Request) {
             */
     }
 
-    console.log(`[Scan] Completed ${realScrapeCount} real scrapes, got ${competitorPrices.length} prices`)
+    logger.info(`[Scan] Completed ${realScrapeCount} real scrapes, got ${competitorPrices.length} prices`)
 
     // Save to database only if we have real data
     if (competitorPrices.length > 0) {
@@ -335,7 +336,7 @@ export async function POST(request: Request) {
       const uniqueDates = [...new Set(competitorPrices.map(p => p.date))]
       const competitorIds = [...new Set(competitorPrices.map(p => p.competitor_id))]
       
-      console.log(`[Scan] Fetching existing prices for ${competitorIds.length} competitors and ${uniqueDates.length} dates`)
+      logger.info(`[Scan] Fetching existing prices for ${competitorIds.length} competitors and ${uniqueDates.length} dates`)
       
       const { data: existingPrices } = await supabase
         .from("competitor_daily_prices")
@@ -343,7 +344,7 @@ export async function POST(request: Request) {
         .in("competitor_id", competitorIds)
         .in("date", uniqueDates)
 
-      console.log(`[Scan] Found ${existingPrices?.length || 0} existing prices`)
+      logger.info(`[Scan] Found ${existingPrices?.length || 0} existing prices`)
 
       // Step 2: Detect price changes
       const priceChanges: any[] = []
@@ -374,24 +375,24 @@ export async function POST(request: Request) {
             recorded_at: new Date().toISOString()
           })
           
-          console.log(`[Scan] 💰 Price change detected: ${oldPrice.price} → ${newPrice.price} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%)`)
+          logger.info(`[Scan] Price change detected: ${oldPrice.price} -> ${newPrice.price} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%)`)
         }
       }
 
       // Step 3: Save price changes to history
       if (priceChanges.length > 0) {
-        console.log(`[Scan] Saving ${priceChanges.length} price changes to history`)
+        logger.info(`[Scan] Saving ${priceChanges.length} price changes to history`)
         const { error: historyError } = await supabase
           .from("competitor_price_history")
           .insert(priceChanges)
         
         if (historyError) {
-          console.error("[Scan] Error saving price history:", historyError)
+          logger.error("[Scan] Error saving price history:", new Error(String(historyError)))
         } else {
-          console.log(`[Scan] ✅ Saved ${priceChanges.length} price changes`)
+          logger.info(`[Scan] Saved ${priceChanges.length} price changes`)
         }
       } else {
-        console.log("[Scan] No price changes detected")
+        logger.info("[Scan] No price changes detected")
       }
 
       // Step 4: Save competitor prices
@@ -403,14 +404,14 @@ export async function POST(request: Request) {
         })
 
         if (upsertError) {
-          console.error("[Scan] Error upserting competitor prices:", upsertError)
+          logger.error("[Scan] Error upserting competitor prices:", new Error(String(upsertError)))
         } else {
-          console.log(`[Scan] Saved ${batch.length} real prices (batch ${Math.floor(i / 100) + 1})`)
+          logger.info(`[Scan] Saved ${batch.length} real prices (batch ${Math.floor(i / 100) + 1})`)
         }
       }
 
       // Step 5: Calculate and save daily_prices (recommendations)
-      console.log("[Scan] Calculating daily price recommendations...")
+      logger.info("[Scan] Calculating daily price recommendations...")
       
       // Group prices by date
       const pricesByDate: Record<string, number[]> = {}
@@ -474,7 +475,7 @@ export async function POST(request: Request) {
 
       // Save daily prices
       if (dailyPricesData.length > 0) {
-        console.log(`[Scan] Saving ${dailyPricesData.length} daily price recommendations`)
+        logger.info(`[Scan] Saving ${dailyPricesData.length} daily price recommendations`)
         
         for (const record of dailyPricesData) {
           const { error: dailyError } = await supabase
@@ -485,11 +486,11 @@ export async function POST(request: Request) {
             })
           
           if (dailyError) {
-            console.error("[Scan] Error saving daily_price:", dailyError)
+            logger.error("[Scan] Error saving daily_price:", new Error(String(dailyError)))
           }
         }
         
-        console.log("[Scan] ✅ Daily prices saved")
+        logger.info("[Scan] Daily prices saved")
       }
     }
 
@@ -520,7 +521,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("[Scan] Scan execution error:", error)
+    logger.error("[Scan] Scan execution error:", error instanceof Error ? error : new Error(String(error)))
 
     if (scan?.id) {
       try {
@@ -532,9 +533,9 @@ export async function POST(request: Request) {
             error_message: error instanceof Error ? error.message : "Unknown error occurred",
           })
           .eq("id", scan.id)
-        console.log("[Scan] Updated scan status to failed")
+        logger.info("[Scan] Updated scan status to failed")
       } catch (updateError) {
-        console.error("[Scan] Failed to update scan status:", updateError)
+        logger.error("[Scan] Failed to update scan status:", updateError instanceof Error ? updateError : new Error(String(updateError)))
       }
     }
 

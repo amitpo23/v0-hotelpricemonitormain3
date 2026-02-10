@@ -1,19 +1,64 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { z } from "zod/v4"
+import { logger } from "@/lib/logger"
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dqhmraeyisoigxzsitiz.supabase.co"
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxaG1yYWV5aXNvaWd4enNpdGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNTcxODEsImV4cCI6MjA3OTYzMzE4MX0.gOmmQBEpT2GJw97dFmlVBX1CtGpfAhARX71K3NlIx8I"
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+function getSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
+  }
+  return createClient(SUPABASE_URL, SUPABASE_KEY)
+}
+
+const bookingItemSchema = z.object({
+  guest_name: z.string().optional(),
+  check_in_date: z.string(),
+  check_out_date: z.string(),
+  room_type: z.string().optional(),
+  room_number: z.string().nullable().optional(),
+  room_count: z.number().optional(),
+  nights: z.number().optional(),
+  nightly_rate: z.number().optional(),
+  total_price: z.number().optional(),
+  booking_source: z.string().optional(),
+  status: z.string().optional(),
+  booking_date: z.string().optional(),
+})
+
+const importSchema = z.object({
+  hotelId: z.string().uuid("Invalid hotel ID format"),
+  bookings: z.array(bookingItemSchema).min(1, "At least one booking is required"),
+  analytics: z.object({
+    occupancyByMonth: z.record(z.string(), z.object({
+      roomNights: z.number(),
+      revenue: z.number(),
+      bookings: z.number(),
+    })).optional(),
+    totalRevenue: z.number().optional(),
+    totalRoomNights: z.number().optional(),
+    avgNightlyRate: z.number().optional(),
+  }).nullable().optional(),
+})
 
 export async function POST(request: NextRequest) {
   try {
-    const { hotelId, bookings, analytics } = await request.json()
+    const supabase = getSupabase()
+    const body = await request.json()
 
-    if (!hotelId || !bookings || !Array.isArray(bookings)) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 })
+    const parsed = importSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request", details: parsed.error.issues },
+        { status: 400 },
+      )
     }
 
-    const bookingsToInsert = bookings.map((booking) => ({
+    const { hotelId, bookings, analytics } = parsed.data
+
+    const bookingsToInsert = bookings.map((booking: Record<string, unknown>) => ({
       hotel_id: hotelId,
       guest_name: booking.guest_name || "Guest",
       check_in_date: booking.check_in_date,
@@ -39,14 +84,14 @@ export async function POST(request: NextRequest) {
       const { data, error } = await supabase.from("bookings").insert(batch).select()
 
       if (error) {
-        console.error("Error inserting batch:", error)
+        logger.error("Error inserting batch", error instanceof Error ? error : new Error(String(error)))
       } else {
         imported += data?.length || 0
       }
     }
 
     if (analytics && analytics.occupancyByMonth) {
-      const occupancyRecords = Object.entries(analytics.occupancyByMonth).map(([month, data]: [string, any]) => ({
+      const occupancyRecords = Object.entries(analytics.occupancyByMonth).map(([month, data]: [string, Record<string, number>]) => ({
         hotel_id: hotelId,
         month: month,
         room_nights: data.roomNights,
@@ -84,7 +129,7 @@ export async function POST(request: NextRequest) {
         : null,
     })
   } catch (error) {
-    console.error("Import error:", error)
+    logger.error("Import error", error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json({ error: "Failed to import bookings" }, { status: 500 })
   }
 }

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { logger } from "@/lib/logger"
 import { createClient } from "@/lib/supabase/server"
 import { weatherService } from "@/lib/external/weather-service"
 import { bookingVelocityTracker } from "@/lib/analytics/booking-velocity"
@@ -47,9 +48,9 @@ export async function GET(request: NextRequest) {
 
     // 1. Weather Service
     try {
-      const weather = await weatherService.getWeatherForDate(
+      const weather = await weatherService.getWeatherImpact(
         hotel.city || "Tel Aviv",
-        new Date(checkInDate)
+        checkInDate
       )
       agentResults.push({
         name: "Weather Service",
@@ -72,9 +73,9 @@ export async function GET(request: NextRequest) {
 
     // 2. Booking Velocity Tracker
     try {
-      const velocity = await bookingVelocityTracker.getBookingVelocity(
-        parseInt(hotelId),
-        7
+      const velocity = await bookingVelocityTracker.getVelocityForDate(
+        hotelId,
+        checkInDate
       )
       agentResults.push({
         name: "Booking Velocity Tracker",
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
         dataAvailable: !!velocity,
         dataQuality: velocity ? 1.0 : 0.5,
         message: velocity
-          ? `Velocity: ${velocity.averageBookingsPerDay.toFixed(1)}/day`
+          ? `Velocity: ${velocity.velocity7d.toFixed(1)}/day`
           : "Limited booking data - using occupancy proxy",
       })
     } catch (err) {
@@ -97,9 +98,9 @@ export async function GET(request: NextRequest) {
 
     // 3. Year-over-Year Service
     try {
-      const yoy = await yoyService.getYoYComparison(
-        parseInt(hotelId),
-        new Date(checkInDate)
+      const yoy = await yoyService.compareYearOverYear(
+        hotelId,
+        checkInDate
       )
       agentResults.push({
         name: "Year-over-Year Analysis",
@@ -123,16 +124,17 @@ export async function GET(request: NextRequest) {
     // 4. CBS Tourism Agent
     try {
       const cbs = await analyzeCBSTourism(
-        new Date(checkInDate),
-        hotel.city || "Tel Aviv"
+        hotel.city || "Tel Aviv",
+        new Date(checkInDate)
       )
+      const cbsData = cbs.dataPoints as { seasonalIndex?: number; growthRate?: number } | undefined
       agentResults.push({
         name: "CBS Tourism Statistics",
         status: cbs ? "healthy" : "degraded",
         dataAvailable: !!cbs,
         dataQuality: cbs ? 0.95 : 0.7,
-        message: cbs
-          ? `CBS index: ${cbs.seasonalIndex.toFixed(2)} (${(cbs.growthRate * 100).toFixed(1)}% growth)`
+        message: cbs && cbsData?.seasonalIndex
+          ? `CBS index: ${cbsData.seasonalIndex.toFixed(2)} (${((cbsData.growthRate ?? 0)).toFixed(1)}% growth)`
           : "CBS data unavailable - using local seasonality",
       })
     } catch (err) {
@@ -147,17 +149,18 @@ export async function GET(request: NextRequest) {
 
     // 5. Events Agent
     try {
-      const events = await discoverEvents(
+      const eventsResult = await discoverEvents(
         hotel.city || "Tel Aviv",
         new Date(checkInDate)
       )
+      const eventsCount = eventsResult?.events?.length ?? 0
       agentResults.push({
         name: "Events Discovery",
-        status: events ? "healthy" : "degraded",
-        dataAvailable: events && events.length > 0,
-        dataQuality: events && events.length > 0 ? 0.8 : 1.0, // No events is valid data
-        message: events && events.length > 0
-          ? `${events.length} event(s) found`
+        status: eventsResult ? "healthy" : "degraded",
+        dataAvailable: eventsCount > 0,
+        dataQuality: eventsCount > 0 ? 0.8 : 1.0, // No events is valid data
+        message: eventsCount > 0
+          ? `${eventsCount} event(s) found`
           : "No major events detected - baseline demand",
       })
     } catch (err) {
@@ -172,18 +175,20 @@ export async function GET(request: NextRequest) {
 
     // 6. Competitor Agent
     try {
-      const competitors = await getCompetitorPrices(
-        parseInt(hotelId),
-        new Date(checkInDate)
+      const competitorResult = await getCompetitorPrices(
+        hotelId,
+        hotel.city || "Tel Aviv",
+        checkInDate
       )
+      const competitorsCount = competitorResult?.competitors?.length ?? 0
       agentResults.push({
         name: "Competitor Pricing",
-        status: competitors && competitors.length > 0 ? "healthy" : "degraded",
-        dataAvailable: competitors.length > 0,
-        dataQuality: competitors.length > 0 ? 0.9 : 0.6,
+        status: competitorsCount > 0 ? "healthy" : "degraded",
+        dataAvailable: competitorsCount > 0,
+        dataQuality: competitorsCount > 0 ? 0.9 : 0.6,
         message:
-          competitors.length > 0
-            ? `${competitors.length} competitor(s) tracked`
+          competitorsCount > 0
+            ? `${competitorsCount} competitor(s) tracked`
             : "No recent competitor data - using historical pricing",
       })
     } catch (err) {
@@ -262,7 +267,7 @@ export async function GET(request: NextRequest) {
           : "Low data quality - predictions may be less accurate",
     })
   } catch (error) {
-    console.error("[Agent Health] Error:", error)
+    logger.error("[Agent Health] Error", error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       {
         error: "Failed to check agent health",

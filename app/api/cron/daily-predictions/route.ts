@@ -6,6 +6,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 300 // 5 minutes max
 export const dynamic = 'force-dynamic'
@@ -22,7 +23,7 @@ interface DailyPredictionJob {
  */
 export async function POST(request: Request) {
   try {
-    console.log('[DailyPredictions] Starting daily prediction job...')
+    logger.info('[DailyPredictions] Starting daily prediction job...')
     
     const supabase = await createClient()
     const today = new Date()
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       })
     }
 
-    console.log(`[DailyPredictions] Found ${hotels.length} active hotels`)
+    logger.info(`[DailyPredictions] Found ${hotels.length} active hotels`)
 
     // Generate predictions for next 90 days, one day at a time
     const PREDICTION_DAYS = 90
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
         batchDates.push(targetDate)
       }
 
-      console.log(`[DailyPredictions] Processing batch: days ${dayOffset} to ${dayOffset + batchDates.length}`)
+      logger.info(`[DailyPredictions] Processing batch: days ${dayOffset} to ${dayOffset + batchDates.length}`)
 
       // Call the main predictions API for this batch
       try {
@@ -86,14 +87,14 @@ export async function POST(request: Request) {
         if (response.ok) {
           const result = await response.json()
           stats.success += result.count || 0
-          console.log(`[DailyPredictions] Batch completed: ${result.count} predictions`)
+          logger.info(`[DailyPredictions] Batch completed: ${result.count} predictions`)
         } else {
           stats.failed += batchDates.length * hotels.length
-          console.error(`[DailyPredictions] Batch failed: ${response.statusText}`)
+          logger.error(`[DailyPredictions] Batch failed: ${response.statusText}`)
         }
       } catch (error) {
         stats.failed += batchDates.length * hotels.length
-        console.error(`[DailyPredictions] Batch error:`, error)
+        logger.error(`[DailyPredictions] Batch error:`, error instanceof Error ? error : new Error(String(error)))
       }
 
       stats.total += batchDates.length * hotels.length
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
       await new Promise(resolve => setTimeout(resolve, 2000))
     }
 
-    console.log('[DailyPredictions] Job completed:', stats)
+    logger.info('[DailyPredictions] Job completed:', { stats })
 
     return NextResponse.json({
       success: true,
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
       days: PREDICTION_DAYS,
     })
   } catch (error) {
-    console.error('[DailyPredictions] Job failed:', error)
+    logger.error('[DailyPredictions] Job failed:', error instanceof Error ? error : new Error(String(error)))
     return NextResponse.json(
       { 
         success: false, 

@@ -185,7 +185,7 @@ export function extractPricesFromHTML(html: string): number[] {
   return rooms.map((r) => r.price)
 }
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "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"
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY || ""
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY
 const APIFY_API_KEY = process.env.APIFY_API_KEY
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY

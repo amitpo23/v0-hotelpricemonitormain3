@@ -9,6 +9,7 @@ import { weatherService } from "./external/weather-service"
 import { bookingVelocityTracker } from "./analytics/booking-velocity"
 import { yoyService } from "./analytics/year-over-year"
 import { featureEngineer } from "./features/feature-engineering"
+import { logger } from "./logger"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 // Weight cache to avoid DB queries on every prediction
@@ -58,7 +59,7 @@ async function getWeight(
       if (weight !== undefined) return weight
     }
   } catch (err) {
-    console.error(`[Weight Loading] Error for ${factorName}:`, err)
+    logger.error(`[Weight Loading] Error for ${factorName}`, err instanceof Error ? err : new Error(String(err)))
   }
   
   // Fallback to default
@@ -563,8 +564,8 @@ export async function predictPrice(
 /**
  * Batch prediction for multiple dates
  */
-export function predictPricesForRange(inputs: PredictionInput[]): PredictionOutput[] {
-  return inputs.map((input) => predictPrice(input))
+export async function predictPricesForRange(inputs: PredictionInput[]): Promise<PredictionOutput[]> {
+  return Promise.all(inputs.map((input) => predictPrice(input)))
 }
 
 /**
@@ -613,7 +614,7 @@ export async function predictPriceEnhanced(
     }
 
     // Run prediction with enhanced features
-    const prediction = predictPrice(enhancedInput)
+    const prediction = await predictPrice(enhancedInput)
 
     // Boost confidence if data quality is high
     if (features.dataQuality > 0.8 && features.confidenceLevel > 0.7) {
@@ -622,7 +623,7 @@ export async function predictPriceEnhanced(
 
     return prediction
   } catch (error) {
-    console.error('Enhanced prediction error:', error)
+    logger.error('Enhanced prediction error', error instanceof Error ? error : new Error(String(error)))
     // Fallback to basic prediction
     return predictPrice({
       date: targetDate,
@@ -765,11 +766,11 @@ export async function predictPriceWithAI(
   enableLLM = true,
 ): Promise<PredictionOutput> {
   // Get base algorithmic prediction
-  const algorithmicPrediction = predictPrice(input)
+  const algorithmicPrediction = await predictPrice(input)
 
   // If LLM disabled or no API key, return algorithmic prediction
   if (!enableLLM || !process.env.PERPLEXITY_API_KEY) {
-    console.log("[Prediction] LLM disabled or API key missing, using algorithmic prediction only")
+    logger.info("[Prediction] LLM disabled or API key missing, using algorithmic prediction only")
     return algorithmicPrediction
   }
 
@@ -794,7 +795,7 @@ export async function predictPriceWithAI(
     // Combine predictions
     const enhancedPrediction = combinePredictions(algorithmicPrediction, llmInsight)
 
-    console.log("[Prediction] Enhanced with AI insights:", {
+    logger.info("[Prediction] Enhanced with AI insights", {
       algorithmic: algorithmicPrediction.recommendedPrice,
       llm: llmInsight.suggestedPrice,
       final: enhancedPrediction.recommendedPrice,
@@ -802,7 +803,7 @@ export async function predictPriceWithAI(
 
     return enhancedPrediction
   } catch (error) {
-    console.error("[Prediction] AI enhancement failed, falling back to algorithmic:", error)
+    logger.error("[Prediction] AI enhancement failed, falling back to algorithmic", error instanceof Error ? error : new Error(String(error)))
     return algorithmicPrediction
   }
 }
@@ -825,11 +826,11 @@ export interface DecisionAgentPredictionInput extends PredictionInput {
   }
 }
 
-export function predictPriceWithDecisionAgent(input: DecisionAgentPredictionInput): PredictionOutput {
+export async function predictPriceWithDecisionAgent(input: DecisionAgentPredictionInput): Promise<PredictionOutput> {
   // If we have Decision Agent data, use it as the primary source
   if (input.decisionData) {
     const { decisionData } = input
-    const basePrediction = predictPrice(input) // Get traditional prediction
+    const basePrediction = await predictPrice(input) // Get traditional prediction
     
     // Combine Decision Agent wisdom with traditional algorithm
     const decisionWeight = decisionData.confidence
@@ -892,8 +893,8 @@ export function predictPriceWithDecisionAgent(input: DecisionAgentPredictionInpu
   }
   
   // Fallback to traditional algorithm if no Decision Agent data
-  console.log('[Prediction] No Decision Agent data available, using traditional algorithm')
-  return predictPrice(input)
+  logger.info('[Prediction] No Decision Agent data available, using traditional algorithm')
+  return await predictPrice(input)
 }
 /**
  * Calculate demand forecast based on date and price statistics

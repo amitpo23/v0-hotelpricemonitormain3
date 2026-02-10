@@ -1,27 +1,22 @@
 /**
  * Auto-scan Cron Job Endpoint
- * 
+ *
  * This endpoint is called every 72 hours by Vercel Cron or Railway Cron
  * to automatically scan missing dates for Q1 2026.
- * 
+ *
  * Features:
- * - Uses checkpoint system to resume from where it stopped
+ * - Uses database checkpoint system (serverless-compatible)
  * - Only scans missing dates (not already completed)
  * - Retries failed dates
- * 
- * Schedule: Every 72 hours (cron: 0 *​/72 * * *)
+ *
+ * Schedule: Every 72 hours (cron: 0 */72 * * *)
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
 
-const CHECKPOINT_FILE = join(process.cwd(), '.missing-dates-checkpoint.json');
-const MISSING_DATES_FILE = join(process.cwd(), 'missing-dates.txt');
 const HOTEL_ID = '716e1e8f-3537-4f67-875d-de3a89642175';
 
-// Create Supabase client at runtime, not at module load time
 function getSupabaseClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Missing Supabase environment variables');
@@ -32,15 +27,60 @@ function getSupabaseClient() {
   );
 }
 
+interface ScanCheckpoint {
+  id?: string;
+  hotel_id: string;
+  completed_dates: string[];
+  failed_dates: string[];
+  last_completed_date: string | null;
+  stats: {
+    total_prices: number;
+    successful_scans: number;
+    failed_scans: number;
+  };
+  started_at: string;
+  last_updated: string;
+}
+
+async function loadCheckpoint(supabase: ReturnType<typeof createClient>): Promise<ScanCheckpoint | null> {
+  const { data } = await supabase
+    .from("scan_checkpoints")
+    .select("*")
+    .eq("hotel_id", HOTEL_ID)
+    .order("last_updated", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data as ScanCheckpoint | null;
+}
+
+async function saveCheckpoint(supabase: ReturnType<typeof createClient>, checkpoint: ScanCheckpoint): Promise<void> {
+  checkpoint.last_updated = new Date().toISOString();
+
+  if (checkpoint.id) {
+    await supabase
+      .from("scan_checkpoints")
+      .update({
+        completed_dates: checkpoint.completed_dates,
+        failed_dates: checkpoint.failed_dates,
+        last_completed_date: checkpoint.last_completed_date,
+        stats: checkpoint.stats,
+        last_updated: checkpoint.last_updated,
+      })
+      .eq("id", checkpoint.id);
+  } else {
+    await supabase
+      .from("scan_checkpoints")
+      .insert(checkpoint);
+  }
+}
+
 export async function GET(request: NextRequest) {
-  console.log("🕐 Auto-scan cron job triggered");
-  
   const supabase = getSupabaseClient();
 
   // Verify cron secret (security)
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    console.error("❌ Unauthorized cron request");
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
@@ -48,26 +88,29 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Load checkpoint
-    let checkpoint: any = null;
-    if (existsSync(CHECKPOINT_FILE)) {
-      checkpoint = JSON.parse(readFileSync(CHECKPOINT_FILE, 'utf-8'));
-      console.log(`📂 Found checkpoint: ${checkpoint.completed_dates.length} dates completed`);
-    }
+    // Load checkpoint from database
+    let checkpoint = await loadCheckpoint(supabase);
 
-    // Load missing dates
-    if (!existsSync(MISSING_DATES_FILE)) {
-      console.log('⚠️ missing-dates.txt not found, scanning full 90 days');
-      return await scanFull90Days(request);
-    }
+    // Get missing dates from scan_logs or generate date range
+    const { data: existingScans } = await supabase
+      .from("scan_logs")
+      .select("scan_metadata")
+      .eq("hotel_id", HOTEL_ID)
+      .eq("scan_type", "auto_cron_checkpoint")
+      .eq("status", "completed");
 
-    const missingDates = readFileSync(MISSING_DATES_FILE, 'utf-8')
-      .split('\n')
-      .filter(d => d.trim())
-      .sort();
+    // Generate the 90-day date range
+    const today = new Date();
+    const missingDates: string[] = [];
+    for (let i = 0; i < 90; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() + i);
+      missingDates.push(date.toISOString().split('T')[0]);
+    }
 
     if (!checkpoint) {
       checkpoint = {
+        hotel_id: HOTEL_ID,
         started_at: new Date().toISOString(),
         completed_dates: [],
         failed_dates: [],
@@ -76,24 +119,20 @@ export async function GET(request: NextRequest) {
           total_prices: 0,
           successful_scans: 0,
           failed_scans: 0,
-        }
+        },
+        last_updated: new Date().toISOString(),
       };
     }
 
     // Filter dates to scan (not completed yet)
-    const datesToScan = missingDates.filter(d => 
+    const datesToScan = missingDates.filter(d =>
       !checkpoint.completed_dates.includes(d)
     );
 
     // Add failed dates for retry
     const allDatesToScan = [...new Set([...checkpoint.failed_dates, ...datesToScan])].sort();
 
-    console.log(`📋 Dates to scan: ${allDatesToScan.length}`);
-    console.log(`   New: ${datesToScan.length}`);
-    console.log(`   Retry: ${checkpoint.failed_dates.length}`);
-
     if (allDatesToScan.length === 0) {
-      console.log('✅ All dates completed!');
       return NextResponse.json({
         success: true,
         message: 'All dates already scanned',
@@ -104,7 +143,6 @@ export async function GET(request: NextRequest) {
     // Scan dates (limit to 10 per cron run to avoid timeout)
     const batchSize = 10;
     const batch = allDatesToScan.slice(0, batchSize);
-    console.log(`🔄 Scanning batch of ${batch.length} dates...`);
 
     const results = [];
     for (const date of batch) {
@@ -116,7 +154,7 @@ export async function GET(request: NextRequest) {
         checkpoint.last_completed_date = date;
         checkpoint.stats.total_prices += result.prices;
         checkpoint.stats.successful_scans++;
-        checkpoint.failed_dates = checkpoint.failed_dates.filter(d => d !== date);
+        checkpoint.failed_dates = checkpoint.failed_dates.filter((d: string) => d !== date);
       } else {
         checkpoint.stats.failed_scans++;
         if (!checkpoint.failed_dates.includes(date)) {
@@ -125,11 +163,10 @@ export async function GET(request: NextRequest) {
       }
 
       // Save checkpoint after each date
-      checkpoint.last_updated = new Date().toISOString();
-      writeFileSync(CHECKPOINT_FILE, JSON.stringify(checkpoint, null, 2));
+      await saveCheckpoint(supabase, checkpoint);
 
       // Small delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 2_000));
     }
 
     const scanResult = {
@@ -142,21 +179,6 @@ export async function GET(request: NextRequest) {
       total_missing: missingDates.length
     };
 
-    // Log the results
-    const logData = {
-      event_type: "auto_scan_checkpoint",
-      hotel_id: HOTEL_ID,
-      batch_scanned: scanResult.batch_size,
-      successful: scanResult.successful,
-      failed: scanResult.failed,
-      remaining: scanResult.remaining,
-      total_completed: scanResult.total_completed,
-      total_missing: scanResult.total_missing,
-      triggered_at: new Date().toISOString(),
-    };
-
-    console.log("✅ Auto-scan batch completed:", logData);
-
     // Save log to database
     await supabase.from("scan_logs").insert({
       hotel_id: HOTEL_ID,
@@ -164,19 +186,28 @@ export async function GET(request: NextRequest) {
       status: "completed",
       results_count: checkpoint.stats.total_prices,
       triggered_at: new Date().toISOString(),
-      scan_metadata: logData,
+      scan_metadata: {
+        event_type: "auto_scan_checkpoint",
+        hotel_id: HOTEL_ID,
+        batch_scanned: scanResult.batch_size,
+        successful: scanResult.successful,
+        failed: scanResult.failed,
+        remaining: scanResult.remaining,
+        total_completed: scanResult.total_completed,
+        total_missing: scanResult.total_missing,
+        triggered_at: new Date().toISOString(),
+      },
     });
 
+    const progressPercent = Math.round((scanResult.total_completed / scanResult.total_missing) * 100);
     return NextResponse.json({
       success: true,
-      message: scanResult.remaining > 0 
-        ? `Batch completed. ${scanResult.remaining} dates remaining (${scanResult.progress}% done).`
-        : "All dates completed! 🎉",
+      message: scanResult.remaining > 0
+        ? `Batch completed. ${scanResult.remaining} dates remaining (${progressPercent}% done).`
+        : "All dates completed!",
       results: scanResult,
     });
   } catch (error) {
-    console.error("❌ Auto-scan failed:", error);
-
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
     // Log error to database
@@ -203,9 +234,7 @@ export async function GET(request: NextRequest) {
  */
 async function scanDate(date: string): Promise<{ success: boolean; prices: number; error?: string }> {
   try {
-    console.log(`  🔍 Scanning ${date}...`);
-    
-    const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 
+    const apiUrl = process.env.NEXT_PUBLIC_APP_URL ||
                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
     const response = await fetch(`${apiUrl}/api/scans/execute`, {
       method: 'POST',
@@ -224,65 +253,16 @@ async function scanDate(date: string): Promise<{ success: boolean; prices: numbe
     }
 
     if (data.success) {
-      console.log(`  ✅ Completed: ${data.results_count || 0} prices`);
       return { success: true, prices: data.results_count || 0 };
-    } else {
-      throw new Error(data.error || 'Unknown error');
     }
+    throw new Error(data.error || 'Unknown error');
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`  ❌ Failed: ${errorMsg}`);
     return { success: false, prices: 0, error: errorMsg };
   }
-}
-
-/**
- * Fallback: Scan full 90 days (old behavior)
- */
-async function scanFull90Days() {
-  const { data: hotel } = await supabase
-    .from("hotels")
-    .select("*")
-    .eq("id", HOTEL_ID)
-    .single();
-
-  if (!hotel) {
-    throw new Error('Hotel not found');
-  }
-
-  const today = new Date();
-  const startDate = today.toISOString().split('T')[0];
-
-  const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                 (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-  const scanResponse = await fetch(
-    `${apiUrl}/api/scans/execute`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        hotel_id: HOTEL_ID,
-        start_date: startDate,
-        days_to_scan: 90,
-      }),
-    }
-  );
-
-  const scanResult = await scanResponse.json();
-
-  if (!scanResponse.ok) {
-    throw new Error(scanResult.error || 'Scan failed');
-  }
-
-  return NextResponse.json({
-    success: true,
-    message: "Full 90-day scan completed",
-    results: scanResult,
-  });
 }
 
 // Also support POST for manual testing
 export async function POST(request: NextRequest) {
   return GET(request);
 }
-
