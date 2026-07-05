@@ -7,6 +7,10 @@ import { ClientLayout } from "./ClientLayout"
 const geistSans = Geist({ subsets: ["latin"] })
 const geistMono = Geist_Mono({ subsets: ["latin"] })
 
+// Auth-gated dashboard: every page renders per-user data at request time.
+// Static prerendering would bake stale data and breaks builds without live env.
+export const dynamic = "force-dynamic"
+
 export const metadata: Metadata = {
   title: "Cockpit | Hotel Revenue Command Center",
   description:
