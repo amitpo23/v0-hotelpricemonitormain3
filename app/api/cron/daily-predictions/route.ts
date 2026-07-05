@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.CRON_SECRET}`,
           },
           body: JSON.stringify({
             hotelIds: hotels.map((h: any) => h.id),

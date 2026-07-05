@@ -13,6 +13,7 @@ import type { NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { requireCronAuth } from "@/lib/auth/cron-auth"
+import { requireUserOrCron } from "@/lib/auth/dual-auth"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes
@@ -22,7 +23,8 @@ export const maxDuration = 300 // 5 minutes
  * POST /api/learning/refresh-predictions
  */
 export async function POST(request: NextRequest) {
-  const denied = requireCronAuth(request)
+  // Called by cron AND by the learning dashboard button — dual auth
+  const denied = await requireUserOrCron(request)
   if (denied) return denied
 
   try {
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.CRON_SECRET}`,
           }
         })
         

@@ -234,7 +234,10 @@ async function scanDate(date: string): Promise<{ success: boolean; prices: numbe
                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
     const response = await fetch(`${apiUrl}/api/scans/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+      },
       body: JSON.stringify({
         hotel_id: HOTEL_ID,
         start_date: date,

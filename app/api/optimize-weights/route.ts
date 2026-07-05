@@ -10,6 +10,7 @@ import { optimizeWeightsForHotel, applyOptimizedWeights } from "@/lib/ml/weight-
 import { clearWeightCache } from "@/lib/prediction-algorithms"
 import { logger } from "@/lib/logger"
 import { requireCronAuth } from "@/lib/auth/cron-auth"
+import { requireUserOrCron } from "@/lib/auth/dual-auth"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes for optimization
@@ -234,6 +235,10 @@ export async function GET(request: NextRequest) {
  * DELETE - Revert to default weights (admin only)
  */
 export async function DELETE(request: NextRequest) {
+  // Mutates factor weights — admin action or cron only
+  const denied = await requireUserOrCron(request)
+  if (denied) return denied
+
   try {
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)

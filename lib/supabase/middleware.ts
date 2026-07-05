@@ -15,6 +15,13 @@ const PUBLIC_PREFIXES = [
   "/api/learning/accuracy",
   "/api/learning/refresh-predictions",
   "/api/optimize-weights",
+  // Dual-auth routes (requireUserOrCron inside the handler): called both by
+  // logged-in users and internally by cron jobs via server-side fetch.
+  "/api/scans/execute",
+  "/api/predictions/generate",
+  "/api/scraper/run-full",
+  // Read-only enrichment data, fetched internally by predictions/generate.
+  "/api/external-data",
 ]
 
 /**

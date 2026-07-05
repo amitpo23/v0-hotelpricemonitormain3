@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 import { logger } from "@/lib/logger"
+import { requireUserOrCron } from "@/lib/auth/dual-auth"
 
 // Validate required environment variables
 function validateEnvironment() {
@@ -22,6 +23,10 @@ function validateEnvironment() {
 }
 
 export async function POST(request: Request) {
+  // Called by users from the UI and internally by cron jobs — dual auth
+  const denied = await requireUserOrCron(request)
+  if (denied) return denied
+
   // Validate environment variables first
   const envCheck = validateEnvironment()
   if (!envCheck.valid) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { forwardAuthHeaders } from "@/lib/auth/dual-auth"
 
 /**
  * Chunked Scraper API
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
         // Call the run-full API with chunk parameters
         const response = await fetch(`${baseUrl}/api/scraper/run-full`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...forwardAuthHeaders(request) },
           body: JSON.stringify({
             hotelId,
             roomTypeId,

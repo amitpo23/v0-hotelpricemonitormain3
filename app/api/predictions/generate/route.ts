@@ -9,6 +9,7 @@ import {
 import { getPredictionLogger } from "@/lib/logging/prediction-logger"
 import { savePredictionLog } from "@/lib/logging/prediction-logger-db"
 import { logger } from "@/lib/logger"
+import { requireUserOrCron, forwardAuthHeaders } from "@/lib/auth/dual-auth"
 
 // Route segment config - set max duration to 50 seconds
 export const maxDuration = 50
@@ -36,22 +37,22 @@ interface ConfidenceFactors {
   externalDataQuality: number
 }
 
-async function fetchExternalData(baseUrl: string) {
+async function fetchExternalData(baseUrl: string, authHeaders: Record<string, string> = {}) {
   const currentYear = new Date().getFullYear()
 
   try {
     // Fetch holidays from Hebcal
-    const holidaysPromise = fetch(`${baseUrl}/api/external-data/holidays?year=${currentYear}`)
+    const holidaysPromise = fetch(`${baseUrl}/api/external-data/holidays?year=${currentYear}`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
 
     // Fetch Google Trends data
-    const trendsPromise = fetch(`${baseUrl}/api/external-data/trends?keyword=hotels+israel`)
+    const trendsPromise = fetch(`${baseUrl}/api/external-data/trends?keyword=hotels+israel`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
 
     // Fetch market intelligence
-    const marketIntelPromise = fetch(`${baseUrl}/api/external-data/market-intel`)
+    const marketIntelPromise = fetch(`${baseUrl}/api/external-data/market-intel`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
 
@@ -218,6 +219,10 @@ async function getDynamicBasePrice(hotelId: string, supabase: any): Promise<numb
 }
 
 export async function POST(request: Request) {
+  // Called by users from the UI and internally by cron jobs — dual auth
+  const denied = await requireUserOrCron(request)
+  if (denied) return denied
+
   // Generate unique session ID for tracking
   const sessionId = `gen-${Date.now()}-${Math.random().toString(36).substring(7)}`
   
@@ -325,7 +330,7 @@ export async function POST(request: Request) {
     
     // Wrap Promise.all with timeout to prevent hanging
     const dataFetchPromise = Promise.all([
-      fetchExternalData(baseUrl),
+      fetchExternalData(baseUrl, forwardAuthHeaders(request)),
       supabase
         .from("bookings")
         .select("*")

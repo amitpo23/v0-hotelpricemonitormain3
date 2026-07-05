@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { NextResponse } from "next/server"
+import { requireUserOrCron } from "@/lib/auth/dual-auth"
 
 const SCAN_DAYS = 45 // Scan 45 days forwar
 const TIMEOUT_MS = 600000 // 10 minutes timeout for serial scraping
@@ -48,6 +49,10 @@ function calculateRecommendedPrice(ourPrice: number, competitorPrices: number[],
 }
 
 export async function POST(request: Request) {
+  // Called by users from the UI and internally by run-chunked — dual auth
+  const denied = await requireUserOrCron(request)
+  if (denied) return denied
+
   const startTime = new Date()
   logger.info("[v0] Booking.com Scraper started at:", { startedAt: startTime.toISOString() })
 

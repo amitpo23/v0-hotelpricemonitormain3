@@ -100,4 +100,42 @@ scrapeBookingPrices()
 
 ## Status
 - Created: 2026-07-05
-- Phase: Ready for implementation
+- Completed: 2026-07-05
+- Commit: 8dc0b58 - "fix: remove broken playwright/python scraper paths and simulated scan code"
+- Phase: COMPLETE ✅
+
+## Completion Summary
+
+### Files Modified:
+1. **lib/scraper/booking-scraper.tsx**
+   - Removed: `scrapeViaApify()` function (lines 460-553) - 94 lines deleted
+   - Removed: Playwright commented block (lines 717-736) - 20 lines deleted
+   - Removed: APIFY_API_KEY constant (no longer used)
+   - Updated: Method numbering (DirectURL is now Method 1, Tavily is Method 2)
+   - Updated: Initial logging (removed APIFY_API_KEY check)
+
+2. **app/api/scans/execute/route.ts**
+   - Removed: `scrapeCompetitorPrices()` function (lines 30-71) - 42 lines deleted
+   - Removed: `fetchMarketData()` function (lines 74-91) - 18 lines deleted
+   - Removed: OLD CODE commented block (lines 297-328) - 31 lines deleted
+   - Removed: Unused imports (scrapeWithNewApifyActor, scrapeBookingWithApify)
+   - Total: 142 lines deleted
+
+3. **docs/plan/phase0-scraper-map.md**
+   - Created: New documentation file for reference
+
+### Verification Results:
+- ✅ TypeScript compilation: PASS (0 errors)
+- ✅ Tests: 47/47 passed
+- ✅ Build: SUCCESS
+- ✅ grep scraper_v5: 0 results
+- ✅ grep /workspaces/: 0 results
+- ✅ grep /home/codespace/: 0 results
+- ✅ grep scrapeViaPlaywright: 0 results
+- ✅ grep child_process: 0 results (in app/lib)
+- ✅ grep scrapeViaApify: 0 results (in live code)
+
+### Lines Removed:
+- Total dead code removed: 249 lines
+- New map documentation: 108 lines
+- Net reduction: 141 lines of dead code

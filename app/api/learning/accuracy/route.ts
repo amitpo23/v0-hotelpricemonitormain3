@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { requireCronAuth } from "@/lib/auth/cron-auth"
+import { requireUserOrCron } from "@/lib/auth/dual-auth"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes for batch processing
@@ -80,7 +81,8 @@ function calculateDateWeight(date: string, demandLevel?: string, occupancyRate?:
  * This should run daily via CRON
  */
 export async function POST(request: NextRequest) {
-  const denied = requireCronAuth(request)
+  // Called by cron AND by the learning dashboard button — dual auth
+  const denied = await requireUserOrCron(request)
   if (denied) return denied
 
   try {
