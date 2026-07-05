@@ -1,11 +1,20 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 
+function unauthorized(): NextResponse {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+}
+
 /**
- * Server-side user validation helper
- * Follows the existing auth pattern used in app/api/auth/check/route.ts
- * Extracts user session from the supabase-auth-token cookie
+ * Server-side user validation.
+ *
+ * Validates the Supabase access token (JWT) that /api/auth/login stores in
+ * the `sb-auth-token` cookie by verifying it against Supabase Auth
+ * (`auth.getUser(jwt)`). A forged or expired token is rejected server-side —
+ * do NOT replace this with cookie parsing: the cookie contents alone are
+ * attacker-controlled.
  */
 export async function requireUser(): Promise<
   { user: { id: string; email?: string }; errorResponse: null } |
@@ -13,70 +22,31 @@ export async function requireUser(): Promise<
 > {
   try {
     const cookieStore = await cookies()
-    const authToken = cookieStore.get('supabase-auth-token')?.value
+    const accessToken = cookieStore.get('sb-auth-token')?.value
 
-    if (!authToken) {
-      logger.warn('Missing auth token')
-      return {
-        user: null,
-        errorResponse: NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        ),
-      }
+    if (!accessToken) {
+      return { user: null, errorResponse: unauthorized() }
     }
 
-    // Safely parse token with validation
-    let tokenData: { user?: { id?: string; email?: string } }
-    try {
-      tokenData = JSON.parse(authToken)
-      // Validate token structure
-      if (typeof tokenData !== 'object' || tokenData === null) {
-        throw new Error('Invalid token structure')
-      }
-    } catch (parseError) {
-      logger.warn('Invalid auth token format', { error: String(parseError) })
-      return {
-        user: null,
-        errorResponse: NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        ),
-      }
-    }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    )
 
-    const userId = tokenData.user?.id
-    const email = tokenData.user?.email
+    const { data, error } = await supabase.auth.getUser(accessToken)
 
-    // Validate userId format (should be UUID)
-    if (
-      !userId ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        userId
-      )
-    ) {
-      logger.warn('Invalid user ID in token', { userId })
-      return {
-        user: null,
-        errorResponse: NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        ),
-      }
+    if (error || !data.user) {
+      logger.warn('Rejected invalid or expired access token')
+      return { user: null, errorResponse: unauthorized() }
     }
 
     return {
-      user: { id: userId, email },
+      user: { id: data.user.id, email: data.user.email ?? undefined },
       errorResponse: null,
     }
   } catch (error) {
     logger.error('User validation error', error as Error)
-    return {
-      user: null,
-      errorResponse: NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      ),
-    }
+    return { user: null, errorResponse: unauthorized() }
   }
 }
