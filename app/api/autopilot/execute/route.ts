@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { requireUser } from "@/lib/auth/require-user"
 
 export async function POST() {
+  const { user, errorResponse } = await requireUser()
+  if (errorResponse) return errorResponse
+
   const supabase = await createClient()
 
   // Get all active autopilot rules
