@@ -3,7 +3,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = 'https://dqhmraeyisoigxzsitiz.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 console.log('🔌 מתחבר ל-Supabase...')
 

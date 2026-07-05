@@ -15,7 +15,7 @@ const envVars = Object.fromEntries(
     .map(line => line.split('=').map(s => s.trim()))
 );
 
-const supabase = createClient(envVars.NEXT_PUBLIC_SUPABASE_URL, envVars.SUPABASE_SERVICE_KEY);
+const supabase = createClient(envVars.NEXT_PUBLIC_SUPABASE_URL, envVars.SUPABASE_SERVICE_ROLE_KEY);
 const HOTEL_ID = '716e1e8f-3537-4f67-875d-de3a89642175';
 
 function formatDate(date) {

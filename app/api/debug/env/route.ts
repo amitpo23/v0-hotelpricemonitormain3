@@ -15,7 +15,7 @@ export async function GET() {
     apifyKeyLength: process.env.APIFY_API_KEY?.length || 0,
     apifyKeyPreview: process.env.APIFY_API_KEY?.substring(0, 10) + "...",
     hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
+    hasSupabaseServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     hasPerplexityKey: !!process.env.PERPLEXITY_API_KEY,
     nodeEnv: process.env.NODE_ENV,
     vercel: process.env.VERCEL,

@@ -1,6 +1,12 @@
 // Server-side Supabase client using fetch for v0 compatibility
+import { requireEnv } from '@/lib/env'
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+
+// Lazy-load the service key to only throw at runtime when actually used
+function getSupabaseKey(): string {
+  return requireEnv('SUPABASE_SERVICE_ROLE_KEY')
+}
 
 type QueryResult<T> = {
   data: T | null
@@ -111,8 +117,8 @@ class ServerQueryBuilder<T = any> {
 
       const response = await fetch(url, {
         headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: getSupabaseKey(),
+          Authorization: `Bearer ${getSupabaseKey()}`,
         },
       })
 
@@ -164,8 +170,8 @@ class ServerInsertBuilder<T = any> {
       const url = `${SUPABASE_URL}/rest/v1/${this.tableName}`
 
       const headers: Record<string, string> = {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
+        apikey: getSupabaseKey(),
+        Authorization: `Bearer ${getSupabaseKey()}`,
         "Content-Type": "application/json",
       }
 
@@ -236,8 +242,8 @@ class ServerUpdateBuilder<T = any> {
       }
 
       const headers: Record<string, string> = {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
+        apikey: getSupabaseKey(),
+        Authorization: `Bearer ${getSupabaseKey()}`,
         "Content-Type": "application/json",
       }
 
@@ -302,8 +308,8 @@ class ServerDeleteBuilder<T = any> {
       const response = await fetch(url, {
         method: "DELETE",
         headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: getSupabaseKey(),
+          Authorization: `Bearer ${getSupabaseKey()}`,
         },
       })
 
@@ -358,8 +364,8 @@ class ServerUpsertBuilder<T = any> {
       }
 
       const headers: Record<string, string> = {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
+        apikey: getSupabaseKey(),
+        Authorization: `Bearer ${getSupabaseKey()}`,
         "Content-Type": "application/json",
         Prefer: "resolution=merge-duplicates" + (this.returnData ? ",return=representation" : ""),
       }
@@ -427,6 +433,6 @@ export async function createClient() {
   
   return createClient(
     SUPABASE_URL,
-    SUPABASE_KEY
+    getSupabaseKey()
   )
 }

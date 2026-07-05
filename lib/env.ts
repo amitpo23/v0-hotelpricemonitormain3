@@ -115,3 +115,15 @@ export function isSlackConfigured(): boolean {
 export function isApifyConfigured(): boolean {
   return hasEnvVar('APIFY_API_TOKEN') || hasEnvVar('APIFY_API_KEY')
 }
+
+/**
+ * Require a specific environment variable to be set and non-empty.
+ * Throws an error if the variable is not set or is an empty string.
+ */
+export function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return value
+}
