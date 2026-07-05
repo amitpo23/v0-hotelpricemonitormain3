@@ -293,7 +293,9 @@ export function YearlyPredictions({ hotels, roomTypes }: YearlyPredictionsProps)
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <BedDoubleIcon className="h-6 w-6" style={{ color: selectedRoomTypeData.display_color || "#06b6d4" }} />
+                <div style={{ color: selectedRoomTypeData.display_color || "#06b6d4" }}>
+                  <BedDoubleIcon className="h-6 w-6" />
+                </div>
                 <div>
                   <p className="font-medium">{selectedRoomTypeData.name}</p>
                   <p className="text-sm text-muted-foreground">

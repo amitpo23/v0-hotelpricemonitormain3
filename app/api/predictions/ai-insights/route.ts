@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     try {
       const weather = await getWeatherForecast(location, targetDate)
       if (weather) {
-        weatherInfo = `מזג אוויר צפוי: ${weather.description}, טמפרטורה: ${weather.temp}°C`
+        weatherInfo = `מזג אוויר צפוי: ${weather.condition}, טמפרטורה: ${weather.temp}°C`
       }
     } catch (error) {
       console.warn('[AIInsights] Weather fetch failed:', error)

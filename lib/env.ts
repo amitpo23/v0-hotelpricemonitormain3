@@ -55,7 +55,7 @@ export function getEnv(): Env {
   const parsed = envSchema.safeParse(process.env)
 
   if (!parsed.success) {
-    const errors = parsed.error.errors.map(e => `  - ${e.path.join('.')}: ${e.message}`).join('\n')
+    const errors = parsed.error.issues.map((e: any) => `  - ${e.path.join('.')}: ${e.message}`).join('\n')
     console.error('Environment validation failed:\n' + errors)
 
     // In production, throw error. In development, continue with warnings

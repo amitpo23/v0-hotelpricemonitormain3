@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
-    const hotelId = searchParams.get('hotelId') // Optional: refresh specific hotel
+    const hotelId = searchParams.get('hotelId') || undefined // Optional: refresh specific hotel
     const daysAhead = parseInt(searchParams.get('daysAhead') || '90')
     
     logger.info('[Prediction Refresh] Starting automatic refresh', { hotelId, daysAhead })
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         if (!response.ok) {
           const error = await response.text()
           results.errors.push(`Hotel ${hotel.name}: ${error}`)
-          logger.error(`[Prediction Refresh] Failed for ${hotel.name}:`, error instanceof Error ? error : new Error(String(error)))
+          logger.error(`[Prediction Refresh] Failed for ${hotel.name}:`, new Error(error))
           continue
         }
         

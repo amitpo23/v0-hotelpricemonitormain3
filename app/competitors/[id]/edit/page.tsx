@@ -10,13 +10,14 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
-export default async function EditCompetitorPage({ params }: { params: { id: string } }) {
+export default async function EditCompetitorPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createClient()
 
   const { data: competitor } = await supabase
     .from("hotel_competitors")
     .select("*, hotels(name)")
-    .eq("id", params.id)
+    .eq("id", id)
     .single()
 
   if (!competitor) {

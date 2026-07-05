@@ -114,8 +114,8 @@ export class YearOverYearService {
       );
 
       return {
-        currentYearPrice,
-        lastYearPrice,
+        currentYearPrice: currentYearPrice || undefined,
+        lastYearPrice: lastYearPrice || undefined,
         priceChange,
         priceChangeAmount,
         pattern,
@@ -337,7 +337,7 @@ export class YearOverYearService {
         .lte('date', endDate);
 
       if (error) throw error;
-      return data?.map(d => d.price) || [];
+      return data?.map((d: any) => d.price) || [];
     } catch (error) {
       return [];
     }

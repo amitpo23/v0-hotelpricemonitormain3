@@ -69,12 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profile.is_admin) {
             const { data: allHotels } = await supabase.from("hotels").select("id, name").order("name")
 
-            const hotelList = (allHotels || []).map((h) => ({ ...h, role: "admin" }))
+            const hotelList = (allHotels || []).map((h: any) => ({ ...h, role: "admin" }))
             setHotels(hotelList)
 
             // Set first hotel as selected, or load from localStorage
             const savedHotelId = localStorage.getItem("selectedHotelId")
-            const savedHotel = hotelList.find((h) => h.id === savedHotelId)
+            const savedHotel = hotelList.find((h: any) => h.id === savedHotelId)
             setSelectedHotel(savedHotel || hotelList[0] || null)
           } else {
             // Get user's hotel access
@@ -85,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .eq("is_approved", true)
 
             const hotelList = (access || [])
-              .filter((a) => a.hotels)
-              .map((a) => ({
+              .filter((a: any) => a.hotels)
+              .map((a: any) => ({
                 id: (a.hotels as any).id,
                 name: (a.hotels as any).name,
                 role: a.role,
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Set first hotel as selected, or load from localStorage
             const savedHotelId = localStorage.getItem("selectedHotelId")
-            const savedHotel = hotelList.find((h) => h.id === savedHotelId)
+            const savedHotel = hotelList.find((h: any) => h.id === savedHotelId)
             setSelectedHotel(savedHotel || hotelList[0] || null)
           }
         }

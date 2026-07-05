@@ -577,13 +577,15 @@ export default async function AnalyticsPage() {
                 <div className="text-3xl font-bold">
                   {optimizationHistory && optimizationHistory.length > 0
                     ? `${
-                        (
-                          optimizationHistory.reduce(
-                            (sum: number, o: any) =>
-                              sum + (Number(o.optimized_price || 0) - Number(o.original_price || 0)),
-                            0,
-                          ) / optimizationHistory.length
-                        ).toFixed(0) >= 0
+                        Number(
+                          (
+                            optimizationHistory.reduce(
+                              (sum: number, o: any) =>
+                                sum + (Number(o.optimized_price || 0) - Number(o.original_price || 0)),
+                              0,
+                            ) / optimizationHistory.length
+                          ).toFixed(0)
+                        ) >= 0
                           ? "+"
                           : ""
                       }₪${Math.abs(

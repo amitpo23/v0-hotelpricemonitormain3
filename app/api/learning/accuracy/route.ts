@@ -333,14 +333,14 @@ async function updatePerformanceSummary(supabase: any, startDate: Date, endDate:
     
     if (!accuracies || accuracies.length === 0) continue
     
-    const avgAccuracy = accuracies.reduce((sum, a) => sum + (a.accuracy_score || 0), 0) / accuracies.length
-    const avgPriceError = accuracies.reduce((sum, a) => sum + (a.price_error_percent || 0), 0) / accuracies.length
-    const avgOccupancyError = accuracies.reduce((sum, a) => sum + (a.occupancy_error_percent || 0), 0) / accuracies.length
+    const avgAccuracy = accuracies.reduce((sum: number, a: any) => sum + (a.accuracy_score || 0), 0) / accuracies.length
+    const avgPriceError = accuracies.reduce((sum: number, a: any) => sum + (a.price_error_percent || 0), 0) / accuracies.length
+    const avgOccupancyError = accuracies.reduce((sum: number, a: any) => sum + (a.occupancy_error_percent || 0), 0) / accuracies.length
     
-    const veryAccurate = accuracies.filter(a => (a.accuracy_score || 0) > 90).length
-    const accurate = accuracies.filter(a => (a.accuracy_score || 0) >= 75 && (a.accuracy_score || 0) <= 90).length
-    const moderate = accuracies.filter(a => (a.accuracy_score || 0) >= 60 && (a.accuracy_score || 0) < 75).length
-    const poor = accuracies.filter(a => (a.accuracy_score || 0) < 60).length
+    const veryAccurate = accuracies.filter((a: any) => (a.accuracy_score || 0) > 90).length
+    const accurate = accuracies.filter((a: any) => (a.accuracy_score || 0) >= 75 && (a.accuracy_score || 0) <= 90).length
+    const moderate = accuracies.filter((a: any) => (a.accuracy_score || 0) >= 60 && (a.accuracy_score || 0) < 75).length
+    const poor = accuracies.filter((a: any) => (a.accuracy_score || 0) < 60).length
     
     // Find best and worst
     const sorted = [...accuracies].sort((a, b) => (b.accuracy_score || 0) - (a.accuracy_score || 0))

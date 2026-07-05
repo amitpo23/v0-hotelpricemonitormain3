@@ -53,7 +53,7 @@ export class BookingVelocityTracker {
       }
 
       // Calculate velocities
-      const bookingDates = bookings.map(b => new Date(b.booking_date));
+      const bookingDates = bookings.map((b: any) => new Date(b.booking_date));
       const velocity7d = this.calculateVelocity(bookingDates, 7);
       const velocity30d = this.calculateVelocity(bookingDates, 30);
       const velocity90d = this.calculateVelocity(bookingDates, 90);
@@ -92,7 +92,7 @@ export class BookingVelocityTracker {
         demandScore,
         reasoning,
         totalBookings: bookings.length,
-        recentBookings: bookingDates.filter(d => 
+        recentBookings: bookingDates.filter((d: Date) =>
           (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24) <= 7
         ).length,
       };
@@ -139,16 +139,16 @@ export class BookingVelocityTracker {
       }
 
       // Calculate average lead time
-      const leadTimes = bookings.map(b => {
+      const leadTimes = bookings.map((b: any) => {
         const bookingDate = new Date(b.booking_date);
         const checkInDate = new Date(b.check_in);
         return Math.floor((checkInDate.getTime() - bookingDate.getTime()) / (1000 * 60 * 60 * 24));
       });
-      const averageLeadTime = leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length;
+      const averageLeadTime = leadTimes.reduce((a: number, b: number) => a + b, 0) / leadTimes.length;
 
       // Most common booking day of week
       const dayOfWeekCounts = new Array(7).fill(0);
-      bookings.forEach(b => {
+      bookings.forEach((b: any) => {
         const day = new Date(b.booking_date).getDay();
         dayOfWeekCounts[day]++;
       });
@@ -158,7 +158,7 @@ export class BookingVelocityTracker {
       const peakBookingHours = [10, 14, 19, 21];
 
       // Last minute booking ratio
-      const lastMinuteBookings = leadTimes.filter(lt => lt <= 7).length;
+      const lastMinuteBookings = leadTimes.filter((lt: number) => lt <= 7).length;
       const lastMinuteRatio = lastMinuteBookings / leadTimes.length;
 
       return {

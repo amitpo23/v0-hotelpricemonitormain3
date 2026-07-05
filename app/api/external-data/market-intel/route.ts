@@ -103,11 +103,11 @@ export async function GET(request: Request) {
   // Calculate demand indicators
   const totalFutureBookings = bookings?.length || 0
   const avgLeadTime =
-    bookings?.reduce((sum: number, b: any) => {
+    (bookings?.reduce((sum: number, b: any) => {
       const checkIn = new Date(b.check_in_date)
       const created = new Date(b.created_at)
       return sum + (checkIn.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
-    }, 0) / Math.max(totalFutureBookings, 1)
+    }, 0) || 0) / Math.max(totalFutureBookings, 1)
 
   return NextResponse.json({
     success: true,

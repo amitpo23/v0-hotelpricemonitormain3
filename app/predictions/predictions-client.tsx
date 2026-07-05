@@ -368,7 +368,7 @@ export default function PredictionsClient({ initialPredictions, hotels, sessionI
                         hotelId={pred.hotel_id}
                         predictionDate={pred.prediction_date}
                         predictedPrice={pred.predicted_price || 0}
-                        basePrice={hotels.find(h => h.id === pred.hotel_id)?.base_price || 0}
+                        basePrice={0}
                       />
                     )}
                   </td>

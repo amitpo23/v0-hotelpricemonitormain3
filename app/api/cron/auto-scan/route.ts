@@ -9,7 +9,7 @@
  * - Only scans missing dates (not already completed)
  * - Retries failed dates
  *
- * Schedule: Every 72 hours (cron: 0 */72 * * *)
+ * Schedule: Every 72 hours
  */
 
 import { type NextRequest, NextResponse } from "next/server";
@@ -42,7 +42,7 @@ interface ScanCheckpoint {
   last_updated: string;
 }
 
-async function loadCheckpoint(supabase: ReturnType<typeof createClient>): Promise<ScanCheckpoint | null> {
+async function loadCheckpoint(supabase: any): Promise<ScanCheckpoint | null> {
   const { data } = await supabase
     .from("scan_checkpoints")
     .select("*")
@@ -54,22 +54,23 @@ async function loadCheckpoint(supabase: ReturnType<typeof createClient>): Promis
   return data as ScanCheckpoint | null;
 }
 
-async function saveCheckpoint(supabase: ReturnType<typeof createClient>, checkpoint: ScanCheckpoint): Promise<void> {
+async function saveCheckpoint(supabase: any, checkpoint: ScanCheckpoint): Promise<void> {
   checkpoint.last_updated = new Date().toISOString();
 
   if (checkpoint.id) {
-    await supabase
+    const updateData: Record<string, any> = {
+      completed_dates: checkpoint.completed_dates,
+      failed_dates: checkpoint.failed_dates,
+      last_completed_date: checkpoint.last_completed_date,
+      stats: checkpoint.stats,
+      last_updated: checkpoint.last_updated,
+    };
+    await (supabase as any)
       .from("scan_checkpoints")
-      .update({
-        completed_dates: checkpoint.completed_dates,
-        failed_dates: checkpoint.failed_dates,
-        last_completed_date: checkpoint.last_completed_date,
-        stats: checkpoint.stats,
-        last_updated: checkpoint.last_updated,
-      })
+      .update(updateData)
       .eq("id", checkpoint.id);
   } else {
-    await supabase
+    await (supabase as any)
       .from("scan_checkpoints")
       .insert(checkpoint);
   }

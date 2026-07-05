@@ -175,7 +175,7 @@ export function validateRequest<T>(schema: z.ZodSchema<T>, data: unknown): {
 
   return {
     success: false,
-    errors: result.error.errors.map(e => ({
+    errors: result.error.issues.map((e: any) => ({
       path: e.path.join('.'),
       message: e.message,
     })),

@@ -131,7 +131,7 @@ export async function scrapeCompetitorHotel(
   checkOut: string,
 ): Promise<{ success: boolean; price?: number; rooms?: any[]; error?: string }> {
   const result = await scrapeBookingWithApify({
-    search: hotelName,
+    bookingUrl: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(hotelName)}`,
     checkIn,
     checkOut,
     maxItems: 5, // Just get top 5 results

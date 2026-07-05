@@ -715,24 +715,25 @@ export async function scrapeBookingPrices(
   }
 
   // Method 1: Playwright (if URL provided) - BEST METHOD!
-  if (bookingUrl) {
-    try {
-      console.log(`[v0] [BookingScraper] Method 1: Playwright Scraper`)
-      const playwrightResults = await scrapeViaPlaywright(bookingUrl, checkIn, checkOut)
-
-      if (playwrightResults.length > 0) {
-        console.log(`[v0] [BookingScraper] ✓ ${hotelName}: ${playwrightResults.length} results via Playwright`)
-        return {
-          success: true,
-          results: playwrightResults,
-          source: "Booking.com",
-          method: "Playwright",
-        }
-      }
-    } catch (error) {
-      console.log(`[v0] [BookingScraper] ❌ Playwright failed: ${error instanceof Error ? error.message : error}`)
-    }
-  }
+  // NOTE: Playwright scraping temporarily disabled - scrapeViaPlaywright not implemented
+  // if (bookingUrl) {
+  //   try {
+  //     console.log(`[v0] [BookingScraper] Method 1: Playwright Scraper`)
+  //     const playwrightResults = await scrapeViaPlaywright(bookingUrl, checkIn, checkOut)
+  //
+  //     if (playwrightResults.length > 0) {
+  //       console.log(`[v0] [BookingScraper] ✓ ${hotelName}: ${playwrightResults.length} results via Playwright`)
+  //       return {
+  //         success: true,
+  //         results: playwrightResults,
+  //         source: "Booking.com",
+  //         method: "Playwright",
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.log(`[v0] [BookingScraper] ❌ Playwright failed: ${error instanceof Error ? error.message : error}`)
+  //   }
+  // }
 
   // Method 2: Direct URL (if provided)
   if (bookingUrl) {

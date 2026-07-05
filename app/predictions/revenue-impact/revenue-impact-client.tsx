@@ -293,9 +293,7 @@ export default function RevenueImpactClient({ hotels, predictions }: RevenueImpa
       avgPrice: Math.round(avgPrice),
       avgOccupancy: Math.round(avgOccupancy * 10) / 10,
       dailyRevenue: revenueCalc.dailyRevenue,
-      periodRevenue: revenueCalc.revenue,
-      difference: 0,
-      percentChange: 0
+      periodRevenue: revenueCalc.revenue
     }
   }
 
@@ -367,9 +365,7 @@ export default function RevenueImpactClient({ hotels, predictions }: RevenueImpa
       avgPrice: Math.round(avgPrice),
       avgOccupancy: Math.round(avgOccupancy * 10) / 10,
       dailyRevenue: Math.round(totalRevenue / days),
-      periodRevenue: Math.round(totalRevenue),
-      difference: 0,
-      percentChange: 0
+      periodRevenue: Math.round(totalRevenue)
     }
   }
 

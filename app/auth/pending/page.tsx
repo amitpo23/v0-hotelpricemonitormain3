@@ -13,9 +13,8 @@ export default function PendingPage() {
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const { data } = await supabase.auth.getUser()
+      const user = data?.user
       if (user) {
         setEmail(user.email || "")
 
