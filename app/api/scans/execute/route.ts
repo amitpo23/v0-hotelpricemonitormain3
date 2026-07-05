@@ -1,7 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { scrapeWithNewApifyActor } from "@/lib/scraper/apify-scraper-integration"
-import { scrapeBookingWithApify } from "@/lib/scraper/apify-booking-scraper"
 import { scrapeCompetitorAllRooms } from "@/lib/scraper/real-scraper"
 import { logger } from "@/lib/logger"
 
@@ -21,73 +19,6 @@ function validateEnvironment() {
   }
   
   return { valid: true }
-}
-
-// Simulated scraping sources - in production, these would be real scrapers
-const BOOKING_SOURCES = [{ name: "Booking.com", baseVariation: 0.95 }]
-
-// Scrape competitor prices from various sources
-async function scrapeCompetitorPrices(
-  hotelName: string,
-  basePrice: number,
-  checkIn: string,
-  checkOut: string,
-  roomType: string,
-) {
-  const results = []
-
-  // Calculate date-based demand multiplier
-  const checkInDate = new Date(checkIn)
-  const dayOfWeek = checkInDate.getDay()
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6
-  const demandMultiplier = isWeekend ? 1.15 : 1.0
-
-  // Seasonal multiplier
-  const month = checkInDate.getMonth()
-  const seasonalMultiplier = [6, 7, 8, 12].includes(month) ? 1.2 : 1.0
-
-  for (const source of BOOKING_SOURCES) {
-    // Simulate price variation with realistic factors
-    const randomVariation = 0.9 + Math.random() * 0.2 // ±10%
-    const price = basePrice * source.baseVariation * demandMultiplier * seasonalMultiplier * randomVariation
-
-    results.push({
-      source: source.name,
-      price: Math.round(price * 100) / 100,
-      currency: "USD",
-      availability: Math.random() > 0.1, // 90% availability
-      room_type: roomType || "Standard Room",
-      metadata: {
-        check_in: checkIn,
-        check_out: checkOut,
-        demand_multiplier: demandMultiplier,
-        seasonal_multiplier: seasonalMultiplier,
-        scraped_url: `https://${source.name.toLowerCase().replace(/[^a-z]/g, "")}.com/hotel/${hotelName.toLowerCase().replace(/\s+/g, "-")}`,
-      },
-    })
-  }
-
-  return results
-}
-
-// Fetch external market data (simulated API call)
-async function fetchMarketData(city: string, date: string) {
-  // In production, this would call real APIs like:
-  // - STR (Smith Travel Research)
-  // - OTA Insight
-  // - RateGain
-
-  const baseOccupancy = 65 + Math.random() * 25 // 65-90%
-  const avgPrice = 100 + Math.random() * 150 // $100-$250
-
-  return {
-    city,
-    date,
-    avg_occupancy_rate: Math.round(baseOccupancy * 10) / 10,
-    avg_hotel_price: Math.round(avgPrice * 100) / 100,
-    demand_level: baseOccupancy > 80 ? "high" : baseOccupancy > 60 ? "medium" : "low",
-    total_hotels_tracked: Math.floor(50 + Math.random() * 100),
-  }
 }
 
 export async function POST(request: Request) {
@@ -294,38 +225,6 @@ export async function POST(request: Request) {
         }
       }
 
-            // OLD CODE - TO BE REMOVED:
-            /*
-      for (const competitor of competitors) {
-        console.log(`[Scan] Scraping ${competitor.competitor_hotel_name} for ${dateStr}`)
-
-        const scrapedResult = await scrapeCompetitorAllRooms(
-          competitor.id,
-          competitor.competitor_hotel_name,
-          dateStr,
-          competitor.booking_url,
-        )
-
-        if (scrapedResult?.success && scrapedResult.rooms && scrapedResult.rooms.length > 0) {
-          realScrapeCount++
-
-          for (const room of scrapedResult.rooms) {
-            competitorPrices.push({
-              hotel_id: hotelData.id,
-              competitor_id: competitor.id,
-              date: dateStr,
-              price: room.price,
-              source: scrapedResult.source || "Booking.com",
-              room_type: room.roomType || "Standard Room",
-              availability: room.available !== false,
-              scraped_at: new Date().toISOString(),
-            })
-          }
-        } else {
-          console.log(`[Scan] No results for ${competitor.competitor_hotel_name} on ${dateStr}`)
-        }
-      }
-            */
     }
 
     logger.info(`[Scan] Completed ${realScrapeCount} real scrapes, got ${competitorPrices.length} prices`)

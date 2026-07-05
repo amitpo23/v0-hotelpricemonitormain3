@@ -187,7 +187,6 @@ export function extractPricesFromHTML(html: string): number[] {
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || ""
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY
-const APIFY_API_KEY = process.env.APIFY_API_KEY
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY
 
 async function scrapeViaTavily(
@@ -457,100 +456,6 @@ async function scrapeViaScraperAPI(
   }
 }
 
-async function scrapeViaApify(
-  hotelName: string,
-  city: string,
-  checkIn: string,
-  checkOut: string,
-    bookingUrl?: string,
-): Promise<BookingPriceResult[]> {
-  console.log(`[v0] [Playwright] Starting scrape via Python Playwright scraper`)
-  console.log(`[v0] [Playwright] Hotel: ${hotelName} in ${city}`)
-  console.log(`[v0] [Playwright] URL: ${bookingUrl}`)
-  console.log(`[v0] [Playwright] Check-in: ${checkIn}, Check-out: ${checkOut}`)
-
-  if (!bookingUrl) {
-    console.error(`[v0] [Playwright] No booking URL provided`)
-    throw new Error("No booking URL available for scraping")
-  }
-
-  try {
-    // Clean the URL - remove all query parameters as they can cause issues with Playwright
-    let cleanUrl = bookingUrl
-    try {
-      const urlObj = new URL(bookingUrl)
-      cleanUrl = `${urlObj.origin}${urlObj.pathname}`
-      console.log(`[v0] [Playwright] Cleaned URL from ${bookingUrl.length} to ${cleanUrl.length} chars`)
-    } catch (e) {
-      console.log(`[v0] [Playwright] Could not parse URL, using as-is`)
-    }
-
-    // Calculate days forward
-    const checkInDate = new Date(checkIn)
-    const now = new Date()
-    const daysForward = Math.ceil((checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    
-    console.log(`[v0] [Playwright] Days forward from now: ${daysForward}`)
-
-    // Run Python Playwright scraper
-    const { exec } = await import('child_process')
-    const { promisify } = await import('util')
-    const execPromise = promisify(exec)
-
-    const scriptPath = '/workspaces/v0-hotelpricemonitormain3/scraper_v5.py'
-    const roomTypes = '["room_only", "with_breakfast"]'
-    // Use checkIn date as start_date to scrape specific date only
-    const pythonPath = '/home/codespace/.python/current/bin/python3'
-    const command = `${pythonPath} ${scriptPath} "${cleanUrl}" 1 '${roomTypes}' '${checkIn}'`
-    
-    console.log(`[v0] [Playwright] Running for specific date: ${checkIn}`)
-    console.log(`[v0] [Playwright] Command: ${command}`)
-    
-    const { stdout, stderr } = await execPromise(command, { 
-      timeout: 120000,
-      maxBuffer: 1024 * 1024 * 10 // 10MB buffer
-    })
-    
-    if (stderr && !stderr.includes('DeprecationWarning')) {
-      console.log(`[v0] [Playwright] stderr:`, stderr)
-    }
-
-    console.log(`[v0] [Playwright] stdout length: ${stdout.length}`)
-    
-    const result = JSON.parse(stdout)
-    
-    if (!result.success) {
-      throw new Error(`Playwright scraper failed: ${result.error}`)
-    }
-
-    console.log(`[v0] [Playwright] Got ${result.results.length} raw results`)
-
-    // Convert Python results to BookingPriceResult format
-    const bookingResults: BookingPriceResult[] = result.results
-      .filter((r: any) => r.available && r.price && r.price > 0)
-      .map((r: any) => ({
-        price: Number(r.price),
-        roomType: r.room_type === 'with_breakfast' ? 'Room with Breakfast' : 'Standard Room',
-        currency: r.currency || 'EUR',
-        available: r.available,
-        hasBreakfast: r.room_type === 'with_breakfast',
-        source: "Booking.com",
-      }))
-
-    console.log(`[v0] [Playwright] ✅ Converted to ${bookingResults.length} booking results`)
-    
-    if (bookingResults.length > 0) {
-      console.log(`[v0] [Playwright] Sample result:`, bookingResults[0])
-    }
-    
-    return bookingResults
-
-  } catch (error: any) {
-    console.error(`[v0] [Playwright] ❌ Error:`, error.message)
-    console.error(`[v0] [Playwright] Full error:`, error)
-    throw error
-  }
-}
 
 async function scrapeViaRapidAPI(
   hotelName: string,
@@ -685,60 +590,11 @@ export async function scrapeBookingPrices(
   console.log(`[v0] [BookingScraper] City: ${city}`)
   console.log(`[v0] [BookingScraper] Dates: ${checkIn} to ${checkOut}`)
   console.log(`[v0] [BookingScraper] Booking URL: ${bookingUrl || "Not provided"}`)
-  console.log(`[v0] [BookingScraper] APIFY_API_KEY exists: ${!!APIFY_API_KEY} (length: ${APIFY_API_KEY?.length || 0})`)
 
-  // Method 0: Apify (PRIMARY - most reliable)
-  if (APIFY_API_KEY) {
-    try {
-      console.log(`[v0] [BookingScraper] Method 0: Apify Search (PRIMARY)`)
-      const apifyResults = await scrapeViaApify(hotelName, city, checkIn, checkOut, bookingUrl)
-
-      if (apifyResults.length > 0) {
-        console.log(`[v0] [BookingScraper] ✅ SUCCESS via Apify: ${apifyResults.length} rooms`)
-        return {
-          success: true,
-          results: apifyResults,
-          source: "Booking.com",
-          method: "Apify",
-        }
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      console.log(`[v0] [BookingScraper] ❌ Apify failed: ${errorMsg}`)
-
-      if (!errorMsg.includes("401") && !errorMsg.includes("authentication")) {
-        // Non-auth error, continue to next method
-      }
-    }
-  } else {
-    console.log(`[v0] [BookingScraper] Apify skipped: No API key`)
-  }
-
-  // Method 1: Playwright (if URL provided) - BEST METHOD!
-  // NOTE: Playwright scraping temporarily disabled - scrapeViaPlaywright not implemented
-  // if (bookingUrl) {
-  //   try {
-  //     console.log(`[v0] [BookingScraper] Method 1: Playwright Scraper`)
-  //     const playwrightResults = await scrapeViaPlaywright(bookingUrl, checkIn, checkOut)
-  //
-  //     if (playwrightResults.length > 0) {
-  //       console.log(`[v0] [BookingScraper] ✓ ${hotelName}: ${playwrightResults.length} results via Playwright`)
-  //       return {
-  //         success: true,
-  //         results: playwrightResults,
-  //         source: "Booking.com",
-  //         method: "Playwright",
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.log(`[v0] [BookingScraper] ❌ Playwright failed: ${error instanceof Error ? error.message : error}`)
-  //   }
-  // }
-
-  // Method 2: Direct URL (if provided)
+  // Method 1: Direct URL (if provided)
   if (bookingUrl) {
     try {
-      console.log(`[v0] [BookingScraper] Method 2: Direct URL`)
+      console.log(`[v0] [BookingScraper] Method 1: Direct URL`)
       const directResults = await scrapeViaDirectUrl(bookingUrl, checkIn, checkOut)
 
       if (directResults.length > 0) {
@@ -755,9 +611,9 @@ export async function scrapeBookingPrices(
     }
   }
 
-  // Method 3: Tavily (fallback)
+  // Method 2: Tavily (fallback)
   try {
-    console.log(`[v0] [BookingScraper] Method 3: Tavily Search`)
+    console.log(`[v0] [BookingScraper] Method 2: Tavily Search`)
     const tavilyResults = await scrapeViaTavily(hotelName, city, checkIn, checkOut)
 
     if (tavilyResults.length > 0) {
