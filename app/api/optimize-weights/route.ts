@@ -9,6 +9,7 @@ import type { NextRequest } from "next/server"
 import { optimizeWeightsForHotel, applyOptimizedWeights } from "@/lib/ml/weight-optimizer"
 import { clearWeightCache } from "@/lib/prediction-algorithms"
 import { logger } from "@/lib/logger"
+import { requireCronAuth } from "@/lib/auth/cron-auth"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes for optimization
@@ -17,18 +18,10 @@ export const maxDuration = 300 // 5 minutes for optimization
  * POST - Run weight optimization for hotel(s)
  */
 export async function POST(request: NextRequest) {
+  const denied = requireCronAuth(request)
+  if (denied) return denied
+
   try {
-    // Verify authorization (only admins or cron)
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-    
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      logger.warn('Unauthorized request to /api/optimize-weights')
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-    }
-    
     const supabase = await createClient()
     const body = await request.json().catch(() => ({}))
     

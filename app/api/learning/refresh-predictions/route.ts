@@ -12,6 +12,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
+import { requireCronAuth } from "@/lib/auth/cron-auth"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes
@@ -21,19 +22,10 @@ export const maxDuration = 300 // 5 minutes
  * POST /api/learning/refresh-predictions
  */
 export async function POST(request: NextRequest) {
+  const denied = requireCronAuth(request)
+  if (denied) return denied
+
   try {
-    // Verify Vercel Cron authentication (production security)
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-    
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      logger.warn('Unauthorized cron request to /api/learning/refresh-predictions')
-      // Allow in development/testing, but log warning
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-    }
-    
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
     const hotelId = searchParams.get('hotelId') || undefined // Optional: refresh specific hotel

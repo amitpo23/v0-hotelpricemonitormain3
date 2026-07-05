@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { requireCronAuth } from "@/lib/auth/cron-auth";
 
 const CHECKPOINT_FILE = join(process.cwd(), '.missing-dates-checkpoint.json');
 const MISSING_DATES_FILE = join(process.cwd(), 'missing-dates.txt');
@@ -17,15 +18,8 @@ const MISSING_DATES_FILE = join(process.cwd(), 'missing-dates.txt');
 export async function GET(request: NextRequest) {
   console.log("🔍 Scan monitor cron job triggered");
 
-  // Verify cron secret (security)
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    console.error("❌ Unauthorized cron request");
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const denied = requireCronAuth(request)
+  if (denied) return denied
 
   try {
     // Check if files exist

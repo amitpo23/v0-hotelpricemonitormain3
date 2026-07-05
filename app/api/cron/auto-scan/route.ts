@@ -14,6 +14,7 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireCronAuth } from "@/lib/auth/cron-auth";
 
 const HOTEL_ID = '716e1e8f-3537-4f67-875d-de3a89642175';
 
@@ -77,16 +78,10 @@ async function saveCheckpoint(supabase: any, checkpoint: ScanCheckpoint): Promis
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabaseClient();
+  const denied = requireCronAuth(request)
+  if (denied) return denied
 
-  // Verify cron secret (security)
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const supabase = getSupabaseClient();
 
   try {
     // Load checkpoint from database

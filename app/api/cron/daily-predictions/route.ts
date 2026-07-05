@@ -5,8 +5,9 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { logger } from '@/lib/logger'
+import { requireCronAuth } from '@/lib/auth/cron-auth'
 
 export const maxDuration = 300 // 5 minutes max
 export const dynamic = 'force-dynamic'
@@ -21,7 +22,10 @@ interface DailyPredictionJob {
  * POST /api/cron/daily-predictions
  * Called by cron job to generate predictions for upcoming dates
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const denied = requireCronAuth(request)
+  if (denied) return denied
+
   try {
     logger.info('[DailyPredictions] Starting daily prediction job...')
     
@@ -128,7 +132,10 @@ export async function POST(request: Request) {
  * GET /api/cron/daily-predictions
  * Status check endpoint
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const denied = requireCronAuth(request)
+  if (denied) return denied
+
   const supabase = await createClient()
   
   // Get latest predictions

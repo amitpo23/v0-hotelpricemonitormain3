@@ -19,6 +19,7 @@ import {
   applyPricingStrategy
 } from "@/lib/prediction-algorithms";
 import { logger } from "@/lib/logger";
+import { requireCronAuth } from "@/lib/auth/cron-auth";
 
 // Create Supabase client at runtime, not at module load time
 function getSupabaseClient() {
@@ -31,29 +32,13 @@ function getSupabaseClient() {
   );
 }
 
-// Verify cron secret
-function verifyCronAuth(request: NextRequest): boolean {
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  
-  if (!cronSecret) {
-    logger.warn('CRON_SECRET לא מוגדר - מריץ בכל מקרה');
-    return true;
-  }
-  
-  return authHeader === `Bearer ${cronSecret}`;
-}
-
 export async function GET(request: NextRequest) {
   logger.info('Update Predictions Cron - התחלה');
-  
+
+  const denied = requireCronAuth(request)
+  if (denied) return denied
+
   const supabase = getSupabaseClient();
-  
-  // Verify auth
-  if (!verifyCronAuth(request)) {
-    logger.error('אימות נכשל');
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   try {
     const startTime = Date.now();

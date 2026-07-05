@@ -12,6 +12,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { requireCronAuth } from "@/lib/auth/cron-auth"
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes for batch processing
@@ -79,19 +80,10 @@ function calculateDateWeight(date: string, demandLevel?: string, occupancyRate?:
  * This should run daily via CRON
  */
 export async function POST(request: NextRequest) {
+  const denied = requireCronAuth(request)
+  if (denied) return denied
+
   try {
-    // Verify Vercel Cron authentication (production security)
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-    
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.warn('⚠️ Unauthorized cron request to /api/learning/accuracy')
-      // Allow in development/testing, but log warning
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-    }
-    
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
     const daysBack = parseInt(searchParams.get('daysBack') || '7')
