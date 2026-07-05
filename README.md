@@ -308,47 +308,10 @@ node test-enhanced-predictions.mjs
 
 ---
 
-## 🗺️ Development Roadmap
+## 🗺️ Status & Roadmap
 
-### ✅ Phase 1: Foundation (COMPLETE - Week 2/12)
-- [x] Decision Agent Core (320 lines)
-- [x] Dynamic weighting algorithm
-- [x] Conflict resolution
-- [x] Context-aware recommendations
-- [x] Orchestrator v2 integration
-- [x] Enhanced prediction engine
-- [x] Database schema design
-- [x] Comprehensive documentation
-
-### 📋 Phase 2: External Data Agents (Weeks 3-5)
-- [ ] CBS Tourism Agent (free)
-- [ ] Enhanced Weather Agent ($10/mo)
-- [ ] News Sentiment Agent (free)
-- [ ] Social Media Sentiment (free)
-- [ ] Flight Price Agent (free tier)
-- [ ] Market Trends Agent v2 (free)
-
-### 📋 Phase 3: Analysis Agents (Weeks 6-8)
-- [ ] Year-over-Year Comparison
-- [ ] Demand Forecasting
-- [ ] Price Elasticity
-- [ ] Market Position Analysis
-
-### 📋 Phase 4: Autopilot (Weeks 9-10)
-- [ ] Autonomous price changes
-- [ ] Safety guards & rollback
-- [ ] Scenario analysis
-- [ ] ROI tracking
-
-### 📋 Phase 5: Learning & Optimization (Weeks 11-12)
-- [ ] Feedback loop system
-- [ ] Self-improving agent weights
-- [ ] A/B testing framework
-- [ ] Continuous optimization
-
-**[→ Full 12-Week Roadmap](FULL_IMPLEMENTATION_ROADMAP.md)**
-
-**Progress**: 17% (Week 2/12) | **Expected Impact**: +60% accuracy, +20% revenue
+המצב העדכני של המערכת מתוחזק במקום אחד: **[STATE.md](STATE.md)**
+תוכנית העבודה המלאה: [docs/superpowers/plans/](docs/superpowers/plans/2026-07-04-rms-master-index.md)
 
 ---
 
